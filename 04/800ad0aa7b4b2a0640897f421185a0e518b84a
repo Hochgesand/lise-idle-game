@@ -1,0 +1,27 @@
+backend/src/main/java/com/lise/liseidle/state/ResourceSet.java
+  s_f80c7031490ca8::t_ee2c6fe5658f71 1-31
+backend/src/main/java/com/lise/liseidle/state/BurnerState.java
+  s_f80c7031490ca8::t_c65dcdba2c4aaf 1-24
+specs/001-dev-idle-game/tasks.md
+  s_f80c7031490ca8::t_297a31b092ed6e 64
+backend/src/main/java/com/lise/liseidle/state/PlayerSettings.java
+  s_f80c7031490ca8::t_4b53f90820c93d 1-16
+backend/src/main/java/com/lise/liseidle/state/GameState.java
+  s_f80c7031490ca8::t_cff3314b775e14 1-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "04800ad0aa7b4b2a0640897f421185a0e518b84a",
+  "prompts": {},
+  "sessions": {
+    "s_f80c7031490ca8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f19bd-1156-72d1-80fa-66df135d331d",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
