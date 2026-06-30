@@ -33,7 +33,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T003 [P] Initialize Vite + TypeScript frontend in `frontend/` (`package.json`, `vite.config.ts`, `tsconfig.json`, install `phaser`, `break_eternity.js`, `vitest`)
 - [x] T004 [P] Configure frontend linting/formatting (ESLint + Prettier) and add `npm run test` (Vitest) + `npm run build` scripts in `frontend/package.json`
 - [x] T005 [P] Configure backend test runner (JUnit 5 + Spring Boot Test) and build in `backend/pom.xml`; add Maven wrapper
-- [ ] T006 [P] Create placeholder content JSON directory `backend/src/main/resources/content/` with empty `producers.json`, `upgrades.json`, `trainings.json`, `milestones.json`, `burners.json`
+- [x] T006 [P] Create placeholder content JSON directory `backend/src/main/resources/content/` with empty `producers.json`, `upgrades.json`, `trainings.json`, `milestones.json`, `burners.json`
 
 **Checkpoint**: Both projects scaffolded; `mvn` and `npm` build cleanly (empty app).
 
