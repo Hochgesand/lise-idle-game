@@ -1,0 +1,33 @@
+specs/001-dev-idle-game/tasks.md
+  s_a5dbe7748c75bc::t_577d69fca2d1ea 32
+backend/src/main/resources/application.yml
+  s_a5dbe7748c75bc::t_1259e313c8095e 1-22
+backend/.gitignore
+  s_a5dbe7748c75bc::t_42b6c150aa5332 1-25
+backend/src/main/java/com/lise/liseidle/LiseIdleApplication.java
+  s_a5dbe7748c75bc::t_719a5c44e0015c 1-21
+backend/pom.xml
+  s_a5dbe7748c75bc::t_8d99dfbbfa153c 1-81
+backend/.mvn/wrapper/maven-wrapper.properties
+  s_a5dbe7748c75bc::t_d051a3e1c29633 1-3
+backend/mvnw
+  s_a5dbe7748c75bc::t_2ef408111b4fc6 1-295
+backend/mvnw.cmd
+  s_a5dbe7748c75bc::t_c1fb955ac429df 1-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "89358e25db158d046ee356e089c25465e2370263",
+  "prompts": {},
+  "sessions": {
+    "s_a5dbe7748c75bc": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1941-6dd0-7824-8b33-21620d19e299",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
