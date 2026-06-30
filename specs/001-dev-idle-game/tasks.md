@@ -51,7 +51,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T008 [P] Write unit test for big-number wrapper (string round-trip, no precision loss, add/multiply) in `frontend/src/sim/bigNumber.test.ts`
 - [x] T009 [P] Write unit test for content loader validation (malformed JSON throws, valid JSON parses to typed catalog) in `frontend/src/sim/content.test.ts`
 - [x] T010 [P] Write backend test for `GET /api/v1/content` returning valid content JSON in `backend/src/test/java/.../content/ContentControllerTest.java`
-- [ ] T011 Write integration test for save round-trip (serialize → deserialize → serialize == identical) in `backend/src/test/java/.../state/GameStateRoundTripTest.java`
+- [x] T011 Write integration test for save round-trip (serialize → deserialize → serialize == identical) in `backend/src/test/java/.../state/GameStateRoundTripTest.java`
 
 ### Implementation for Foundational
 
