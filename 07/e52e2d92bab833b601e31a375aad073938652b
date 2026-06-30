@@ -1,0 +1,21 @@
+backend/src/main/java/com/lise/liseidle/content/ContentController.java
+  s_9b302231636e3d::t_52c9d307fef016 1-44
+specs/001-dev-idle-game/tasks.md
+  s_9b302231636e3d::t_ff2ddca4211923 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "07e52e2d92bab833b601e31a375aad073938652b",
+  "prompts": {},
+  "sessions": {
+    "s_9b302231636e3d": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f19c6-74ef-7cb9-b066-4e3d1039875e",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
