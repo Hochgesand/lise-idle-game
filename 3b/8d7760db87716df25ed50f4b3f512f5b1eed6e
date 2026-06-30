@@ -1,0 +1,25 @@
+.dockerignore
+  s_645528d71e215e::t_559bd75f461a85 1-86
+docker-compose.yml
+  s_645528d71e215e::t_a257737a7750a4 1-72
+specs/001-dev-idle-game/tasks.md
+  s_645528d71e215e::t_0993b0443701a7 31
+README.md
+  s_645528d71e215e::t_e7bc160bc607c3 9,11-14,16-17,19-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "3b8d7760db87716df25ed50f4b3f512f5b1eed6e",
+  "prompts": {},
+  "sessions": {
+    "s_645528d71e215e": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f193b-cabc-732a-9c83-39618cec2a99",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
