@@ -8,6 +8,15 @@
 
 **Input**: User description: "Ein Browsergame in Vogelperspektive, in dem wir einen Software-Developer im Pixel-Stil spielen, mit Idle-Game-Mechaniken. Der Dev arbeitet bei der lise GmbH; Fortschritt läuft auch offline weiter. Theme orientiert sich an lise.de (Software-/KI-Haus, lise Academy, Zertifizierungen). Ein 'Token-Burner'-Mechanic (LOC ↔ Cash ↔ AI-Tokens) bildet den wirtschaftlichen Kern."
 
+## Clarifications
+
+### Session 2026-06-30
+
+- Q: How do the two real lise office buildings relate in progression? → A: Start in Office #1; Office #2 unlocks as a major milestone that expands producer/desk capacity (lise "growing into a second location").
+- Q: What does navigating between the two offices mean mechanically? → A: A timed commute — switching the dev's active office starts a short, state-tracked travel delay before the dev is "present" at the destination; autonomous producers keep producing in both offices throughout.
+- Q: Are the floor-plan rooms/desks tied to the economy or just backdrop? → A: Desks host producers — each producer occupies a desk/room; the two offices provide a finite, expandable number of placement slots, and Office #2's unlock raises the cap.
+- Q: How should "mobile-first, desktop also" shape requirements? → A: Mobile and desktop are co-equal first-class targets via a responsive layout (touch and pointer input, phone portrait/landscape through desktop); neither is treated as secondary.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -36,8 +45,8 @@ and confirm LOC grew by the expected offline amount.
 1. **Given** a brand-new player, **When** they open the game for the first
    time, **Then** a top-down pixel-art scene of a developer at a workstation
    is shown and LOC begins accumulating from zero.
-2. **Given** the dev is working, **When** the player interacts (e.g., clicks
-   the scene), **Then** production receives an immediate manual boost.
+2. **Given** the dev is working, **When** the player interacts (e.g., taps or
+   clicks the scene), **Then** production receives an immediate manual boost.
 3. **Given** the player closes the game, **When** they return after N
    minutes, **Then** LOC has increased by roughly the amount the dev would
    have produced in N minutes (offline progress honored).
@@ -95,6 +104,9 @@ increases; reach a credential milestone and confirm it unlocks/registers.
    (e.g., quality certification, partner status) and grants its reward.
 3. **Given** the player owns several trainings, **When** production is
    calculated, **Then** all permanent boosts are correctly applied.
+4. **Given** the player reaches the Office #2 unlock milestone, **When** it
+   triggers, **Then** the second office becomes available and the total
+   number of producer/desk slots increases.
 
 ---
 
@@ -112,15 +124,30 @@ increases; reach a credential milestone and confirm it unlocks/registers.
   correctly (no overflow that changes gameplay).
 - Corrupted save: the game falls back safely without destroying other
   progress.
+- Closing the game mid-commute: on return, the commute resolves from elapsed
+  time (the dev arrives if the travel delay has passed); autonomous
+  production is unaffected because it does not depend on the dev's presence.
+- Active office's desk slots all full: further producer placements are
+  blocked with clear feedback pointing to the Office #2 unlock; the game
+  never soft-locks.
+- Small or rotated mobile viewport: the layout stays fully playable in both
+  portrait and landscape, and all controls remain reachable without
+  horizontal scrolling.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **FR-001**: The game MUST run in a standard web browser with no
-  installation required.
-- **FR-002**: The game MUST present a top-down, pixel-art scene depicting a
-  software developer working at the lise GmbH office.
+  installation required, on both mobile and desktop devices as co-equal
+  first-class targets, via a responsive layout that adapts from phone
+  portrait/landscape through desktop and supports both touch and pointer
+  input.
+- **FR-002**: The game MUST present a top-down, pixel-art world based on the
+  two real lise GmbH office buildings (derived from the studio's floor
+  plans), each laid out as rooms — e.g., open office areas, lounge, kitchen,
+  conference room, elevator, stairs, garage, restrooms — populated with desk
+  workstations where the developer and producers work.
 - **FR-003**: The game MUST accumulate a primary resource ("Lines of Code" /
   LOC) as a function of elapsed real time.
 - **FR-004**: The player MUST be able to manually boost production through
@@ -145,22 +172,51 @@ increases; reach a credential milestone and confirm it unlocks/registers.
   very large (no precision loss that alters gameplay).
 - **FR-013**: The core loop MUST remain playable without a live network
   connection once loaded (offline-capable).
+- **FR-014**: The game MUST model two distinct office buildings. The player
+  MUST begin in Office #1, and Office #2 MUST be unlockable as a long-term
+  milestone that expands the number of available producer/desk slots.
+- **FR-015**: Producers MUST occupy desk/room slots within an office. Each
+  office MUST provide a finite number of placement slots; when the active
+  office is full, the game MUST clearly indicate that more capacity requires
+  unlocking the next office (no silent failure, no soft-lock).
+- **FR-016**: The player MUST be able to switch the developer's active
+  office. Switching MUST incur a timed commute: a state-tracked travel delay
+  after which the developer becomes "present" at the destination. The commute
+  timer MUST be part of saved state and computed from elapsed time (the same
+  time-based rule as all other progress), so it resolves correctly across
+  offline absence and reloads.
+- **FR-017**: Autonomous producers MUST keep producing in BOTH offices
+  regardless of which office is currently active or whether a commute is in
+  progress; only the developer's presence-based effects (e.g., manual boost
+  and any presence bonus) depend on the active office and commute state.
+- **FR-018**: All interactive controls MUST be operable by both touch and
+  pointer, and MUST remain reachable and legible across the supported viewport
+  range (phone portrait/landscape through desktop).
 
 ### Key Entities
 
-- **Developer (Dev)**: the player's character in the office; the visual
-  subject whose activity represents production.
+- **Developer (Dev)**: the player's character; the visual subject whose
+  activity represents production. The dev has a current location (which of
+  the two offices they are "present" in) and may commute between offices,
+  tracked as a travel-timer in state.
 - **Resources**: LOC (primary production), Cash (spendable value), AI Tokens
   (accelerator fuel consumed by the burner).
 - **Producers / Upgrades**: themed sources of LOC or multipliers (e.g.,
   manual typing, community Q&A, AI assistant, full autonomous agent),
-  purchasable with Cash.
+  purchasable with Cash. Each placed producer occupies a desk/room slot in an
+  office; an office's finite slot count limits how many can be placed.
+- **Office / Location**: one of the two real lise GmbH buildings, rendered as
+  a top-down floor plan of rooms with a finite set of desk slots. Office #1 is
+  available from the start; Office #2 is unlockable and raises the total slot
+  capacity. The dev is "present" in exactly one office at a time.
 - **Training (lise Academy)**: purchasable entries granting permanent
   production boosts.
 - **Credential Milestones**: long-term goals (quality certification, partner
   status, etc.) that unlock and reward the player.
 - **Save State**: the snapshot restored on load — timestamp, resources, owned
-  upgrades/trainings, earned milestones, and settings.
+  upgrades/trainings (and their desk placements), which offices are unlocked,
+  the dev's active office and any in-progress commute timer, earned
+  milestones, and settings.
 
 ## Success Criteria *(mandatory)*
 
@@ -178,19 +234,29 @@ increases; reach a credential milestone and confirm it unlocks/registers.
 - **SC-005**: The full core loop (produce LOC → cash out → buy token-burner
   → faster LOC) can be demonstrated end-to-end within a single short play
   session.
-- **SC-006**: The game loads and runs in mainstream desktop browsers without
-  additional software.
+- **SC-006**: The game loads and runs in mainstream mobile and desktop
+  browsers without additional software, with a responsive layout that adapts
+  across the supported viewport range.
+- **SC-007**: The full core loop is completable one-handed on a phone in
+  portrait orientation: all interactive targets meet a minimum touch-target
+  size guideline (≥44×44 px) and no interaction requires a pointer-only
+  gesture such as hover or right-click.
+- **SC-008**: Unlocking Office #2 measurably increases the producer/desk
+  capacity available to the player compared with Office #1 alone.
 
 ## Assumptions
 
 - **Single-player MVP**: no multiplayer or social features in this feature
   (per the project constitution's offline-capable, single-player core).
 - **Player manages the economy**: the dev works autonomously with idle
-  animations; direct character movement/control is out of MVP scope (flavor
-  only). Worth confirming in `/speckit.clarify`.
-- **Visual concept**: top-down pixel-art office with the developer at a
-  workstation. The reference image is not machine-readable in this
-  environment, so exact layout/asset scope is confirmed in clarify/plan.
+  animations. Free roaming / direct character control remains out of MVP
+  scope; the only location mechanic is a timed commute that moves the dev's
+  "presence" between the two offices (see FR-016).
+- **Visual concept**: top-down pixel-art world based on the two real lise
+  GmbH office floor plans (rooms such as open office, lounge, kitchen,
+  conference, elevator, stairs, garage, restrooms, with desk workstations).
+  Pixel-art fidelity and exact asset scope are a plan-level decision; the
+  layout need only be recognizable, not a 1:1 architectural reproduction.
 - **Theme / lore**: the developer works at "lise GmbH"; milestones reuse
   real lise.de themes (lise Academy = training, quality certification /
   partner status = credentials, AI solutions = token-burner tier). Flavor
@@ -201,3 +267,6 @@ increases; reach a credential milestone and confirm it unlocks/registers.
 - **No monetization** in the MVP.
 - **Hosting**: served from an already-available self-hosted web endpoint;
   the specific stack is decided in plan.
+- **Target devices**: mobile and desktop browsers are co-equal first-class
+  targets (touch and pointer input, phone portrait/landscape through
+  desktop); no native app or install is in scope.
