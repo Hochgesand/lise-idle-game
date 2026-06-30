@@ -30,7 +30,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 
 - [x] T001 Create root repo scaffolding: `docker-compose.yml`, `.dockerignore`, top-level `README.md` update, and `specs/001-dev-idle-game/` already in place
 - [x] T002 Initialize Spring Boot 4.1 backend project in `backend/` (Java 25, `pom.xml` with `spring-boot-starter-parent` 4.1.x, starters: web, websocket, data-jpa; H2 + PostgreSQL drivers; folder structure per plan.md)
-- [ ] T003 [P] Initialize Vite + TypeScript frontend in `frontend/` (`package.json`, `vite.config.ts`, `tsconfig.json`, install `phaser`, `break_eternity.js`, `vitest`)
+- [x] T003 [P] Initialize Vite + TypeScript frontend in `frontend/` (`package.json`, `vite.config.ts`, `tsconfig.json`, install `phaser`, `break_eternity.js`, `vitest`)
 - [ ] T004 [P] Configure frontend linting/formatting (ESLint + Prettier) and add `npm run test` (Vitest) + `npm run build` scripts in `frontend/package.json`
 - [ ] T005 [P] Configure backend test runner (JUnit 5 + Spring Boot Test) and build in `backend/pom.xml`; add Maven wrapper
 - [ ] T006 [P] Create placeholder content JSON directory `backend/src/main/resources/content/` with empty `producers.json`, `upgrades.json`, `trainings.json`, `milestones.json`, `burners.json`
