@@ -1,0 +1,27 @@
+README.md
+  s_74320c54e5bde1::t_b82cb086609432 1-18
+.gitignore
+  s_74320c54e5bde1::t_f0d116afb77b6e 1-51
+.specify/feature.json
+  s_74320c54e5bde1::t_58ca4c2ef194aa 1-3
+specs/001-dev-idle-game/checklists/requirements.md
+  s_74320c54e5bde1::t_15448c6269c03e 1-45
+specs/001-dev-idle-game/spec.md
+  s_74320c54e5bde1::t_2741d1a61bb860 1-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "f48a44c743d07b98de3fca3780c3a613ccd143f5",
+  "prompts": {},
+  "sessions": {
+    "s_74320c54e5bde1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f18fa-8dd3-7eea-b20d-5255b70ff9a6",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
