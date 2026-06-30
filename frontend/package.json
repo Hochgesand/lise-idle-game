@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@stomp/stompjs": "^7.3.0",
@@ -19,10 +20,16 @@
     "sockjs-client": "^1.6.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/sockjs-client": "^1.5.4",
     "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.7.0",
     "jsdom": "^29.1.1",
+    "prettier": "^3.9.4",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
     "vite": "^8.1.1",
     "vitest": "^4.1.9"
   }

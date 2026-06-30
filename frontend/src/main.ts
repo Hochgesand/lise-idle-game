@@ -17,16 +17,11 @@ class BootScene extends Phaser.Scene {
     // Simple flat background so the dev server shows something recognizable.
     this.cameras.main.setBackgroundColor('#1e293b');
     this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        'Lise Dev Idle Game — booting…',
-        {
-          fontFamily: 'monospace',
-          fontSize: '20px',
-          color: '#e2e8f0',
-        },
-      )
+      .text(this.scale.width / 2, this.scale.height / 2, 'Lise Dev Idle Game — booting…', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        color: '#e2e8f0',
+      })
       .setOrigin(0.5);
   }
 }
