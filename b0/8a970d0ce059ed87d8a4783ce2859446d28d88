@@ -1,0 +1,29 @@
+specs/001-dev-idle-game/tasks.md
+  s_450233d18131f8::t_57beb4c10b8b7c 67
+backend/src/test/java/com/lise/liseidle/state/PlayerStateRepositoryTest.java
+  s_450233d18131f8::t_336d69b041dc75 1-85
+backend/src/main/java/com/lise/liseidle/state/PlayerStateEntity.java
+  s_450233d18131f8::t_bc8753d7b5c8b6 1-102
+backend/src/main/java/com/lise/liseidle/state/PlayerStateRepository.java
+  s_450233d18131f8::t_cf7d98378f4ef5 1-26
+backend/src/main/java/com/lise/liseidle/state/PlayerStateService.java
+  s_450233d18131f8::t_1fc1ab48384917 64,89
+  s_450233d18131f8::t_f34a233910cf25 1-63,65-88,90-94,96-104
+  s_450233d18131f8::t_87c4b975f3bdaa 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "b08a970d0ce059ed87d8a4783ce2859446d28d88",
+  "prompts": {},
+  "sessions": {
+    "s_450233d18131f8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f19c8-c0e7-7f70-839a-de1413dda4f9",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
