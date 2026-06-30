@@ -64,7 +64,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T018 [P] Implement `GameState` Java DTO + BigDecimal/string big-number handling in `backend/src/main/java/.../state/GameState.java`
 - [x] T019 [P] Implement content Java entities (Producer, Upgrade, Training, Milestone, Burner) + JSON loader in `backend/src/main/java/.../content/`
 - [x] T020 Implement `ContentController` serving `GET /api/v1/content` from `backend/src/main/resources/content/*.json` in `backend/src/main/java/.../content/ContentController.java`
-- [ ] T021 Implement JPA persistence layer for player state in `backend/src/main/java/.../state/PlayerStateRepository.java`
+- [x] T021 Implement JPA persistence layer for player state in `backend/src/main/java/.../state/PlayerStateRepository.java`
 - [ ] T022 Implement deterministic monotonic merge (max scalars, union ownership sets, max timestamp) in `backend/src/main/java/.../sync/StateMerger.java`
 - [ ] T023 Implement REST session endpoints (`POST /api/v1/session`, `PUT /api/v1/session/{id}/state`) in `backend/src/main/java/.../session/SessionController.java`
 - [ ] T024 Implement WebSocket/STOMP config + push-only `StateCorrection`/`ContentUpdate` channels in `backend/src/main/java/.../session/`
