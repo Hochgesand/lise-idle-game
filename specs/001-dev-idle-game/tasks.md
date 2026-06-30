@@ -58,8 +58,8 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T012 [P] Implement big-number wrapper around break_eternity.js in `frontend/src/sim/bigNumber.ts` (string in/out, arithmetic helpers)
 - [x] T013 [P] Implement `GameState` + shared value-type TS types (ResourceSet, BurnerState, Cost, Requirement, Effect) in `frontend/src/sim/types.ts` matching data-model.md
 - [x] T014 Implement content loader `loadContent(contentJson) -> ContentCatalog` with validation in `frontend/src/sim/content.ts`
-- [ ] T015 Implement the pure deterministic `advance(state, dt) -> state` core in `frontend/src/sim/advance.ts` (computeRate, burner fuel consumption, milestone check, lastAdvancedAt update) — NO I/O, NO Phaser imports
-- [ ] T016 Implement `computeRate(state, content) -> BigNumber` (preview LOC/sec) in `frontend/src/sim/advance.ts` (exported, used by UI and `advance`)
+- [x] T015 Implement the pure deterministic `advance(state, dt) -> state` core in `frontend/src/sim/advance.ts` (computeRate, burner fuel consumption, milestone check, lastAdvancedAt update) — NO I/O, NO Phaser imports
+- [x] T016 Implement `computeRate(state, content) -> BigNumber` (preview LOC/sec) in `frontend/src/sim/advance.ts` (exported, used by UI and `advance`)
 - [ ] T017 [P] Implement localStorage save/load + `schemaVersion` migration chain stub in `frontend/src/save/localStorage.ts`
 - [ ] T018 [P] Implement `GameState` Java DTO + BigDecimal/string big-number handling in `backend/src/main/java/.../state/GameState.java`
 - [ ] T019 [P] Implement content Java entities (Producer, Upgrade, Training, Milestone, Burner) + JSON loader in `backend/src/main/java/.../content/`

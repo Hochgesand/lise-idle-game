@@ -72,6 +72,16 @@ export function multiply(a: BigNumber, b: BigNumber): BigNumber {
   return wrap(Decimal.mul(a as Decimal, b as Decimal));
 }
 
+/** BigNumber subtraction (returns a new BigNumber; operands not mutated). */
+export function subtract(a: BigNumber, b: BigNumber): BigNumber {
+  return wrap(Decimal.sub(a as Decimal, b as Decimal));
+}
+
+/** BigNumber division (returns a new BigNumber; operands not mutated). */
+export function divide(a: BigNumber, b: BigNumber): BigNumber {
+  return wrap(Decimal.div(a as Decimal, b as Decimal));
+}
+
 /** Ordering: -1 if a < b, 0 if equal, 1 if a > b. */
 export function compare(a: BigNumber, b: BigNumber): -1 | 0 | 1 {
   return Decimal.cmp(a as Decimal, b as Decimal);
