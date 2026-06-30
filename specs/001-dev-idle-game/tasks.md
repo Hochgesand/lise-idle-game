@@ -61,7 +61,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T015 Implement the pure deterministic `advance(state, dt) -> state` core in `frontend/src/sim/advance.ts` (computeRate, burner fuel consumption, milestone check, lastAdvancedAt update) — NO I/O, NO Phaser imports
 - [x] T016 Implement `computeRate(state, content) -> BigNumber` (preview LOC/sec) in `frontend/src/sim/advance.ts` (exported, used by UI and `advance`)
 - [x] T017 [P] Implement localStorage save/load + `schemaVersion` migration chain stub in `frontend/src/save/localStorage.ts`
-- [ ] T018 [P] Implement `GameState` Java DTO + BigDecimal/string big-number handling in `backend/src/main/java/.../state/GameState.java`
+- [x] T018 [P] Implement `GameState` Java DTO + BigDecimal/string big-number handling in `backend/src/main/java/.../state/GameState.java`
 - [ ] T019 [P] Implement content Java entities (Producer, Upgrade, Training, Milestone, Burner) + JSON loader in `backend/src/main/java/.../content/`
 - [ ] T020 Implement `ContentController` serving `GET /api/v1/content` from `backend/src/main/resources/content/*.json` in `backend/src/main/java/.../content/ContentController.java`
 - [ ] T021 Implement JPA persistence layer for player state in `backend/src/main/java/.../state/PlayerStateRepository.java`
