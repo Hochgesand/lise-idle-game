@@ -1,0 +1,72 @@
+# docker-compose.yml — Lise Dev Idle Game
+#
+# Two-service stack for the Unraid deploy target (host: root@schmitz.gg:2222,
+# appdata: /mnt/user/appdata/lise-game), fronted by the existing Traefik
+# reverse proxy on the host's external `traefik` network.
+#
+# This is an initial scaffold (T001). Routing/volumes are finalized in T057.
+# Build contexts (./backend, ./frontend) are created by T002/T003.
+#
+# Bring up locally:        docker compose up --build
+# Validate the YAML:       docker compose config -q
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: lise-game-backend
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      # Persist H2/Postgres data under the bind-mounted /data volume.
+      - SPRING_DATASOURCE_URL=jdbc:h2:file:/data/gamedb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+    volumes:
+      # Durable backend state (DB files, saves) on the Unraid appdata share.
+      - /mnt/user/appdata/lise-game:/data
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      # Plaintext HTTP router (entrypoint `web` on :80).
+      - traefik.http.routers.lise-game-api.rule=Host(`lise-game-api.schmitz.gg`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))
+      - traefik.http.routers.lise-game-api.entrypoints=web
+      # HTTPS router (entrypoint `websecure` on :443) with cert resolver.
+      - traefik.http.routers.lise-game-api-secure.rule=Host(`lise-game-api.schmitz.gg`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))
+      - traefik.http.routers.lise-game-api-secure.entrypoints=websecure
+      - traefik.http.routers.lise-game-api-secure.tls=true
+      - traefik.http.routers.lise-game-api-secure.tls.certresolver=letsencrypt
+      # Backend listens on 8080 inside the container.
+      - traefik.http.services.lise-game-api.loadbalancer.server.port=8080
+      - traefik.http.routers.lise-game-api.service=lise-game-api
+      - traefik.http.routers.lise-game-api-secure.service=lise-game-api
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: lise-game-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      # Plaintext HTTP router for the static frontend.
+      - traefik.http.routers.lise-game.rule=Host(`lise-game.schmitz.gg`)
+      - traefik.http.routers.lise-game.entrypoints=web
+      # HTTPS router for the static frontend.
+      - traefik.http.routers.lise-game-secure.rule=Host(`lise-game.schmitz.gg`)
+      - traefik.http.routers.lise-game-secure.entrypoints=websecure
+      - traefik.http.routers.lise-game-secure.tls=true
+      - traefik.http.routers.lise-game-secure.tls.certresolver=letsencrypt
+      # nginx serves on port 80 inside the container.
+      - traefik.http.services.lise-game.loadbalancer.server.port=80
+      - traefik.http.routers.lise-game.service=lise-game
+      - traefik.http.routers.lise-game-secure.service=lise-game
+
+networks:
+  traefik:
+    # The host already runs Traefik with this external network.
+    external: true

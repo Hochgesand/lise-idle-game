@@ -1,0 +1,86 @@
+# .dockerignore — Lise Dev Idle Game monorepo (Node + Java)
+#
+# Keeps the Docker build context lean for both ./backend (Spring Boot) and
+# ./frontend (Vite). Mirrors .gitignore essentials plus spec/agent tooling
+# that must never enter a production image.
+
+# ── Version control / metadata ──────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Node / frontend (TS/JS) ─────────────────────────
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.cache/
+.parcel-cache/
+.vite/
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+coverage/
+**/coverage/
+
+# ── Java / Spring Boot backend ──────────────────────
+target/
+**/target/
+out/
+**/out/
+*.class
+*.jar
+*.war
+*.ear
+!gradle/wrapper/gradle-wrapper.jar
+hs_err_pid*
+replay_pid*
+
+# ── Env / secrets ───────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── IDE / editor ────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# ── OS / misc ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+
+# ── Docker metadata (don't recurse into images) ────
+Dockerfile
+**/Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# ── Spec/agent tooling (tracked, but not for images) ─
+.specify/
+.pi/
+.claude/
+specs/
+AGENTS.md
+
+# ── Tests/docs excluded from runtime images ─────────
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/tests/
+**/__tests__/
+README.md
