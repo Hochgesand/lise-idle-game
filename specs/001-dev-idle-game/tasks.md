@@ -48,7 +48,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 ### Tests for Foundational (write first, ensure RED)
 
 - [x] T007 [P] Write property test for `advance` determinism/associativity: `advance(advance(s, a), b) === advance(s, a+b)` in `frontend/src/sim/advance.test.ts`
-- [ ] T008 [P] Write unit test for big-number wrapper (string round-trip, no precision loss, add/multiply) in `frontend/src/sim/bigNumber.test.ts`
+- [x] T008 [P] Write unit test for big-number wrapper (string round-trip, no precision loss, add/multiply) in `frontend/src/sim/bigNumber.test.ts`
 - [ ] T009 [P] Write unit test for content loader validation (malformed JSON throws, valid JSON parses to typed catalog) in `frontend/src/sim/content.test.ts`
 - [ ] T010 [P] Write backend test for `GET /api/v1/content` returning valid content JSON in `backend/src/test/java/.../content/ContentControllerTest.java`
 - [ ] T011 Write integration test for save round-trip (serialize → deserialize → serialize == identical) in `backend/src/test/java/.../state/GameStateRoundTripTest.java`
