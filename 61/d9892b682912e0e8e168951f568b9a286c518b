@@ -1,0 +1,38 @@
+frontend/package.json
+  s_177201b1833743::t_48616d00b42a76 1-29
+frontend/src/vite-env.d.ts
+  s_177201b1833743::t_3bd986163dd667 1
+frontend/index.html
+  s_177201b1833743::t_eb9422ff9b3117 1-17
+frontend/tsconfig.node.json
+  s_177201b1833743::t_09e66d3fc15cf9 1-21
+frontend/.gitignore
+  s_177201b1833743::t_34d738a57a5074 1-6
+frontend/tsconfig.json
+  s_177201b1833743::t_219c6c69479d18 1-25
+frontend/src/main.ts
+  s_177201b1833743::t_ac3a2ff067225d 1-44
+specs/001-dev-idle-game/tasks.md
+  s_177201b1833743::t_dbf8ff31856674 33
+frontend/vite.config.ts
+  s_177201b1833743::t_0e9119b30a3f71 1-15,18-24
+  s_177201b1833743::t_28f1afdc1f1670 16-17
+frontend/package-lock.json
+  s_177201b1833743::t_6df6741671f61b 1-2258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "61d9892b682912e0e8e168951f568b9a286c518b",
+  "prompts": {},
+  "sessions": {
+    "s_177201b1833743": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f194a-2f62-7437-a06a-893e81032d95",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
