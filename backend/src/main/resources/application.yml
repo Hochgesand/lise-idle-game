@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: lise-idle-backend
+
+  datasource:
+    # Dev default: in-memory H2 in PostgreSQL compatibility mode. Prod is
+    # driven by SPRING_DATASOURCE_* env vars (see docker-compose.yml).
+    url: jdbc:h2:mem:gamedb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+  h2:
+    console:
+      enabled: true
+
+server:
+  port: 8080

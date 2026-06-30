@@ -1,0 +1,25 @@
+# Maven / Java build output
+target/
+build/
+out/
+
+# Compiled classes
+*.class
+
+# Spring Boot / Initializr
+HELP.md
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
