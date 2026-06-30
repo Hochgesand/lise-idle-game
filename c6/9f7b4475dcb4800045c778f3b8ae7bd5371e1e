@@ -1,0 +1,39 @@
+backend/src/main/java/com/lise/liseidle/content/Effect.java
+  s_cf72ad6ff91932::t_daa31d0764cc53 1-39
+backend/src/main/java/com/lise/liseidle/content/Cost.java
+  s_cf72ad6ff91932::t_1b75f384fa2be0 1-19
+backend/src/main/java/com/lise/liseidle/content/ContentLoader.java
+  s_cf72ad6ff91932::t_69c8817a079899 1-105
+backend/src/main/java/com/lise/liseidle/content/Burner.java
+  s_cf72ad6ff91932::t_0e363613798c72 1-23
+backend/src/main/java/com/lise/liseidle/content/Training.java
+  s_cf72ad6ff91932::t_2fee0cce457b0e 1-24
+specs/001-dev-idle-game/tasks.md
+  s_cf72ad6ff91932::t_a96e194e485e1a 65
+backend/src/main/java/com/lise/liseidle/content/Milestone.java
+  s_cf72ad6ff91932::t_bb84ff6f282e4d 1-20
+backend/src/main/java/com/lise/liseidle/content/ContentCatalog.java
+  s_cf72ad6ff91932::t_43ab795d37d3a3 1-36
+backend/src/main/java/com/lise/liseidle/content/Producer.java
+  s_cf72ad6ff91932::t_b2b6b5715a43b6 1-31
+backend/src/main/java/com/lise/liseidle/content/Requirement.java
+  s_cf72ad6ff91932::t_241b956298b6ec 1-22
+backend/src/main/java/com/lise/liseidle/content/Upgrade.java
+  s_cf72ad6ff91932::t_f692dfe13b9426 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "c69f7b4475dcb4800045c778f3b8ae7bd5371e1e",
+  "prompts": {},
+  "sessions": {
+    "s_cf72ad6ff91932": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f19c1-ac0e-756d-b23d-0e71939fce92",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
