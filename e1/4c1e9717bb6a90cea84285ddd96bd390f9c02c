@@ -1,0 +1,23 @@
+frontend/src/sim/bigNumber.test.ts
+  s_e15f555e9f8b73::t_decb7cb77d2666 20-27,46-61,85-88
+frontend/src/sim/bigNumber.ts
+  s_e15f555e9f8b73::t_ce37fd0351a827 1-88
+specs/001-dev-idle-game/tasks.md
+  s_e15f555e9f8b73::t_37c363d355570c 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "e14c1e9717bb6a90cea84285ddd96bd390f9c02c",
+  "prompts": {},
+  "sessions": {
+    "s_e15f555e9f8b73": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1986-7bb7-7b99-b98c-d70d1e5a1172",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
