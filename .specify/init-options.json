@@ -1,0 +1,8 @@
+{
+  "ai": "pi",
+  "feature_numbering": "sequential",
+  "here": false,
+  "integration": "pi",
+  "script": "sh",
+  "speckit_version": "0.10.1"
+}
