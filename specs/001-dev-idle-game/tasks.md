@@ -55,7 +55,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 
 ### Implementation for Foundational
 
-- [ ] T012 [P] Implement big-number wrapper around break_eternity.js in `frontend/src/sim/bigNumber.ts` (string in/out, arithmetic helpers)
+- [x] T012 [P] Implement big-number wrapper around break_eternity.js in `frontend/src/sim/bigNumber.ts` (string in/out, arithmetic helpers)
 - [ ] T013 [P] Implement `GameState` + shared value-type TS types (ResourceSet, BurnerState, Cost, Requirement, Effect) in `frontend/src/sim/types.ts` matching data-model.md
 - [ ] T014 Implement content loader `loadContent(contentJson) -> ContentCatalog` with validation in `frontend/src/sim/content.ts`
 - [ ] T015 Implement the pure deterministic `advance(state, dt) -> state` core in `frontend/src/sim/advance.ts` (computeRate, burner fuel consumption, milestone check, lastAdvancedAt update) — NO I/O, NO Phaser imports
