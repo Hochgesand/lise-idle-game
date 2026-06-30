@@ -1,0 +1,34 @@
+frontend/tsconfig.json
+  s_c71b16660f8ae8::t_4d856ed1ae01a4 23
+frontend/package.json
+  s_c71b16660f8ae8::t_6fc68b93641d4e 23,26-28,30,32
+  s_c71b16660f8ae8::t_95605aa1567a11 13-14
+frontend/eslint.config.js
+  s_c71b16660f8ae8::t_efa7e4fa074800 1-40
+frontend/.prettierignore
+  s_c71b16660f8ae8::t_fb9f9aa07e09e5 1-5
+frontend/.prettierrc.json
+  s_c71b16660f8ae8::t_4dc3860d8f508d 1-7
+frontend/src/main.ts
+  s_c71b16660f8ae8::t_cb47c570f2aaa8 20-24
+specs/001-dev-idle-game/tasks.md
+  s_c71b16660f8ae8::t_0d07320cd5be30 34
+frontend/package-lock.json
+  s_c71b16660f8ae8::t_c4f44809c14439 17,20-22,24,26,329-474,493-558,940-946,954-960,968-1269,1414-1453,1476-1485,1496-1508,1532-1546,1591-1597,1628-1819,1830-1839,1865-1885,1916-1966,1982-2007,2044-2063,2070-2092,2100-2106,2194-2238,2512-2527,2583-2598,2624-2630,2645-2694,2708-2727,2793-2818,2931-2953,3114-3126,3135-3147,3162-3185,3196-3205,3455-3470,3488-3497,3514-3526
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "2633e5935ea8afa4877489df692bc8761ce32277",
+  "prompts": {},
+  "sessions": {
+    "s_c71b16660f8ae8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1953-6659-7e6c-8f57-6c2913c587b0",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
