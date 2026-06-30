@@ -1,0 +1,255 @@
+// T009 — RED unit test for the content loader validation.
+//
+// ## Background (data-model.md, contracts §1, §2)
+// All game content (producers, upgrades, trainings, milestones, burners) is
+// versioned JSON served by the backend at `GET /api/v1/content` (contracts §2).
+// The client parses the raw envelope into a typed, validated ContentCatalog.
+// Malformed content → throws ContentValidationError; the game never runs with
+// half-parsed balance data (contracts §1 "Content loader").
+//
+// Big-number fields (baseRate, cost.amount, fuelCostToActivate, burnRate,
+// threshold) are serialized as **strings** end-to-end — never `double`. A
+// number where a string is required is malformed and must be rejected.
+//
+// ## API designed here (implemented by T014)
+//  - `loadContent(envelope: ContentEnvelope): ContentCatalog`
+//        Validate + type-narrow the already-parsed envelope. All-or-nothing:
+//        either returns a fully-valid catalog or throws ContentValidationError
+//        before returning anything partial.
+//  - `class ContentValidationError extends Error`
+//        The loader's own error type, exported from `./content`.
+//
+// ## Envelope shape (contracts §2)
+//   { schemaVersion: number; contentVersion: string;
+//     producers: unknown[]; upgrades: unknown[]; trainings: unknown[];
+//     milestones: unknown[]; burners: unknown[] }
+//
+// This file imports `./content` and `./types`, which DO NOT EXIST yet
+// (implemented in T014 and T013 respectively). Therefore the suite fails to
+// resolve and is RED — the correct TDD starting state per Constitution
+// Principle III.
+
+import { describe, it, expect } from 'vitest';
+import { loadContent, ContentValidationError } from './content';
+import type { ContentEnvelope, ContentCatalog } from './types';
+
+// ---------------------------------------------------------------------------
+// Fixture builders (DRY) — each returns a fresh deep clone so a test may
+// mutate its copy without affecting siblings.
+// ---------------------------------------------------------------------------
+
+/** A single valid producer, optionally overridden. */
+function producer(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'manual_typing',
+    name: 'Manual Typing',
+    description: 'Type lines of code by hand.',
+    baseRate: '1',
+    cost: { resource: 'cash', amount: '10' },
+    costGrowth: 1.15,
+    unlockRequirement: null,
+    ...overrides,
+  };
+}
+
+/** A single valid upgrade. */
+function upgrade(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'better_keyboard',
+    name: 'Better Keyboard',
+    cost: { resource: 'cash', amount: '100' },
+    effect: { type: 'producerRateMultiplier', producerId: 'manual_typing', multiplier: 2 },
+    prerequisite: null,
+    ...overrides,
+  };
+}
+
+/** A single valid lise Academy training. */
+function training(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'lise_onboarding',
+    name: 'lise Onboarding',
+    description: 'Welcome to the lise Academy.',
+    cost: { resource: 'cash', amount: '50' },
+    permanentMultiplier: 1.1,
+    prerequisite: null,
+    ...overrides,
+  };
+}
+
+/** A single valid credential milestone. */
+function milestone(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'iso_9001',
+    name: 'ISO 9001 Certified',
+    requirement: { type: 'resourceGte', targetId: null, threshold: '1000' },
+    reward: { type: 'globalMultiplier', multiplier: 1.05 },
+    ...overrides,
+  };
+}
+
+/** A single valid burner definition. */
+function burner(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'copilot_burner',
+    name: 'Copilot Burner',
+    fuelCostToActivate: '100',
+    burnRate: '10',
+    productionMultiplier: 3,
+    ...overrides,
+  };
+}
+
+/** A fresh, fully-valid envelope with one entry of each type. */
+function validEnvelope(): ContentEnvelope {
+  return {
+    schemaVersion: 1,
+    contentVersion: '1.0.0',
+    producers: [producer()],
+    upgrades: [upgrade()],
+    trainings: [training()],
+    milestones: [milestone()],
+    burners: [burner()],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// loadContent — valid input
+// ---------------------------------------------------------------------------
+
+describe('loadContent — valid input', () => {
+  it('parses a well-formed envelope into a typed catalog', () => {
+    const catalog = loadContent(validEnvelope());
+
+    // Each content type array has the expected length.
+    expect(catalog.producers).toHaveLength(1);
+    expect(catalog.upgrades).toHaveLength(1);
+    expect(catalog.trainings).toHaveLength(1);
+    expect(catalog.milestones).toHaveLength(1);
+    expect(catalog.burners).toHaveLength(1);
+
+    // The producer is typed with the expected id and fields.
+    expect(catalog.producers[0].id).toBe('manual_typing');
+    expect(catalog.producers[0].name).toBe('Manual Typing');
+    expect(catalog.producers[0].baseRate).toBe('1');
+    expect(catalog.producers[0].costGrowth).toBe(1.15);
+    expect(catalog.producers[0].unlockRequirement).toBeNull();
+  });
+
+  it('handles empty arrays (all content empty)', () => {
+    const catalog = loadContent({
+      schemaVersion: 1,
+      contentVersion: '1.0.0',
+      producers: [],
+      upgrades: [],
+      trainings: [],
+      milestones: [],
+      burners: [],
+    });
+
+    // Five empty arrays, no throw.
+    expect(catalog.producers).toEqual([]);
+    expect(catalog.upgrades).toEqual([]);
+    expect(catalog.trainings).toEqual([]);
+    expect(catalog.milestones).toEqual([]);
+    expect(catalog.burners).toEqual([]);
+  });
+
+  it('preserves big-number string fields as strings (baseRate, cost.amount)', () => {
+    const catalog = loadContent(validEnvelope());
+
+    // Big numbers MUST stay strings — never coerced to number.
+    expect(typeof catalog.producers[0].baseRate).toBe('string');
+    expect(catalog.producers[0].baseRate).toBe('1');
+    expect(typeof catalog.producers[0].cost.amount).toBe('string');
+    expect(catalog.producers[0].cost.amount).toBe('10');
+  });
+
+  it('returns a catalog carrying the envelope schemaVersion/contentVersion', () => {
+    const catalog: ContentCatalog = loadContent(validEnvelope());
+    expect(catalog.schemaVersion).toBe(1);
+    expect(catalog.contentVersion).toBe('1.0.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadContent — malformed input throws ContentValidationError
+// ---------------------------------------------------------------------------
+
+describe('loadContent — malformed input throws ContentValidationError', () => {
+  it('throws when producers is missing', () => {
+    const env = validEnvelope();
+    // @ts-expect-error — intentionally malformed (producers deleted).
+    delete env.producers;
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when a producer is missing a required field (id)', () => {
+    const env = validEnvelope();
+    env.producers = [producer({ id: undefined })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when baseRate is not a string (number forbidden — big numbers are strings)', () => {
+    const env = validEnvelope();
+    // A number where a string is required is malformed.
+    env.producers = [producer({ baseRate: 1 })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when cost.amount is not a string', () => {
+    const env = validEnvelope();
+    env.producers = [producer({ cost: { resource: 'cash', amount: 10 } })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when requirement.type is not one of the allowed enum values', () => {
+    const env = validEnvelope();
+    env.milestones = [
+      milestone({
+        requirement: { type: 'nonsense', targetId: null, threshold: null },
+      }),
+    ];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws on duplicate ids within a content type', () => {
+    const env = validEnvelope();
+    env.producers = [producer({ id: 'dup' }), producer({ id: 'dup' })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when schemaVersion is missing / not a number', () => {
+    const env = validEnvelope();
+    // @ts-expect-error — intentionally malformed.
+    env.schemaVersion = 'oops';
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when cost.resource is not an allowed enum value', () => {
+    const env = validEnvelope();
+    env.producers = [producer({ cost: { resource: 'gold', amount: '10' } })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadContent — never runs with half-parsed data
+// ---------------------------------------------------------------------------
+
+describe('loadContent — never runs with half-parsed data', () => {
+  // The contract (§1) guarantees all-or-nothing: a throwing validation
+  // produces NO partial catalog. loadContent must throw BEFORE returning any
+  // half-built object. The tests above already assert that malformed input
+  // throws ContentValidationError; this block makes the guarantee explicit.
+
+  it('a throwing validation produces NO partial catalog (throws before returning)', () => {
+    const env = validEnvelope();
+    env.producers = [producer({ baseRate: 1 })]; // malformed
+
+    // Calling loadContent must not resolve to a value at all — it throws.
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+    // No additional assertion needed: a thrown error means no return value,
+    // hence no partial catalog can leak to the caller (the sim).
+  });
+});
