@@ -1,0 +1,23 @@
+frontend/public/assets/office.json
+  s_ccd69d97aaeccd::t_cfe8c2fda71d34 1-658
+frontend/public/assets/README.md
+  s_ccd69d97aaeccd::t_2844ac7ade06f6 1-79
+specs/001-dev-idle-game/tasks.md
+  s_ccd69d97aaeccd::t_e541631093bbca 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c2a50f2c499c1e9374bb111a081ddb5b8a08be4f",
+  "prompts": {},
+  "sessions": {
+    "s_ccd69d97aaeccd": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e54-b2a4-7a0d-a7f3-56eda773f047",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
