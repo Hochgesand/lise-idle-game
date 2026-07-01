@@ -1,0 +1,12 @@
+# Keep the Docker build context small and avoid copying heavy local build
+# artifacts (node_modules/, dist/) or IDE caches into the build stage. They
+# are regenerated inside the image by `npm ci` + `npm run build`.
+node_modules/
+dist/
+*.log
+.idea/
+.vscode/
+*.iml
+.DS_Store
+# TypeScript incremental build info — regenerated during the image build.
+*.tsbuildinfo
