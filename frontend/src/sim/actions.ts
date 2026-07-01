@@ -236,3 +236,55 @@ export function activateBurner(
   };
   return result;
 }
+
+// ── US3: purchaseTraining ───────────────────────────────────────────────
+
+/**
+ * Purchase a lise Academy training: deducts its Cost from the named resource
+ * and adds the training id to ownedTrainings (contracts.md §1, quickstart
+ * Scenario 3).
+ *
+ * The permanent multiplier is NOT applied here — it is derived continuously
+ * from `ownedTrainings` by `computeRate`/`advance` (`rateWithoutBurner` does
+ * `globalMult *= training.permanentMultiplier` for owned trainings). So this
+ * mutator only changes ownership + deducts the cost, exactly mirroring
+ * `purchaseUpgrade`.
+ *
+ * @param state       the current saveable snapshot (not mutated)
+ * @param content     the versioned game content
+ * @param trainingId  the id of the Training to purchase
+ * @returns a NEW GameState with the cost deducted and the training owned.
+ * @throws Error if the training id is not found in content (a usage bug, not
+ *         an affordability condition).
+ * @throws InsufficientResourcesError if the player cannot afford the Cost
+ *         (input unchanged).
+ *
+ * Pure: returns a new state, never mutates the input, no I/O, no time advance.
+ */
+export function purchaseTraining(
+  state: GameState,
+  content: ContentCatalog,
+  trainingId: string,
+): GameState {
+  const training = content.trainings.find((t) => t.id === trainingId);
+  if (training === undefined) {
+    throw new Error(`Training '${trainingId}' not found in content.`);
+  }
+
+  const resource = training.cost.resource;
+  const amount = training.cost.amount;
+  if (compare(bn(state.resources[resource]), bn(amount)) < 0) {
+    throw new InsufficientResourcesError(
+      `Cannot purchase training '${trainingId}': needs ${amount} ${resource}, ` +
+        `only ${state.resources[resource]} available.`,
+    );
+  }
+
+  const result = cloneState(state);
+  result.resources[resource] = toString(
+    subtract(bn(state.resources[resource]), bn(amount)),
+  );
+  result.ownedTrainings = new Set(state.ownedTrainings);
+  result.ownedTrainings.add(trainingId);
+  return result;
+}
