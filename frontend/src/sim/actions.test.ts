@@ -35,7 +35,7 @@ import {
 } from './actions';
 import { computeRate, advance } from './advance';
 import { add, bn, compare, multiply, toString } from './bigNumber';
-import type { GameState, ContentCatalog, Training } from './types';
+import type { GameState, ContentCatalog } from './types';
 
 // ---------------------------------------------------------------------------
 // Fixtures (mirror advance.test.ts conventions)
