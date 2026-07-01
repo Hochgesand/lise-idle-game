@@ -1,39 +1,292 @@
+// T036 — End-to-end US1 wiring: the shippable MVP entry point.
+//
+// Boots the full game per quickstart.md Scenario 1:
+//   new player starts at zero → fetch content → start loop → render office →
+//   save on close/periodically → restore on reload.
+//
+// On load, offline progress is caught up via `advance(state, elapsedDt)`.
+// A fresh player is granted `manual_typing` (free starter producer) so LOC
+// grows from t=0.
+//
+// ## Constitution compliance
+// - This is the ONLY module allowed to touch the wall clock (Date.now()),
+//   localStorage, and the network. The pure sim (advance/actions/content) is
+//   called here but its modules contain no side effects.
+// - Offline-capable (Constitution IV): all network calls are best-effort; the
+//   local localStorage save is authoritative for play. The game boots and runs
+//   even if the backend is totally unreachable.
+// - Big numbers stay strings end-to-end (never double).
+//
+// ## Loop-driver choice
+// A thin `ControllerScene` (defined below) drives the game-loop tick via its
+// `update(time)` — this avoids modifying OfficeScene (T034) or HudScene (T035)
+// while ensuring the tick runs every frame. The controller launches both
+// scenes as parallel overlays.
+
 import Phaser from 'phaser';
+import type { ContentCatalog, ContentEnvelope, GameState } from './sim/types';
+import { loadContent } from './sim/content';
+import { manualBoost } from './sim/actions';
+import { grantStarterProducer } from './sim/freshPlayer';
+import { bn, compare } from './sim/bigNumber';
+import { GameLoop } from './game/gameLoop';
+import { loadGame, saveGame, createInitialState } from './save/localStorage';
+import { restClient } from './net/restClient';
+import { stompClient } from './net/stompClient';
+import { OfficeScene } from './scenes/OfficeScene';
+import { HudScene } from './scenes/HudScene';
+
+// ── Module-level mutable state (the single source of truth for the app) ────
 
 /**
- * Placeholder entry point (T003).
- *
- * Boots a minimal Phaser 4 game into the #game div just to prove the toolchain
- * works end-to-end. The real office scene arrives in T034; the HUD in T035;
- * full wiring in T036. Scale.RESIZE keeps the canvas responsive across mobile
- * (portrait/landscape) and desktop (FR-001/FR-018).
+ * The live game state. Written by the game loop (each tick) and action
+ * mutators (boost), read by the HUD. This is the authoritative in-memory copy;
+ * localStorage + backend are best-effort persistence layers.
  */
-class BootScene extends Phaser.Scene {
-  constructor() {
-    super('BootScene');
-  }
+let state: GameState = createInitialState();
 
-  create(): void {
-    // Simple flat background so the dev server shows something recognizable.
-    this.cameras.main.setBackgroundColor('#1e293b');
-    this.add
-      .text(this.scale.width / 2, this.scale.height / 2, 'Lise Dev Idle Game — booting…', {
-        fontFamily: 'monospace',
-        fontSize: '20px',
-        color: '#e2e8f0',
-      })
-      .setOrigin(0.5);
+/**
+ * The validated content catalog. Starts as an empty fallback so the game
+ * renders before the backend fetch resolves; replaced with real content once
+ * the fetch succeeds. If the backend is unreachable, the fallback persists
+ * (the game is playable but produces nothing until content loads — offline-
+ * capable, Constitution IV).
+ */
+let content: ContentCatalog = {
+  schemaVersion: 1,
+  contentVersion: '0.0.0',
+  producers: [],
+  upgrades: [],
+  trainings: [],
+  milestones: [],
+  burners: [],
+};
+
+/** The game loop orchestrator (constructed during boot). */
+let loop: GameLoop;
+
+// ── Player ID management ──────────────────────────────────────────────────
+
+const PLAYER_ID_KEY = 'lise-player-id';
+
+/**
+ * Get or create the anonymous player ID (stored in localStorage). Generates a
+ * fresh UUID on first boot. If localStorage is unavailable (private mode,
+ * disabled), returns an ephemeral UUID (the backend sync simply won't persist
+ * across sessions — non-fatal, local save is authoritative).
+ */
+function getOrCreatePlayerId(): string {
+  try {
+    let id = localStorage.getItem(PLAYER_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(PLAYER_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return crypto.randomUUID();
   }
 }
 
-new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'game',
-  backgroundColor: '#1e293b',
-  scale: {
-    mode: Phaser.Scale.RESIZE,
-    width: '100%',
-    height: '100%',
-  },
-  scene: [BootScene],
-});
+// ── Content fetching (best-effort, offline-capable) ────────────────────────
+
+/**
+ * Fetch + validate game content from the backend. On success, updates the
+ * module-level `content`. On failure (backend unreachable, malformed JSON),
+ * logs a warning and keeps the empty fallback — the game stays playable
+ * (Constitution IV — offline-capable core).
+ */
+async function fetchContent(): Promise<void> {
+  try {
+    const envelope: ContentEnvelope = await restClient.getContent();
+    content = loadContent(envelope);
+  } catch (err) {
+    console.warn(
+      '[main] Content fetch failed — using empty fallback. The game is still playable.',
+      err,
+    );
+  }
+}
+
+// ── Backend sync (best-effort) ─────────────────────────────────────────────
+
+/**
+ * Best-effort: save the current state to the backend. Failures are logged but
+ * never fatal — the local localStorage save is authoritative for play.
+ */
+async function syncToBackend(): Promise<void> {
+  try {
+    const playerId = getOrCreatePlayerId();
+    await restClient.saveState(playerId, state, new Date().toISOString());
+  } catch (err) {
+    console.warn('[main] Backend sync failed — local save is authoritative.', err);
+  }
+}
+
+/**
+ * Best-effort: load a server save. If the server has a state with MORE progress
+ * (higher LOC) than the local save, adopt it (handles "played on another
+ * device"). Otherwise keep the local save. Never reduces progress
+ * (Constitution IV — never silently destroy progress).
+ */
+async function loadFromBackend(): Promise<void> {
+  try {
+    const playerId = getOrCreatePlayerId();
+    const serverState = await restClient.loadSession(playerId);
+    if (serverState !== null) {
+      // Adopt server state only if it has strictly more LOC (more progress).
+      if (compare(bn(serverState.resources.loc), bn(state.resources.loc)) > 0) {
+        state = serverState;
+        loop.load(state, Date.now());
+        saveGame(state);
+      }
+    }
+  } catch {
+    // Backend unreachable — local save is authoritative. Non-fatal.
+  }
+}
+
+// ── STOMP live channel (best-effort) ───────────────────────────────────────
+
+/**
+ * Connect the STOMP push-only channel (advisory corrections + content updates).
+ * Failures are non-fatal — the game stays playable without it.
+ */
+function connectStomp(): void {
+  try {
+    stompClient.connect({
+      onStateCorrection: (newState, _reason) => {
+        // Replace local state with the authoritative merged state + re-anchor.
+        state = newState;
+        loop.load(state, Date.now());
+        saveGame(state);
+      },
+      onContentUpdate: async (_version) => {
+        await fetchContent();
+      },
+    });
+  } catch (err) {
+    console.warn('[main] STOMP connection failed — push channel disabled.', err);
+  }
+}
+
+// ── Controller scene (drives the game-loop tick each frame) ────────────────
+
+/**
+ * A thin controller Phaser scene. It does NOT render anything itself — it
+ * launches OfficeScene (the office) and HudScene (the overlay) as parallel
+ * scenes, and its `update(time)` drives the game-loop tick.
+ *
+ * This is the cleanest integration point: it avoids modifying OfficeScene
+ * (T034) or HudScene (T035) while ensuring the loop tick runs every frame.
+ */
+class ControllerScene extends Phaser.Scene {
+  constructor() {
+    super('ControllerScene');
+  }
+
+  create(): void {
+    // Launch the office scene (renders the tilemap + dev sprite).
+    this.scene.launch('OfficeScene');
+    // Launch the HUD overlay with injected accessors for live state + boost.
+    this.scene.launch('HudScene', {
+      getState: (): GameState => state,
+      getContent: (): ContentCatalog => content,
+      onBoost: () => {
+        state = manualBoost(state, content);
+      },
+    });
+  }
+
+  /**
+   * Called by Phaser every frame (~60fps). Drives the game-loop tick with the
+   * real elapsed dt. This is the wall-clock boundary — Phaser's time feeds the
+   * loop, which computes dt internally and delegates to the pure `advance`.
+   */
+  update(time: number): void {
+    loop.update(time);
+  }
+}
+
+// ── Boot sequence ──────────────────────────────────────────────────────────
+
+/**
+ * Boot the game. This is the single entry point — called once on page load.
+ *
+ * Order:
+ *  1. Load local save (null → fresh state) + grant starter producer.
+ *  2. Construct the game loop (content is the empty fallback for now).
+ *  3. Start Phaser immediately (office renders, HUD shows "LOC: 0").
+ *  4. Fetch content (async, best-effort). Once loaded, catch up offline progress
+ *     with the real content (so a returning player's LOC rate is correct).
+ *  5. Best-effort: backend session load, STOMP connect, periodic sync.
+ *
+ * Offline-capability: steps 4–5 are all best-effort. If the backend is down,
+ * the game still boots, renders, and saves locally (Constitution IV).
+ */
+async function boot(): Promise<void> {
+  // 1. Load local save + grant starter producer (manual_typing for fresh players).
+  const loaded = loadGame();
+  state = loaded !== null ? loaded : createInitialState();
+  state = grantStarterProducer(state);
+
+  // 2. Construct the game loop with the current (empty-fallback) content.
+  loop = new GameLoop({
+    getContent: (): ContentCatalog => content,
+    getState: (): GameState => state,
+    setState: (s: GameState): void => {
+      state = s;
+    },
+    save: () => saveGame(state),
+  });
+
+  // 3. Start Phaser immediately (renders office + HUD before content loads).
+  new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    backgroundColor: '#0f172a',
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      width: '100%',
+      height: '100%',
+    },
+    // ControllerScene is the active scene; OfficeScene + HudScene are launched
+    // by it as parallel scenes (not auto-started).
+    scene: [ControllerScene, OfficeScene, HudScene],
+  });
+
+  // 4. Fetch content (best-effort). The HUD/loop pick it up via the module-level
+  //    `content` variable — no restart needed.
+  await fetchContent();
+
+  // 5. Catch up offline progress now that real content is available.
+  //    For a fresh player this is a no-op (epoch → now with no producers before
+  //    the grant was applied, and now manual_typing is owned); for a returning
+  //    player it credits the offline interval at the correct production rate.
+  loop.load(state, Date.now());
+
+  // 6. Best-effort backend sync + STOMP (all non-fatal on failure).
+  void loadFromBackend();
+  connectStomp();
+
+  // 7. Periodic save + sync. Local save every 30s; backend sync every 60s.
+  setInterval(() => {
+    saveGame(state);
+  }, 30_000);
+  setInterval(() => {
+    void syncToBackend();
+  }, 60_000);
+
+  // 8. Save on tab close / navigation (best-effort — beforeunload may not wait
+  //    for async, so the local saveGame is the reliable path; syncToBackend is
+  //    best-effort via sendBeacon-like fire-and-forget).
+  window.addEventListener('beforeunload', () => {
+    saveGame(state);
+    void syncToBackend();
+  });
+}
+
+// Kick off the boot sequence. The only throwing call is `loadGame()` on a
+// corrupt save (CorruptedSaveError); a future UI iteration can catch that and
+// show a recovery prompt. For now it surfaces in the console.
+void boot();
