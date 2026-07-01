@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "better_keyboards",
+    "name": "Better Keyboards",
+    "cost": { "resource": "cash", "amount": "500" },
+    "effect": { "type": "globalMultiplier", "multiplier": 2 },
+    "prerequisite": null
+  },
+  {
+    "id": "mechanical_switches",
+    "name": "Mechanical Switches",
+    "cost": { "resource": "cash", "amount": "200" },
+    "effect": { "type": "producerRateMultiplier", "producerId": "manual_typing", "multiplier": 3 },
+    "prerequisite": { "type": "ownsProducer", "targetId": "stack_overflow", "threshold": null }
+  }
+]

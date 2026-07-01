@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "id": "gpu_cluster",
+    "name": "GPU Cluster",
+    "fuelCostToActivate": "100",
+    "burnRate": "10",
+    "productionMultiplier": 3
+  }
+]
