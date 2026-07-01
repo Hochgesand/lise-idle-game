@@ -1,0 +1,31 @@
+backend/src/main/java/com/lise/liseidle/session/StateCorrection.java
+  s_b361fe7ba54346::t_bf7a91026b0a73 1-37
+backend/src/test/java/com/lise/liseidle/session/WebSocketConfigTest.java
+  s_b361fe7ba54346::t_84fd2e7ad79f56 1-35
+backend/src/main/java/com/lise/liseidle/session/ContentUpdate.java
+  s_b361fe7ba54346::t_c87638d540a0e4 1-31
+backend/src/test/java/com/lise/liseidle/session/SessionPushServiceTest.java
+  s_b361fe7ba54346::t_4d13a77adc3ef7 1-77
+backend/src/main/java/com/lise/liseidle/session/WebSocketConfig.java
+  s_b361fe7ba54346::t_e9b6a2f34f30a4 1-85
+backend/src/main/java/com/lise/liseidle/session/SessionPushService.java
+  s_b361fe7ba54346::t_6acb221f442fe4 1-65
+specs/001-dev-idle-game/tasks.md
+  s_b361fe7ba54346::t_4b2afccf1e3bbc 70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "ac3494e9caa406431a81d84cd29a61e7308617b0",
+  "prompts": {},
+  "sessions": {
+    "s_b361fe7ba54346": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1cda-990a-7c28-a6de-7e701c58e974",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
