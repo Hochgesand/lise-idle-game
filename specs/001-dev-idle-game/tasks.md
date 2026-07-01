@@ -138,7 +138,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 ### Implementation for User Story 3
 
 - [x] T046 [P] [US3] Implement `purchaseTraining` mutator in `frontend/src/sim/actions.ts`
-- [ ] T047 [US3] Implement milestone evaluation in `advance` (check requirements, append earned, apply reward) in `frontend/src/sim/advance.ts`
+- [x] T047 [US3] Implement milestone evaluation in `advance` (check requirements, append earned, apply reward) in `frontend/src/sim/advance.ts`  _(already implemented in T015/T016 `applyMilestones`/`requirementMet`/`applyReward`; guarded by T045's 8 milestone tests)_
 - [x] T048 [US3] Implement Academy UI panel: training list (affordable/locked states), milestones/credentials display (earned lise-themed badges) in `frontend/src/scenes/AcademyScene.ts`
 - [x] T049 [US3] Wire Academy panel into game loop: permanent boosts reflected in `computeRate`, milestones evaluate each tick in `frontend/src/game/gameLoop.ts`
 - [ ] T050 [P] [US3] Seed US3 content (lise Academy trainings; credential milestones: "ISO 9001 Certified", "Microsoft Gold Partner", "AI Design Sprint Facilitator") in `backend/src/main/resources/content/`
