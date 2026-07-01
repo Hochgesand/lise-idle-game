@@ -26,7 +26,7 @@ import type { ContentCatalog } from './types';
  */
 export const FALLBACK_CONTENT: ContentCatalog = {
   schemaVersion: 1,
-  contentVersion: '1.1.0',
+  contentVersion: '1.2.0',
   producers: [
     {
       id: 'manual_typing',
@@ -75,8 +75,46 @@ export const FALLBACK_CONTENT: ContentCatalog = {
       prerequisite: { type: 'ownsProducer', targetId: 'stack_overflow', threshold: null },
     },
   ],
-  trainings: [],
-  milestones: [],
+  trainings: [
+    {
+      id: 'iso_9001_course',
+      name: 'ISO 9001 Course',
+      description:
+        'Quality management fundamentals — process discipline boosts throughput.',
+      cost: { resource: 'cash', amount: '500' },
+      permanentMultiplier: 2,
+      prerequisite: null,
+    },
+    {
+      id: 'agile_master',
+      name: 'Agile Master',
+      description:
+        'Certified Scrum mastery — your devs ship faster, sprint after sprint.',
+      cost: { resource: 'cash', amount: '2000' },
+      permanentMultiplier: 3,
+      prerequisite: { type: 'ownsTraining', targetId: 'iso_9001_course', threshold: null },
+    },
+  ],
+  milestones: [
+    {
+      id: 'iso_9001_certified',
+      name: 'ISO 9001 Certified',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '10000' },
+      reward: { type: 'grantResource', resource: 'cash', amount: '1000' },
+    },
+    {
+      id: 'ms_gold_partner',
+      name: 'Microsoft Gold Partner',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100000' },
+      reward: { type: 'globalMultiplier', multiplier: 2 },
+    },
+    {
+      id: 'ai_design_sprint_facilitator',
+      name: 'AI Design Sprint Facilitator',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '1000000' },
+      reward: { type: 'globalMultiplier', multiplier: 3 },
+    },
+  ],
   burners: [
     {
       id: 'gpu_cluster',

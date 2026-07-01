@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "iso_9001_course",
+    "name": "ISO 9001 Course",
+    "description": "Quality management fundamentals — process discipline boosts throughput.",
+    "cost": { "resource": "cash", "amount": "500" },
+    "permanentMultiplier": 2,
+    "prerequisite": null
+  },
+  {
+    "id": "agile_master",
+    "name": "Agile Master",
+    "description": "Certified Scrum mastery — your devs ship faster, sprint after sprint.",
+    "cost": { "resource": "cash", "amount": "2000" },
+    "permanentMultiplier": 3,
+    "prerequisite": { "type": "ownsTraining", "targetId": "iso_9001_course", "threshold": null }
+  }
+]
