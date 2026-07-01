@@ -26,7 +26,7 @@
 import Phaser from 'phaser';
 import type { ContentCatalog, ContentEnvelope, GameState } from './sim/types';
 import { loadContent } from './sim/content';
-import { manualBoost, cashOut, purchaseUpgrade, activateBurner, InsufficientResourcesError } from './sim/actions';
+import { manualBoost, cashOut, purchaseUpgrade, activateBurner, purchaseTraining, InsufficientResourcesError } from './sim/actions';
 import { bn, compare } from './sim/bigNumber';
 import { GameLoop } from './game/gameLoop';
 import { prepareInitialState } from './game/prepareState';
@@ -37,6 +37,7 @@ import { stompClient } from './net/stompClient';
 import { OfficeScene } from './scenes/OfficeScene';
 import { HudScene } from './scenes/HudScene';
 import { EconomyScene } from './scenes/EconomyScene';
+import { AcademyScene } from './scenes/AcademyScene';
 import { CASH_RATE } from './game/economyConfig';
 
 // ── Module-level mutable state (the single source of truth for the app) ────
@@ -226,6 +227,26 @@ class ControllerScene extends Phaser.Scene {
         }
       },
     });
+    // Launch the Academy overlay (trainings + credentials/milestones).
+    // Callback binds to purchaseTraining + state update + save, wrapped in
+    // try/catch — an InsufficientResourcesError (clicking an unaffordable
+    // training) must NOT crash the game. computeRate already multiplies by
+    // owned trainings' permanentMultipliers (advance.ts rateWithoutBurner),
+    // so once ownedTrainings changes the HUD rate display updates
+    // automatically each frame. Milestones evaluate each tick via
+    // advance's applyMilestones (T015/T016) — no extra wiring needed.
+    this.scene.launch('AcademyScene', {
+      getState: (): GameState => state,
+      getContent: (): ContentCatalog => content,
+      onPurchaseTraining: (trainingId: string) => {
+        try {
+          state = purchaseTraining(state, content, trainingId);
+          saveGame(state);
+        } catch (err) {
+          if (!(err instanceof InsufficientResourcesError)) throw err;
+        }
+      },
+    });
   }
 
   /**
@@ -287,7 +308,7 @@ async function boot(): Promise<void> {
       width: '100%',
       height: '100%',
     },
-    scene: [ControllerScene, OfficeScene, HudScene, EconomyScene],
+    scene: [ControllerScene, OfficeScene, HudScene, EconomyScene, AcademyScene],
   });
 
   // 4. Fetch content (best-effort). On failure the bundled FALLBACK_CONTENT
