@@ -18,6 +18,7 @@ import type {
   Burner,
   ContentCatalog,
   ContentEnvelope,
+  CoopConfig,
   Cost,
   Effect,
   Milestone,
@@ -231,6 +232,63 @@ function validateBurner(raw: unknown): Burner {
   };
 }
 
+/**
+ * Validates the (002) co-op tuning block (data-model.md "CoopConfig";
+ * contracts §1 "Content loader"). All six fields must be present, finite
+ * numbers, within their contracted bounds. Malformed → ContentValidationError.
+ */
+function validateCoop(raw: unknown): CoopConfig {
+  const ctx = 'coop';
+  assert(isRecord(raw), `${ctx}: coop block must be an object`);
+
+  const perColleagueMultiplier = expectNumber(
+    raw.perColleagueMultiplier,
+    'perColleagueMultiplier',
+    ctx,
+  );
+  const maxMultiplier = expectNumber(raw.maxMultiplier, 'maxMultiplier', ctx);
+  const leaseSeconds = expectNumber(raw.leaseSeconds, 'leaseSeconds', ctx);
+  const heartbeatSeconds = expectNumber(raw.heartbeatSeconds, 'heartbeatSeconds', ctx);
+  const commuteSeconds = expectNumber(raw.commuteSeconds, 'commuteSeconds', ctx);
+  const lastSeenRetentionDays = expectNumber(
+    raw.lastSeenRetentionDays,
+    'lastSeenRetentionDays',
+    ctx,
+  );
+
+  // Bounded tuning scalars — reject Infinity/NaN (expectNumber already
+  // rejects NaN; finiteness rules out ±Infinity).
+  assert(
+    Number.isFinite(perColleagueMultiplier),
+    `${ctx}: "perColleagueMultiplier" must be finite`,
+  );
+  assert(Number.isFinite(maxMultiplier), `${ctx}: "maxMultiplier" must be finite`);
+  assert(Number.isFinite(leaseSeconds), `${ctx}: "leaseSeconds" must be finite`);
+  assert(Number.isFinite(heartbeatSeconds), `${ctx}: "heartbeatSeconds" must be finite`);
+  assert(Number.isFinite(commuteSeconds), `${ctx}: "commuteSeconds" must be finite`);
+  assert(Number.isFinite(lastSeenRetentionDays), `${ctx}: "lastSeenRetentionDays" must be finite`);
+
+  assert(perColleagueMultiplier >= 0, `${ctx}: "perColleagueMultiplier" must be >= 0`);
+  assert(maxMultiplier >= 1, `${ctx}: "maxMultiplier" must be >= 1`);
+  assert(leaseSeconds > 0, `${ctx}: "leaseSeconds" must be > 0`);
+  assert(heartbeatSeconds > 0, `${ctx}: "heartbeatSeconds" must be > 0`);
+  assert(
+    heartbeatSeconds < leaseSeconds,
+    `${ctx}: "heartbeatSeconds" must be strictly less than leaseSeconds`,
+  );
+  assert(commuteSeconds > 0, `${ctx}: "commuteSeconds" must be > 0`);
+  assert(lastSeenRetentionDays > 0, `${ctx}: "lastSeenRetentionDays" must be > 0`);
+
+  return {
+    perColleagueMultiplier,
+    maxMultiplier,
+    leaseSeconds,
+    heartbeatSeconds,
+    commuteSeconds,
+    lastSeenRetentionDays,
+  };
+}
+
 /** Ensures all ids within one content type are unique. */
 function assertUniqueIds<T extends { id: string }>(items: T[], label: string): void {
   const seen = new Set<string>();
@@ -277,6 +335,9 @@ export function loadContent(envelope: ContentEnvelope): ContentCatalog {
   const trainings = expectArrayField(envelope, 'trainings').map(validateTraining);
   const milestones = expectArrayField(envelope, 'milestones').map(validateMilestone);
   const burners = expectArrayField(envelope, 'burners').map(validateBurner);
+  // The (002) coop block is mandatory content (contracts §1/§2); validate it
+  // alongside the five 001 arrays so the catalog is all-or-nothing.
+  const coop = validateCoop(envelope.coop);
 
   assertUniqueIds(producers, 'producers');
   assertUniqueIds(upgrades, 'upgrades');
@@ -292,5 +353,6 @@ export function loadContent(envelope: ContentEnvelope): ContentCatalog {
     trainings,
     milestones,
     burners,
+    coop,
   };
 }

@@ -79,8 +79,7 @@ export const FALLBACK_CONTENT: ContentCatalog = {
     {
       id: 'iso_9001_course',
       name: 'ISO 9001 Course',
-      description:
-        'Quality management fundamentals — process discipline boosts throughput.',
+      description: 'Quality management fundamentals — process discipline boosts throughput.',
       cost: { resource: 'cash', amount: '500' },
       permanentMultiplier: 2,
       prerequisite: null,
@@ -88,8 +87,7 @@ export const FALLBACK_CONTENT: ContentCatalog = {
     {
       id: 'agile_master',
       name: 'Agile Master',
-      description:
-        'Certified Scrum mastery — your devs ship faster, sprint after sprint.',
+      description: 'Certified Scrum mastery — your devs ship faster, sprint after sprint.',
       cost: { resource: 'cash', amount: '2000' },
       permanentMultiplier: 3,
       prerequisite: { type: 'ownsTraining', targetId: 'iso_9001_course', threshold: null },
@@ -124,4 +122,16 @@ export const FALLBACK_CONTENT: ContentCatalog = {
       productionMultiplier: 3,
     },
   ],
+  // (002) Co-op tuning — mirrors backend/src/main/resources/content/coop.json
+  // (T021 placeholder values) so an offline-booting client integrates with the
+  // same values as the served envelope (contracts §1). loadContent validates
+  // this exact shape for the served path; the fallback carries it verbatim.
+  coop: {
+    perColleagueMultiplier: 0.1,
+    maxMultiplier: 1.5,
+    leaseSeconds: 60,
+    heartbeatSeconds: 20,
+    commuteSeconds: 30,
+    lastSeenRetentionDays: 14,
+  },
 };

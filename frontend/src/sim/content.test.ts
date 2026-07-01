@@ -287,17 +287,17 @@ describe('loadContent — coop block validation (002)', () => {
     const catalog = loadContent(validEnvelope());
 
     expect(catalog.coop).toBeDefined();
-    expect(catalog.coop.perColleagueMultiplier).toBe(0.1);
-    expect(catalog.coop.maxMultiplier).toBe(1.5);
-    expect(catalog.coop.leaseSeconds).toBe(60);
-    expect(catalog.coop.heartbeatSeconds).toBe(20);
-    expect(catalog.coop.commuteSeconds).toBe(30);
-    expect(catalog.coop.lastSeenRetentionDays).toBe(14);
+    const coopBlock = catalog.coop!;
+    expect(coopBlock.perColleagueMultiplier).toBe(0.1);
+    expect(coopBlock.maxMultiplier).toBe(1.5);
+    expect(coopBlock.leaseSeconds).toBe(60);
+    expect(coopBlock.heartbeatSeconds).toBe(20);
+    expect(coopBlock.commuteSeconds).toBe(30);
+    expect(coopBlock.lastSeenRetentionDays).toBe(14);
   });
 
   it('throws ContentValidationError when the coop block is missing', () => {
     const env = validEnvelope();
-    // @ts-expect-error — intentionally malformed (coop is required, deleted).
     delete env.coop;
     expect(() => loadContent(env)).toThrow(ContentValidationError);
   });
@@ -366,8 +366,8 @@ describe('loadContent — coop block validation (002)', () => {
     const env = validEnvelope();
     env.coop = coop({ perColleagueMultiplier: 0, maxMultiplier: 1 });
     const catalog = loadContent(env);
-    expect(catalog.coop.perColleagueMultiplier).toBe(0);
-    expect(catalog.coop.maxMultiplier).toBe(1);
+    expect(catalog.coop!.perColleagueMultiplier).toBe(0);
+    expect(catalog.coop!.maxMultiplier).toBe(1);
   });
 });
 

@@ -32,4 +32,17 @@ describe('FALLBACK_CONTENT', () => {
     expect(manual).toBeDefined();
     expect(manual!.baseRate).toBe('1');
   });
+
+  it('mirrors the coop tuning block so offline boot integrates identically (002)', () => {
+    // Same values as backend/.../content/coop.json (T021); loadContent validates
+    // this shape on the served path, the fallback carries it for offline boots.
+    expect(FALLBACK_CONTENT.coop).toEqual({
+      perColleagueMultiplier: 0.1,
+      maxMultiplier: 1.5,
+      leaseSeconds: 60,
+      heartbeatSeconds: 20,
+      commuteSeconds: 30,
+      lastSeenRetentionDays: 14,
+    });
+  });
 });

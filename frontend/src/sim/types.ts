@@ -185,6 +185,21 @@ export interface Burner {
   productionMultiplier: number; // LOC/sec × while active
 }
 
+/**
+ * Co-op bonus tuning (data-model.md "CoopConfig"; 002). A single content
+ * object (`coop.json`), mirrored into the bundled fallback so an
+ * offline-booting client integrates with identical values (contracts §1).
+ * These are bounded tuning scalars — plain JSON numbers, never resources.
+ */
+export interface CoopConfig {
+  perColleagueMultiplier: number; // bonus per distinct present colleague (>= 0)
+  maxMultiplier: number; // hard cap on the total multiplier (>= 1, FR-011)
+  leaseSeconds: number; // how far each heartbeat extends a lease / presence TTL (> 0)
+  heartbeatSeconds: number; // client heartbeat interval (0 < x < leaseSeconds)
+  commuteSeconds: number; // office-switch commute duration, consumed by advance + observers (> 0)
+  lastSeenRetentionDays: number; // rendering/retention window for durable last-seen rows (> 0)
+}
+
 // ── Aggregates ───────────────────────────────────────────────────────────
 
 /** Validated, typed game content (the output of loadContent in content.ts). */
@@ -196,6 +211,13 @@ export interface ContentCatalog {
   trainings: Training[];
   milestones: Milestone[];
   burners: Burner[];
+  /**
+   * (002) Co-op bonus tuning. Always present on catalogs produced by
+   * `loadContent` and on `FALLBACK_CONTENT` (the loader validates + enforces
+   * it); typed optional only so partial test fixtures that do not exercise
+   * the co-op block stay valid without churn.
+   */
+  coop?: CoopConfig;
 }
 
 /**
@@ -211,4 +233,6 @@ export interface ContentEnvelope {
   trainings: unknown[];
   milestones: unknown[];
   burners: unknown[];
+  /** (002) raw coop block — validated/narrowed by loadContent into CoopConfig. */
+  coop?: unknown;
 }
