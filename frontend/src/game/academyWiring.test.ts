@@ -56,6 +56,9 @@ function makeState(ownedTrainings: Set<string>): GameState {
     lastAdvancedAt: '2026-06-30T12:00:00.000Z',
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 

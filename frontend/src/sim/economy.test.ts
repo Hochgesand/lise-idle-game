@@ -26,6 +26,11 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    // (002) co-op overlay defaults (placed before the override spread so a
+    // test may still override them via `overrides`).
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
     ...overrides,
   };
 }

@@ -243,6 +243,11 @@ function cloneState(state: GameState): GameState {
     lastAdvancedAt: state.lastAdvancedAt,
     schemaVersion: state.schemaVersion,
     settings: { ...state.settings },
+    // (002) co-op overlay — deep-copied so `advance` never shares references
+    // with the caller's state (T024 finalizes segment-aware cloning).
+    coopSegments: state.coopSegments.map((s) => ({ ...s })),
+    activeOffice: state.activeOffice,
+    commute: state.commute === null ? null : { ...state.commute },
   };
 }
 

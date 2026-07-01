@@ -46,9 +46,45 @@ export interface PlayerSettings {
   muted: boolean; // audio
 }
 
+// ── Co-op presence (002 — additive overlay on the Spec 001 model) ─────────
+
+/**
+ * A closed, server-authored co-op lease segment — the only channel through
+ * which presence affects the simulation (data-model.md "CoopSegment").
+ *
+ * `from`/`until` are **sim-timeline timestamps in milliseconds** (the same
+ * numeric timeline `advance` derives from `Date.parse(lastAdvancedAt)`); the
+ * client never authors them — they arrive server-stamped and are merged
+ * verbatim into the save. `multiplier` is a bounded scalar
+ * (`1 <= multiplier <= CoopConfig.maxMultiplier`), never a resource.
+ */
+export interface CoopSegment {
+  from: number; // segment start, sim-timeline ms (server clock)
+  until: number; // bounded lease end, sim-timeline ms (server clock)
+  multiplier: number; // production multiplier, capped at content.coop.maxMultiplier
+}
+
+/**
+ * An in-progress office switch (data-model.md "CommuteState"; closes the
+ * 001 FR-016 saved-commute gap). `startedAt` is a **sim-timeline timestamp in
+ * milliseconds**, written by the `switchOffice` mutator from `lastAdvancedAt`
+ * (never wall clock) so `advance` can resolve it from elapsed time on load at
+ * `startedAt + content.coop.commuteSeconds`. While `commute != null` the dev is
+ * present in no office.
+ */
+export interface CommuteState {
+  fromOffice: string; // origin office id
+  toOffice: string; // destination office id
+  startedAt: number; // sim-timeline ms, derived from lastAdvancedAt
+}
+
 /**
  * The complete saveable snapshot — the ONLY input/output of `advance`.
  * See data-model.md "GameState".
+ *
+ * The 002 co-op overlay adds `coopSegments`, `activeOffice`, and `commute`
+ * (all additive; an empty `coopSegments` + `"office_1"` + `null` commute is
+ * byte-identical to Spec 001 behavior). See data-model.md "GameState (extended)".
  */
 export interface GameState {
   resources: ResourceSet;
@@ -60,6 +96,9 @@ export interface GameState {
   lastAdvancedAt: string; // ISO-8601 UTC — the clock anchor
   schemaVersion: number; // save format version for migrations
   settings: PlayerSettings;
+  coopSegments: CoopSegment[]; // (002) server-issued co-op lease segments; default []
+  activeOffice: string; // (002) the dev's active office; default "office_1"
+  commute: CommuteState | null; // (002) in-progress office switch; default null
 }
 
 // ── Content entities (versioned JSON data, NOT in the save) ──────────────

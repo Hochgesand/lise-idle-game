@@ -26,6 +26,9 @@ function makeState(cash: string, ownedTrainings = new Set<string>()): GameState 
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 

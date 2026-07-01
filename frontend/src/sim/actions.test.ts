@@ -55,6 +55,9 @@ function makeFixtureState(): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 
@@ -121,6 +124,9 @@ function makeEmptyState(): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 
@@ -329,6 +335,9 @@ function makeEconomyState(): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 
@@ -757,6 +766,9 @@ function makeAcademyState(): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 

@@ -39,6 +39,9 @@ function makeFixtureState(): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 
@@ -715,6 +718,9 @@ describe('T051 — advance numeric integrity at extreme LOC values', () => {
       lastAdvancedAt: FIXED_ANCHOR,
       schemaVersion: 1,
       settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
     };
   }
 

@@ -172,6 +172,13 @@ function toGameState(parsed: unknown): GameState {
     lastAdvancedAt: parsed.lastAdvancedAt,
     schemaVersion: parsed.schemaVersion,
     settings,
+    // (002) Co-op overlay fields default to the Spec 001 baseline. T022 adds
+    // lenient parsing of these from the save + the v1->v2 migration chain; for
+    // now every loadable save is schemaVersion 1 (no such fields), so the
+    // defaults make a v1 save byte-identical to 001 behavior.
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 
@@ -243,6 +250,11 @@ export function createInitialState(): GameState {
     lastAdvancedAt: new Date(0).toISOString(),
     schemaVersion: CURRENT_SCHEMA_VERSION,
     settings: { reducedMotion: false, muted: false },
+    // (002) Co-op overlay: a fresh, never-online save is byte-identical to
+    // Spec 001 (empty segments, default office, no commute in progress).
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 

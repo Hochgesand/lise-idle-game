@@ -93,6 +93,9 @@ function makePopulatedState(): GameState {
     lastAdvancedAt: FIXED_ANCHOR,
     schemaVersion: CURRENT_SCHEMA_VERSION,
     settings: { reducedMotion: true, muted: true },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 
@@ -179,6 +182,9 @@ describe('localStorage save → reload round-trip', () => {
       lastAdvancedAt: FIXED_ANCHOR,
       schemaVersion: CURRENT_SCHEMA_VERSION,
       settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
     };
 
     saveGame(state);
@@ -203,6 +209,9 @@ describe('localStorage save → reload round-trip', () => {
       lastAdvancedAt: FIXED_ANCHOR,
       schemaVersion: CURRENT_SCHEMA_VERSION,
       settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
     };
 
     saveGame(state);

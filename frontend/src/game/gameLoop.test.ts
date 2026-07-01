@@ -34,6 +34,9 @@ function makeFixtureState(lastAdvancedAt: string, loc = '0'): GameState {
     lastAdvancedAt,
     schemaVersion: 1,
     settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 

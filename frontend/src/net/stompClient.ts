@@ -70,6 +70,11 @@ function fromWire(wire: WireGameState): GameState {
     earnedMilestones: new Set(wire.earnedMilestones),
     lastAdvancedAt: wire.lastAdvancedAt,
     settings: wire.settings,
+    // (002) T035 threads coopSegments/activeOffice/commute through WireGameState;
+    // until then the co-op overlay defaults to the Spec 001 baseline.
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
   };
 }
 

@@ -59,6 +59,11 @@ function cloneState(state: GameState): GameState {
     lastAdvancedAt: state.lastAdvancedAt,
     schemaVersion: state.schemaVersion,
     settings: { ...state.settings },
+    // (002) co-op overlay — deep-copied so action mutators never share
+    // references with the caller's state (T025 finalizes switchOffice).
+    coopSegments: state.coopSegments.map((s) => ({ ...s })),
+    activeOffice: state.activeOffice,
+    commute: state.commute === null ? null : { ...state.commute },
   };
 }
 
