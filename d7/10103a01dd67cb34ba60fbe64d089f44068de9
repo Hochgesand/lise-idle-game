@@ -1,0 +1,27 @@
+frontend/src/scenes/OfficeScene.ts
+  s_38463098d043fc::t_0fbcc9d59c768b 1-13,16-17,19-97
+  s_38463098d043fc::t_dd19304c1cbae7 14-15,18
+frontend/src/scenes/layout.ts
+  s_38463098d043fc::t_b43416313e50e8 1-30
+specs/001-dev-idle-game/tasks.md
+  s_38463098d043fc::t_35758c79b95fae 96
+frontend/src/scenes/OfficeScene.test.ts
+  s_38463098d043fc::t_64ddfa2d4ae543 1-7,9-28
+  s_38463098d043fc::t_18f4cad316aa0a 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "d710103a01dd67cb34ba60fbe64d089f44068de9",
+  "prompts": {},
+  "sessions": {
+    "s_38463098d043fc": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e71-0340-7304-9b76-ea065ef3da64",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
