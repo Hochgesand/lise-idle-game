@@ -28,7 +28,7 @@
 
 import type { ContentCatalog, GameState } from './types';
 import { computeRate } from './advance';
-import { add, bn, fromNumber, multiply, toString } from './bigNumber';
+import { add, bn, compare, fromNumber, multiply, subtract, toString } from './bigNumber';
 
 // ── Deep clone (purity guarantee) ────────────────────────────────────────
 //
@@ -87,5 +87,151 @@ export function manualBoost(
   const boost = multiply(rate, fromNumber(factor)); // LOC granted this action
   result.resources.loc = toString(add(bn(state.resources.loc), boost));
 
+  return result;
+}
+
+// ── US2: Error type ─────────────────────────────────────────────────────
+
+/**
+ * Thrown by economy mutators when the player cannot afford the operation
+ * (contracts.md §1). Typed so the UI can catch it and disable/notify.
+ * No partial mutation occurs on this error — the input state is untouched.
+ */
+export class InsufficientResourcesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InsufficientResourcesError';
+  }
+}
+
+// ── US2: cashOut (LOC → Cash) ───────────────────────────────────────────
+
+/**
+ * Convert LOC into Cash at a conversion rate (contracts.md §1, quickstart
+ * Scenario 2).
+ *
+ * @param state      the current saveable snapshot (not mutated)
+ * @param locAmount  how much LOC to convert (big-number string)
+ * @param cashRate   the conversion multiplier (cash gained = locAmount × cashRate)
+ * @returns a NEW GameState: loc decreased by locAmount, cash increased by
+ *          locAmount × cashRate; everything else unchanged.
+ * @throws InsufficientResourcesError if loc < locAmount (input unchanged).
+ *
+ * Pure: returns a new state, never mutates the input, no I/O, no time advance.
+ */
+export function cashOut(
+  state: GameState,
+  locAmount: string,
+  cashRate: number,
+): GameState {
+  // Affordability check BEFORE cloning (the input is never mutated either way,
+  // but throwing early keeps the no-partial-mutation guarantee explicit).
+  if (compare(bn(state.resources.loc), bn(locAmount)) < 0) {
+    throw new InsufficientResourcesError(
+      `Cannot cash out ${locAmount} LOC: only ${state.resources.loc} available.`,
+    );
+  }
+
+  const result = cloneState(state);
+  result.resources.loc = toString(subtract(bn(state.resources.loc), bn(locAmount)));
+  result.resources.cash = toString(
+    add(bn(state.resources.cash), multiply(bn(locAmount), fromNumber(cashRate))),
+  );
+  return result;
+}
+
+// ── US2: purchaseUpgrade ────────────────────────────────────────────────
+
+/**
+ * Purchase an upgrade: deducts its Cost from the named resource and adds the
+ * upgrade id to ownedUpgrades (contracts.md §1).
+ *
+ * @param state      the current saveable snapshot (not mutated)
+ * @param content    the versioned game content
+ * @param upgradeId  the id of the Upgrade to purchase
+ * @returns a NEW GameState with the cost deducted and the upgrade owned.
+ * @throws Error if the upgrade id is not found in content (a usage bug, not
+ *         an affordability condition).
+ * @throws InsufficientResourcesError if the player cannot afford the Cost
+ *         (input unchanged).
+ *
+ * Pure: returns a new state, never mutates the input, no I/O, no time advance.
+ */
+export function purchaseUpgrade(
+  state: GameState,
+  content: ContentCatalog,
+  upgradeId: string,
+): GameState {
+  const upgrade = content.upgrades.find((u) => u.id === upgradeId);
+  if (upgrade === undefined) {
+    throw new Error(`Upgrade '${upgradeId}' not found in content.`);
+  }
+
+  const resource = upgrade.cost.resource;
+  const amount = upgrade.cost.amount;
+  if (compare(bn(state.resources[resource]), bn(amount)) < 0) {
+    throw new InsufficientResourcesError(
+      `Cannot purchase upgrade '${upgradeId}': needs ${amount} ${resource}, ` +
+        `only ${state.resources[resource]} available.`,
+    );
+  }
+
+  const result = cloneState(state);
+  result.resources[resource] = toString(
+    subtract(bn(state.resources[resource]), bn(amount)),
+  );
+  result.ownedUpgrades = new Set(state.ownedUpgrades);
+  result.ownedUpgrades.add(upgradeId);
+  return result;
+}
+
+// ── US2: activateBurner ─────────────────────────────────────────────────
+
+/**
+ * Activate an AI-token burner: deducts fuelCostToActivate from aiTokens and
+ * sets activeBurner (contracts.md §1, quickstart Scenario 2). The fuel paid
+ * for becomes the fuel available to burn (`fuelRemaining = fuelCostToActivate`).
+ *
+ * `startedAt` is anchored to `state.lastAdvancedAt` to keep the sim pure (no
+ * `Date.now()` — Constitution Principle I). The game loop re-anchors the
+ * burner start time to the real clock when it wires the action to user input.
+ *
+ * @param state     the current saveable snapshot (not mutated)
+ * @param content   the versioned game content
+ * @param burnerId  the id of the Burner definition to activate
+ * @returns a NEW GameState with aiTokens reduced and activeBurner set.
+ * @throws Error if the burner id is not found in content.
+ * @throws InsufficientResourcesError if aiTokens < fuelCostToActivate
+ *         (input unchanged).
+ *
+ * Pure: returns a new state, never mutates the input, no I/O, no time advance.
+ */
+export function activateBurner(
+  state: GameState,
+  content: ContentCatalog,
+  burnerId: string,
+): GameState {
+  const burner = content.burners.find((b) => b.id === burnerId);
+  if (burner === undefined) {
+    throw new Error(`Burner '${burnerId}' not found in content.`);
+  }
+
+  const fuelCost = burner.fuelCostToActivate;
+  if (compare(bn(state.resources.aiTokens), bn(fuelCost)) < 0) {
+    throw new InsufficientResourcesError(
+      `Cannot activate burner '${burnerId}': needs ${fuelCost} aiTokens, ` +
+        `only ${state.resources.aiTokens} available.`,
+    );
+  }
+
+  const result = cloneState(state);
+  result.resources.aiTokens = toString(
+    subtract(bn(state.resources.aiTokens), bn(fuelCost)),
+  );
+  result.activeBurner = {
+    definitionId: burnerId,
+    startedAt: state.lastAdvancedAt,
+    fuelRemaining: fuelCost,
+  };
   return result;
 }
