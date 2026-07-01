@@ -1,0 +1,25 @@
+specs/002-shared-office-coop/spec.md
+  s_cb0b044ded5b16::t_39eb19a8d2343f 47-148
+  s_cb0b044ded5b16::t_4a22e62eeeae1b 372-392
+  s_cb0b044ded5b16::t_8d79f71269e51f 410-417
+  s_cb0b044ded5b16::t_130257115f179c 438-440,443-449
+  s_cb0b044ded5b16::t_e14dc7fc26cbee 286-295
+  s_cb0b044ded5b16::t_8513e7bcee1a53 456-465
+  s_cb0b044ded5b16::t_c2a73d47ea5d3e 393
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "89b2baf41d3f27e18e53e5d020d38b094af6188c",
+  "prompts": {},
+  "sessions": {
+    "s_cb0b044ded5b16": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e97964b8-afa3-4e1e-87e3-c32fe5f67676",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
