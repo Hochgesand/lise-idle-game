@@ -1,0 +1,303 @@
+---
+description: "Task list for feature implementation"
+---
+
+# Tasks: Shared Office Co-op Presence
+
+**Input**: Design documents from `/specs/002-shared-office-coop/`
+
+**Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, contracts/contracts.md, quickstart.md
+
+**Tests**: **MANDATORY** — the project constitution (`.specify/memory/constitution.md` Principle III "Test-First — NON-NEGOTIABLE") requires TDD: tests written, approved, and RED before implementation. Test tasks are included and MUST be completed before their sibling implementation tasks in every phase.
+
+**Deploys**: **Every phase ends with an explicit "Deploy to prod & verify" task** executed via the `deploy-lise-game` Claude Code skill (created in T008). The live site at `https://lise-game.schmitz.gg` is re-proven after each phase — each phase Checkpoint references its deploy task.
+
+**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story. See spec.md for the three user stories (US1 P1, US2 P2, US3 P3). The world/rendering overhaul (Phase 3) is story-mandated scope per plan.md's classification note (FR-019..FR-024), carried as its own phase without a story label.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (US1, US2, US3) — Phases 4–6 only; Setup/Foundational/World/Polish tasks carry no story label
+- Include exact file paths in descriptions
+
+## Path Conventions
+
+Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25, package base `backend/src/main/java/com/lise/liseidle/`) and `frontend/` (Phaser 4 / TypeScript / Vite). Paths below are repo-relative.
+
+## Keycloak reference (authoritative values — bake these, do not re-derive)
+
+- Server: `https://keycloak.novitasoft.de` — realm **`LiseIdler`**
+- Admin console: <https://keycloak.novitasoft.de/admin/master/console/#/LiseIdler>
+- Issuer URI: `https://keycloak.novitasoft.de/realms/LiseIdler`
+- Frontend client **`lise-idler-frontend`** — public (client auth OFF), PKCE enabled
+- Backend client **`lise-idler-backend`** — confidential (client auth ON), service-account roles enabled. Current client secret (recorded here per Andre's explicit decision so everything is testable; he rotates it later — T003a): **`wl1tmobtiXiq5iHwj8UNHgbYIGsoXn3X`** — verified working 2026-07-01 (client-credentials grant issues tokens, 300 s expiry). ⚠️ Note: this repo (`Hochgesand/lise-idle-game`) is **public** — pushing this file publishes the secret, so the rotation should happen around the time this file lands on GitHub. Compose never carries the literal: it interpolates `KEYCLOAK_BACKEND_CLIENT_SECRET` from the untracked host-side `.env` (gitignored), see T005.
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: New dependencies, Keycloak realm readiness, compose environment, asset tooling, and the deploy skill — everything later phases assume exists.
+
+- [ ] T001 Add `oidc-client-ts` to `frontend/package.json` (`npm install oidc-client-ts`) — the feature's only new frontend runtime dependency, accepted deliberately under the minimal-deps constraint: hand-rolling the OIDC token lifecycle (PKCE challenge, redirect callback, storage, renewal, expiry) is error-prone security code (research: Identity decision)
+- [ ] T002 [P] Add `spring-boot-starter-security` + `spring-boot-starter-oauth2-resource-server` (runtime) and `spring-security-test` (test scope) to `backend/pom.xml`
+- [ ] T003 [P] Verify/complete the Keycloak realm client configuration in the admin console (<https://keycloak.novitasoft.de/admin/master/console/#/LiseIdler>, realm `LiseIdler`, issuer `https://keycloak.novitasoft.de/realms/LiseIdler`): frontend client `lise-idler-frontend` is public (client auth OFF) with **PKCE enabled**, its valid redirect URIs **and** web origins include `https://lise-game.schmitz.gg/*`, `http://localhost:5173/*`, and `http://localhost:8087/*` (the local compose frontend, T006), and its **protocol mappers put `name` and `preferred_username` into the access token** (the backend reads display-name claims from the access token, not the ID token — contracts §2; the SPA requests scope `openid profile`, T057); backend client `lise-idler-backend` is confidential (client auth ON) with **service-account roles enabled** — current secret in the Keycloak reference block above (rotation: T003a). **Already verified 2026-07-01**: PKCE S256 advertised by the realm; redirect URIs `https://lise-game.schmitz.gg/` ✓ and `http://localhost:5173/` ✓ (registered by Andre) both render the login form; backend client-credentials grant ✓. **Still open**: `http://localhost:8087/*` redirect/web-origin entry, web-origins check for the two verified URIs, and the protocol-mapper check
+- [ ] T003a [P] **Rotate the `lise-idler-backend` client secret** (Andre, deliberately deferred — "ich rotier das später"): in the Keycloak admin console (Clients → `lise-idler-backend` → Credentials → Regenerate). Deadline rationale: the current value is recorded in plaintext in this file (Keycloak reference above) and this repo is **public**, so rotate no later than around the first push of this file to GitHub. After rotation, update the untracked host-side `.env` (`KEYCLOAK_BACKEND_CLIENT_SECRET=...`; `.env` is gitignored; the deploy skill T008 documents where it lives on the host) — the new value never lands in any tracked file
+- [ ] T004 [P] Create the two realm test users **`alice`** and **`bob`** in the admin console (<https://keycloak.novitasoft.de/admin/master/console/#/LiseIdler> → Users → Add user; set passwords under Credentials). App-side first-run consent lives in `player_presence`, so fresh identities start **un-consented** and the FR-003 consent flow stays exercisable (contracts §2; quickstart prerequisites)
+- [ ] T005 [P] Add the Keycloak env to the backend `environment:` block in `docker-compose.yml` (the prod stack, `SPRING_PROFILES_ACTIVE=prod`): `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://keycloak.novitasoft.de/realms/LiseIdler` (the resource server needs only this), plus the reserved service-account credentials `KEYCLOAK_BACKEND_CLIENT_ID=lise-idler-backend` and `KEYCLOAK_BACKEND_CLIENT_SECRET=${KEYCLOAK_BACKEND_CLIENT_SECRET}` — the secret value is **interpolated from the untracked host-side `.env`** (`.env` is gitignored — the literal never appears in compose or any runtime config; the current value is in this file's Keycloak reference block, rotation per T003a; reserved capability for backend→Keycloak client-credentials calls — not required for MVP)
+- [ ] T006 [P] Create `docker-compose.dev.yml` override for local validation — the base `docker-compose.yml` is the **prod** stack, so the override must make a dev machine self-sufficient: (1) backend: set `SPRING_PROFILES_ACTIVE=dev` (enables **only** the `DevPresenceSeeder` presence-seeding profile — auth uses the real `LiseIdler` realm everywhere, no identity stub exists) **and** override the datasource to in-memory H2 (`SPRING_DATASOURCE_URL=jdbc:h2:mem:gamedb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL`) so the Unraid-only bind mount `/mnt/user/appdata/lise-game:/data` is not required locally (override the `volumes:` entry away or to a named volume); (2) frontend: override the build-args to `VITE_API_BASE_URL=http://localhost:8086` and `VITE_WS_BASE_URL=ws://localhost:8086/ws` so a locally built compose frontend on `:8087` talks to the local compose backend, never the prod API; (3) sign-in and API calls from `http://localhost:8087` additionally need the T003 redirect-URI/web-origin entry and the T030 CORS entry for that origin. Alternative day-to-day combo — Vite dev server on `:5173` + compose backend — needs `VITE_API_BASE_URL=http://localhost:8086` / `VITE_WS_BASE_URL=ws://localhost:8086/ws` in `frontend/.env.local`, because the code defaults to `http://localhost:8080` (`restClient.ts`/`stompClient.ts`) while compose publishes `8086:8080` (quickstart prerequisites; usage: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`)
+- [ ] T007 [P] Asset pipeline setup: install Tiled; download the CC0 Kenney packs **"Roguelike Modern City"** + **"Roguelike Indoors"** (fallback: Kenney "Tiny Town"; all 16×16, one author, consistent palette); stage the raw sources in `frontend/public/assets/` and record pack names + CC0 licensing in `frontend/public/assets/README.md` (research: Art direction — LimeZu rejected, not CC0)
+- [ ] T008 [P] Create the Claude Code deploy skill `.claude/skills/deploy-lise-game/SKILL.md` encoding the full deploy procedure so every later deploy task can invoke it. The skill MUST cover: **(1) push-first rule** — the host pulls from `origin main` (`https://github.com/Hochgesand/lise-idle-game.git`), so commit and push before deploying; **(2) procedure** — `ssh -p 2222 root@schmitz.gg`, then `cd /root/lise-idle-game && git pull && docker compose build && docker compose up -d`; **(3) host facts** — Unraid "Neulaender"; Nginx Proxy Manager routes `lise-game.schmitz.gg` → `:8087` (frontend) and `lise-game-api.schmitz.gg` → `:8086` (backend, "Websockets Support" ON); frontend image bakes `VITE_API_BASE_URL=https://lise-game-api.schmitz.gg` and `VITE_WS_BASE_URL=wss://lise-game-api.schmitz.gg/ws` as compose build-args; backend runs `SPRING_PROFILES_ACTIVE=prod` with the H2 file DB under bind-mounted `/data`; the untracked `/root/lise-idle-game/.env` on the host holds `KEYCLOAK_BACKEND_CLIENT_SECRET` (rotated in T003a) that compose interpolates (T005) — the skill MUST document this location and never echo the value; **(4) Keycloak env expectations** — issuer URI `https://keycloak.novitasoft.de/realms/LiseIdler`, backend client id `lise-idler-backend` + secret from the host `.env` (see T005); **(5) verification checklist** — `https://lise-game.schmitz.gg` loads; `GET https://lise-game-api.schmitz.gg/api/v1/content` → 200; WS connect OK; once Phase 4 has shipped, additionally: login redirect to `keycloak.novitasoft.de` works. (This task is recorded here and executed during implementation like any other task — not at planning time.)
+- [ ] T009 Deploy to prod & verify (Phase 1 baseline): use the `deploy-lise-game` skill (T008) for a baseline redeploy proving the skill and procedure before any 002 code lands — push `main`, run the deploy, then verify `https://lise-game.schmitz.gg` loads, `GET https://lise-game-api.schmitz.gg/api/v1/content` → 200, and the WS connection succeeds (unchanged 001 behavior)
+
+**Checkpoint**: Dependencies installed, realm `LiseIdler` verified with `alice`/`bob` in place, compose env prepared, asset tooling staged, and the deploy skill exists and is proven by T009's baseline deploy.
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: The sim-core, security, and presence groundwork every story needs — v1→v2 save migration, `coopSegments` piecewise `advance` with compaction, `switchOffice` + commute resolution (closing the 001 FR-014/016 gap), `coop.json` content, `StateMerger` extensions, the OAuth2 resource server + STOMP principal, and the presence package skeleton.
+
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete. T024 (piecewise `advance`) and T030–T032 (security) are the load-bearing tasks.
+
+### Tests for Foundational (write first, ensure RED)
+
+- [ ] T010 [P] Write v1→v2 migration tests: migration defaults `coopSegments: []`, `activeOffice: "office_1"`, `commute: null` and changes nothing else; every v1 save stays loadable (lenient defaults before the chain runs); migration is total — valid v2 state or safe failure, never partial mutation — in `frontend/src/save/migrations.test.ts`
+- [ ] T011 [P] Write piecewise `advance` tests: interval split at segment boundaries (clipped to `[lastAdvancedAt, lastAdvancedAt+dt]`) and burner fuel-exhaustion point; multiplier exactly 1 outside segments; latest-`from` wins on overlap; cap clamp to `content.coop.maxMultiplier` (tampered-save defense); multiplier scales production only, never `burnRate`; compaction prunes `until <= lastAdvancedAt` idempotently; commute resolution at `startedAt + coop.commuteSeconds` works across offline spans; `dt = 0` exact no-op; `coopSegments: []` byte-identical to 001 behavior; **associativity property** `advance(advance(s, a), b) === advance(s, a + b)` with `coopSegments` present (exact for multiples of 1000 ms, documented ULP caveat otherwise); **`computeRate` extension** (contracts §1 — "consistency is contractual"): applies the covering segment's multiplier at `lastAdvancedAt` (latest-`from` wins, cap-clamped), returns baseline with no covering segment, and `manualBoost` (derived from `computeRate`) matches the preview under an active segment — in `frontend/src/sim/advance.test.ts` (contracts §1 postconditions)
+- [ ] T012 [P] Write `applyCoopPresence` tests: upsert by `from` taking `max(until)`/`max(multiplier)`; idempotent redelivery; stale segment (`until <= lastAdvancedAt`) is a no-op; segment with `from > lastAdvancedAt + coop.leaseSeconds` is dropped (unbounded-growth hole); malformed input (unparseable timestamps, `until <= from`, non-finite/negative multiplier) returns state unchanged, never throws; never touches `lastAdvancedAt` or resources — in `frontend/src/sim/coop.test.ts`
+- [ ] T013 [P] Write `switchOffice` mutator tests: starts `commute = { fromOffice: activeOffice, toOffice, startedAt: lastAdvancedAt }` (sim-timeline timestamp, never wall clock); while commuting the dev is present in no office — in `frontend/src/sim/actions.test.ts`
+- [ ] T014 [P] Write content-loader coop-block validation tests: all six fields present, `perColleagueMultiplier >= 0`, `maxMultiplier >= 1`, `leaseSeconds > 0`, `0 < heartbeatSeconds < leaseSeconds`, `commuteSeconds > 0`, `lastSeenRetentionDays > 0`; malformed throws `ContentValidationError`; the bundled fallback mirrors identical values — in `frontend/src/sim/content.test.ts`
+- [ ] T015 [P] Write `SecurityConfig` tests with `spring-security-test` mock JWTs (no network to Keycloak): the anonymous 001 surface stays open (`GET /api/v1/content`, `POST /api/v1/session`, `PUT /api/v1/session/**` for never-claimed ids, `/ws` handshake — FR-002); `/api/v1/me` and `/api/v1/presence/**` return **401** `not_authenticated` without a token; a valid token with a mismatched path/body `playerId` → **403** `player_mismatch`; **identity-bound ownership rule** (contracts §2): after an id has been bootstrapped/written under a valid bearer whose `sub` matches it, a tokenless `POST /api/v1/session` or `PUT /api/v1/session/{id}/state` for that id → **401** `not_authenticated`, while never-claimed anonymous UUIDs stay open; under the `dev` profile `/api/v1/dev/**` is permitted without a token and all other unlisted paths default to `anyRequest().authenticated()`; CORS allows the `Authorization` header for `https://lise-game.schmitz.gg`, `http://localhost:5173`, and `http://localhost:8087`; CSRF disabled for the stateless API — in `backend/src/test/java/com/lise/liseidle/security/SecurityConfigTest.java`
+- [ ] T016 [P] Write `GET /api/v1/me` contract test (mock JWT): `colleagueId` = the `sub` claim, `displayName` refreshed from the access-token claims (`name`/`preferred_username`) on each authenticated request, `consentGiven`/`visible` read from the `player_presence` row (fresh identity → un-consented); a fresh identity receives a **deterministic, stable `avatarId`** (stable hash of `colleagueId` onto the avatar frame set — same value on repeated calls, data-model PlayerIdentity); 401 without a token — in `backend/src/test/java/com/lise/liseidle/security/MeControllerTest.java`
+- [ ] T017 [P] Write `StateMerger` extension tests: segment union keyed by `from` taking `max(until)` AND `max(multiplier)` (identical by contract to `applyCoopPresence`); `activeOffice`/`commute` merge as a pair from the input with the later `lastAdvancedAt` (client copy on tie); absent/`null` `coopSegments` normalized to `[]` and absent `activeOffice`/`commute` to `"office_1"`/`null` before merging (pre-existing v1 rows must not NPE) — in `backend/src/test/java/com/lise/liseidle/sync/StateMergerTest.java`; plus the **bootstrap null-leak case** (the `PlayerStateService` half of the leniency rule, data-model "Save migration"): given a stored v1-shaped `player_state` row, `POST /api/v1/session` responds with `coopSegments: []`, `activeOffice: "office_1"`, `commute: null` — never `null` fields — in `backend/src/test/java/com/lise/liseidle/session/SessionControllerTest.java`
+- [ ] T018 [P] Write content-envelope test: `GET /api/v1/content` carries the additive sixth `coop` block with the five 001 arrays, `schemaVersion`, and `contentVersion` intact; `ContentLoader` fails fast (`@PostConstruct`) on a malformed `coop.json` — extend `backend/src/test/java/com/lise/liseidle/content/ContentControllerTest.java`
+- [ ] T019 [P] Write presence-skeleton tests: `PresenceRegistry` upserts keyed by `colleagueId` (duplicate sessions refresh the same record — structural collapse); `PlayerPresenceEntity` round-trips through `PresenceRepository` (player_id, display name, avatar, office, activity, `last_seen_at` ISO-8601 string, consent/visibility flag) — in `backend/src/test/java/com/lise/liseidle/presence/PresenceRegistryTest.java`
+- [ ] T019b [P] Write STOMP CONNECT/broker tests in `backend/src/test/java/com/lise/liseidle/security/StompAuthTest.java`: a CONNECT carrying a mock-JWT bearer installs a session `Principal` named by the `sub` claim; a CONNECT without a token — or with an **invalid/expired** one — is accepted with **no** Principal (never an ERROR frame) and `/app/presence.heartbeat` frames from it are ignored; with the corrected broker prefixes (`enableSimpleBroker("/queue", "/topic")`) a `convertAndSendToUser` push on `/user/queue/state` reaches an authenticated subscriber (contracts §3) — T032 depends on this being RED first
+
+### Implementation for Foundational
+
+- [ ] T020 [P] Extend the shared sim types in `frontend/src/sim/types.ts`: `CoopSegment { from, until, multiplier }`, `CommuteState { fromOffice, toOffice, startedAt }`, and `GameState` gains `coopSegments: CoopSegment[]`, `activeOffice: string`, `commute: CommuteState | null` (data-model.md)
+- [ ] T021 [P] Create `backend/src/main/resources/content/coop.json` with the placeholder tuning block `{ "perColleagueMultiplier": 0.10, "maxMultiplier": 1.5, "leaseSeconds": 60, "heartbeatSeconds": 20, "commuteSeconds": 30, "lastSeenRetentionDays": 14 }` (FR-015, Principle II — values tuned later, content-only change)
+- [ ] T022 Implement the v1→v2 migration in `frontend/src/save/migrations.ts` and lenient defaults for the missing fields in `frontend/src/save/localStorage.ts` (`toGameState` defaults before the migration chain runs, so every v1 save stays loadable)
+- [ ] T023 Implement `applyCoopPresence(state, segment, content)` + segment clip/overlap helpers in `frontend/src/sim/coop.ts` per contracts §1 (pure, discrete, non-time-based; the third `content` parameter is required because the bounded-acceptance horizon reads `content.coop.leaseSeconds`; upsert rule identical to the server merge)
+- [ ] T024 Extend the pure `advance` in `frontend/src/sim/advance.ts`: (1) resolve an in-progress commute at `startedAt + coop.commuteSeconds`; (2) prune fully-integrated segments; (3) split the interval at segment boundaries + fuel exhaustion; (4) `gain = Σ rate_i × multiplier_i × len_i` with cap clamp, production only; (5–7) milestones and `lastAdvancedAt` unchanged from 001; extend `computeRate` to apply the segment covering `lastAdvancedAt` (latest-`from`, cap-clamped — preview and `manualBoost` MUST agree); `cloneState` copies the new fields — NO I/O, NO Phaser, NO `Date.now()`
+- [ ] T025 Implement the `switchOffice` mutator in `frontend/src/sim/actions.ts` (starts a commute from `lastAdvancedAt`; `cloneState` there copies the new fields too) — lands 001 FR-016
+- [ ] T026 Validate the `coop` block in `frontend/src/sim/content.ts` (`loadContent`) and mirror the identical block into `frontend/src/sim/fallbackContent.ts` so an offline-booting client integrates with the same values
+- [ ] T027 [P] Backend content: add `CoopConfig` record in `backend/src/main/java/com/lise/liseidle/content/CoopConfig.java`, load `coop.json` fail-fast in the existing `ContentLoader`/`ContentCatalog` pass, and bump the hand-maintained `CONTENT_VERSION` (currently `"1.2.0"`) in `backend/src/main/java/com/lise/liseidle/content/ContentLoader.java`
+- [ ] T028 [P] Backend state: `backend/src/main/java/com/lise/liseidle/state/GameState.java` gains `coopSegments`/`activeOffice`/`commute`; normalize absent/`null` values (`[]` / `"office_1"` / `null`) in `backend/src/main/java/com/lise/liseidle/state/PlayerStateService.java` so pre-existing rows never NPE or leak `null` to a v2 client
+- [ ] T029 Extend the deterministic merge in `backend/src/main/java/com/lise/liseidle/sync/StateMerger.java`: segment union keyed by `from` (max `until`, max `multiplier`), `activeOffice`/`commute` as a pair by later `lastAdvancedAt`, null-normalization first (depends on T028)
+- [ ] T030 Implement `SecurityConfig` in `backend/src/main/java/com/lise/liseidle/security/SecurityConfig.java`: OAuth2 resource server validating `LiseIdler` JWTs, anonymous 001 surface permitted (identity-bound session ids excepted — enforced in T031 per contracts §2), bearer required on `/api/v1/me` + `/api/v1/presence/**`, `/api/v1/dev/**` permitted without a token under the `dev` profile only (the endpoints are `@Profile("dev")` and do not exist in prod — contracts §2), all other unlisted paths `anyRequest().authenticated()`, CSRF disabled, `CorsConfigurationSource` bean for `https://lise-game.schmitz.gg`, `http://localhost:5173`, and `http://localhost:8087` with the `Authorization` header; configure `spring.security.oauth2.resourceserver.jwt.issuer-uri: https://keycloak.novitasoft.de/realms/LiseIdler` and enable `@EnableScheduling` in `backend/src/main/resources/application.yml` / the application class
+- [ ] T031 Principal-derived identity in `backend/src/main/java/com/lise/liseidle/session/SessionController.java`: when a request carries a valid bearer token, derive the save identity from the JWT `sub`; mismatched path/body `playerId` → 403 `player_mismatch`; **identity-bound ownership rule** (contracts §2, binding): once a `playerId` has been bootstrapped/written under a valid bearer whose `sub` matches it (i.e. a `player_presence` row exists for that id), all session endpoints for that id REQUIRE a matching bearer — unauthenticated requests to an identity-bound id → 401 `not_authenticated`; anonymous requests keep the 001 UUID path only for ids never claimed by an identity; bump `CURRENT_SCHEMA_VERSION` to 2 (409 semantics unchanged) (depends on T030)
+- [ ] T032 STOMP identity + broker fix (depends on T019b RED): implement `StompBearerAuthInterceptor` — a `ChannelInterceptor` validating the `Authorization: Bearer` header on the STOMP CONNECT frame → session `Principal` named by the `sub` — in `backend/src/main/java/com/lise/liseidle/security/StompBearerAuthInterceptor.java`; a tokenless **or invalid/expired-token** CONNECT is accepted with **no** Principal (never an ERROR frame — 001 anonymous behavior; presence destinations/heartbeats then deliver nothing); per the contracts §3 deliverability decision, `/user/queue/*` pushes (incl. 001's `/user/queue/state` corrections) are deliverable **only to authenticated sessions** — for anonymous sessions the de-facto 001 status quo (undeliverable) persists and is accepted; change `enableSimpleBroker("/user")` to `enableSimpleBroker("/queue", "/topic")` (keeping `setUserDestinationPrefix("/user")`) in `backend/src/main/java/com/lise/liseidle/session/WebSocketConfig.java` — corrects the latent 001 broker-prefix misconfiguration that made `convertAndSendToUser` undeliverable (contracts §3)
+- [ ] T033 Presence package skeleton in `backend/src/main/java/com/lise/liseidle/presence/`: `PresenceRecord.java` (wire/domain record), `PresenceRegistry.java` (`ConcurrentHashMap<String colleagueId, PresenceRecord>`, cached-singleton style), `PlayerPresenceEntity.java` (`@Entity @Table(name = "player_presence")` — durable last-seen row incl. consent/visibility, created via `ddl-auto: update`), `PresenceRepository.java` (`JpaRepository`)
+- [ ] T034 Implement `GET /api/v1/me` in `backend/src/main/java/com/lise/liseidle/security/MeController.java`: echoes `colleagueId` = `sub`; `displayName` captured/refreshed from the access-token claims on each authenticated request (first write creates the `player_presence` row — the resource server sees no sign-in event); **assign `avatar` = stable hash of `colleagueId` onto the `avatars.png` frame set on first sight and persist it to `player_presence`** (deterministic, same value on repeated calls — data-model PlayerIdentity `avatarId`); `consentGiven`/`visible` from `player_presence` — app-side, never delegated to Keycloak (depends on T030, T033)
+- [ ] T035 Pass `coopSegments`/`activeOffice`/`commute` through the private `WireGameState` mappings in `frontend/src/net/restClient.ts` and `frontend/src/net/stompClient.ts` (depends on T020)
+- [ ] T036 Deploy to prod & verify (Phase 2): use the `deploy-lise-game` skill — verify the 001 experience is unchanged on prod, `GET https://lise-game-api.schmitz.gg/api/v1/content` → 200 **including the `coop` block**, anonymous session sync round-trips at `schemaVersion` 2, `/api/v1/me` → 401 without a token, and WS connect still succeeds
+
+**Checkpoint** (T036): Foundational layer deployed — pure sim passes the segment/commute property tests, backend validates JWTs and serves the coop block, merge rules match client-side. User story implementation can now begin.
+
+---
+
+## Phase 3: World & Rendering Overhaul (story-mandated scope)
+
+**Purpose**: The campus workstream required by FR-019..FR-024 — a Tiled campus map of both lise buildings with object layers, a real camera model, and the responsive DOM overlay UI replacing the three retired in-canvas panels. Story-mandated scope per plan.md's classification note, not a Principle V deviation.
+
+**Independent Test**: Even solo (no presence yet), this phase fixes the audited visual baseline: the campus renders both buildings with named rooms, the camera fits/pans/zooms on desktop and phone, and the HUD/Economy/Academy panels are reachable and usable at 375×812 phone portrait (quickstart Scenario 8 steps 1–4 and 7–8, pre-crowd).
+
+### Tests for World & Rendering (write first, ensure RED — Phaser-free modules)
+
+- [ ] T037 [P] Write seat-assignment tests: deterministic assignment of presences to distinct `SeatAnchors`, per-building anchor tags respected, overflow beyond anchors falls back to standing/roaming spots (never hides or stacks colleagues) — in `frontend/src/scenes/world/seats.test.ts`
+- [ ] T038 [P] Write camera math tests: boot fit/center on the **active office's** `Rooms` bounds (`zoom = clamp(min(viewportW/officeW, viewportH/officeH), minZoom, maxZoom)`); `minZoom = 24/16 = 1.5`, `maxZoom ≈ 4`; pan clamped to map bounds; resize recompute — in `frontend/src/scenes/world/camera.test.ts`
+- [ ] T039 [P] Write commute-path math tests: polyline progress as a function of elapsed vs `coop.commuteSeconds`; deterministic per-colleague perpendicular lane offset from a stable hash of `colleagueId` (commute-rush legibility, SC-010) — in `frontend/src/scenes/world/commute.test.ts`
+
+### Implementation for World & Rendering
+
+- [ ] T040 Author the Tiled campus map `frontend/public/assets/campus.json`: both buildings with preserved footprints and named rooms (Office #1: **corkscrew**, **spiderweb**, **skier**, the Office, Stairs/Elevator core; Office #2: **deco-office-chair**, **frog**, **bongo**, **bridge**, the executive Office, both cores) joined by the streets/tram commute route; three object layers — `Rooms` (named polygons), `SeatAnchors` (point objects, building-tagged, ≥ 20 for Office #1 / ≥ 40 for Office #2 per the FR-021 capacity invariant), `CommutePaths` (entrance-to-entrance polylines); tilesets **embedded** in the export (FR-020/021/022) — depends on T041's `campus_tileset.png`: the Tiled authoring embeds the tileset atlas, so the atlas must exist before tiles can be laid or the embedded tileset exported
+- [ ] T041 [P] Produce `frontend/public/assets/campus_tileset.png` (Kenney CC0 16×16 base + custom lise touches: logo signage, skier trophy shelf, room-name plates, coffee points; combined atlas well below 4096×4096) and `frontend/public/assets/avatars.png` (16 px frames with green live vs red/desaturated last-seen styling + activity icons — FR-023)
+- [ ] T042 Implement the camera module `frontend/src/scenes/world/camera.ts`: boot fit/center on the active building, pointer-drag pan within `setBounds`, wheel + pinch zoom clamped to `[1.5, 4]`, recompute on `this.scale.on('resize', ...)` (pure math kept testable per T038)
+- [ ] T043 Implement the seats module `frontend/src/scenes/world/seats.ts`: read `SeatAnchors` via `map.getObjectLayer(...)`, seat assignment + standing overflow (per T037)
+- [ ] T044 Implement the commute module `frontend/src/scenes/world/commute.ts`: `CommutePaths` traversal, progress interpolation, lane offsets (per T039)
+- [ ] T045 Implement the avatars module `frontend/src/scenes/world/avatars.ts`: sprite + name label + activity icon containers; labels persistent at/above the label-zoom threshold, tap/hover below it (FR-005 × FR-024 label rule); padded pointer hit-area pushing effective touch targets toward 44 px
+- [ ] T046 Implement `frontend/src/scenes/world/CampusScene.ts`: load `campus.json`/tileset (throw on tileset-name mismatch, as 001 did by design), render tile layers, wire camera/seats/avatars; set `pixelArt: true` in the Phaser game config; update `TILE_SIZE` in `frontend/src/scenes/layout.ts` for the 16 px base tile; supersedes the retired `frontend/src/scenes/OfficeScene.ts`
+- [ ] T047 DOM overlay foundation (FR-019): positioned `<div id="ui">` + stylesheet in `frontend/index.html`; `frontend/src/ui/styles.css` with `pointer-events: none` on the container / `auto` on interactive children (camera gestures still reach the canvas), bottom-sheet/tab-bar layout in phone portrait ↔ side panels on desktop, per-scene color constants consolidated into CSS custom properties; mount + per-frame `refresh(view)` in `frontend/src/ui/overlay.ts` driven from the existing accessor-injection seam (`{ getState, getContent, on<Action> }`); plus the per-building **quick-jump buttons** promised by research's Camera decision (min-zoom consequence, FR-019 reachability): two overlay buttons that pan/fit the camera to each building's `Rooms` bounds via `frontend/src/scenes/world/camera.ts` — without them, reaching the other building on a phone requires panning the whole campus
+- [ ] T048 [P] Implement `frontend/src/ui/hudPanel.ts` replacing `HudScene`: LOC counter (`formatLoc`/`formatRate`), rate preview from `computeRate`, manual-boost DOM button (moves the scene-wide `pointerdown` boost off the canvas — resolves the camera input conflict), boost float-text as a CSS animation honoring `state.settings.reducedMotion`
+- [ ] T049 [P] Implement `frontend/src/ui/economyPanel.ts` replacing `EconomyScene` from `getEconomyView`: cash display, cash-out, upgrade shop, burner activation with fuel remaining (fixes the audited off-screen `PANEL_X = 520` mobile defect)
+- [ ] T050 [P] Implement `frontend/src/ui/academyPanel.ts` replacing `AcademyScene` from `getAcademyView`: training list (affordable/locked), milestones/credentials display
+- [ ] T051 Retire the Phaser UI scenes: remove `frontend/src/scenes/HudScene.ts`, `frontend/src/scenes/EconomyScene.ts`, `frontend/src/scenes/AcademyScene.ts` (and the retired `OfficeScene.ts`) from the scene registration; wire `CampusScene` + `overlay.refresh()` per frame into the loop in `frontend/src/main.ts` and `frontend/src/game/` (depends on T046–T050)
+- [ ] T052 Deploy to prod & verify (Phase 3): use the `deploy-lise-game` skill — verify on `https://lise-game.schmitz.gg` that the campus renders both buildings with named rooms, camera fit/pan/clamped-zoom works with crisp pixels, the full 001 loop (boost, cash-out, upgrades, burner, academy) is usable in the DOM overlay at 375×812 phone portrait **and** desktop, and no 001 regression exists
+
+**Checkpoint** (T052): The audited visual baseline is fixed in prod — campus world + responsive UI shipped, ready to carry presence.
+
+---
+
+## Phase 4: User Story 1 - See Your Colleagues in the Shared Office (Priority: P1) 🎯 MVP
+
+**Goal**: Sign in as a lise colleague via Keycloak (PKCE), consent, and see colleagues as live (green) and last-seen (red) avatars seated in the shared campus, labeled with name and activity; hide/show at will; anonymous play untouched.
+
+**Independent Test**: quickstart Scenario 1 — two browsers sign in as `alice` and `bob`, each sees the other's green avatar within seconds; sign one out and it transitions to a red last-seen avatar at its desk. Plus Scenarios 2 (anonymous play + consent + identity adoption) and 3 (hide me — visibility assertions only at this phase; the co-op-bonus half of Scenario 3 needs US2 and runs in full at T075).
+
+### Tests for User Story 1 (write first, ensure RED)
+
+- [ ] T053 [P] [US1] Write presence REST contract tests (mock JWTs): `GET /api/v1/presence` returns `{ serverTime, self, colleagues }` with `PresenceRecord` shape per contracts §2, hidden/un-consented colleagues filtered server-side, `self` echoed even while hidden, **only** the FR-004 field allowlist exposed, 401 without a token; `PUT /api/v1/presence/settings` stores consent/visibility, 409 `consent_required` when `visible: true` without consent — in `backend/src/test/java/com/lise/liseidle/presence/PresenceControllerTest.java`
+- [ ] T054 [P] [US1] Write `PresenceService` tests: an accepted heartbeat marks the sender live and sets `leaseExpiresAt = serverNow + coop.leaseSeconds`; the `@Scheduled` sweep expires live → last-seen past the lease, stamps/persists `lastSeenAt` to `player_presence`, and broadcasts the delta; hidden players contribute to no snapshot or broadcast; heartbeats from tokenless sessions are ignored — in `backend/src/test/java/com/lise/liseidle/presence/PresenceServiceTest.java`
+- [ ] T055 [P] [US1] Write the two-session integration test (mock JWTs `alice` + `bob`, no network to Keycloak): both connect STOMP with a CONNECT-frame bearer, heartbeat, and each sees the other via snapshot + `/topic/presence` deltas; when one stops heartbeating past the lease the other observes the live → last-seen transition — in `backend/src/test/java/com/lise/liseidle/presence/TwoSessionPresenceIT.java` (backs quickstart Scenario 1)
+- [ ] T056 [P] [US1] Write presence-model tests: snapshot replaces the model wholesale (authoritative as of `serverTime`); `presence.update` upserts / `presence.remove` drops by `colleagueId`; deltas older than the snapshot's `serverTime` may be discarded; malformed payloads and unknown `type` values are ignored silently (never throw into the game loop) — in `frontend/src/net/presenceClient.test.ts`
+- [ ] T056a [P] [US1] Write auth/identity-adoption client tests extending the existing `frontend/src/net/restClient.test.ts` (mocked `fetch` + a mocked token source): `Authorization: Bearer` is attached when a token is held and omitted otherwise; after sign-in the client re-bootstraps `POST /api/v1/session` under `colleagueId` and pushes local state via `PUT /api/v1/session/{colleagueId}/state`; the anonymous-UUID row and the local save content are untouched by adoption (orphan-never-wipe); a 401 or network failure degrades to signed-out behavior without throwing into the game loop (FR-016; contracts §2 identity adoption) — RED before T057/T058
+
+### Implementation for User Story 1
+
+- [ ] T057 [P] [US1] Implement `frontend/src/net/auth.ts` with `oidc-client-ts`: Authorization Code + PKCE against issuer `https://keycloak.novitasoft.de/realms/LiseIdler`, public client `lise-idler-frontend` (no secret), requesting scope **`openid profile`** (the access token must carry `name`/`preferred_username` — T003 verifies the client's protocol mappers); login redirect, callback handling, token storage/renewal/expiry, sign-out (drop tokens, optional Keycloak end-session redirect); every failure degrades to signed-out solo play (FR-001/002, contracts §2) (depends on T056a RED)
+- [ ] T058 [US1] Extend `frontend/src/net/restClient.ts`: attach `Authorization: Bearer <access_token>` on authenticated calls, add `getMe()`, and implement **identity adoption** (contracts §2, binding): after sign-in adopt `colleagueId` (the JWT `sub` echoed by `/api/v1/me`) as `playerId`, re-bootstrap `POST /api/v1/session` under that id, and push local state via `PUT /api/v1/session/{colleagueId}/state` (no 403 `player_mismatch`; the anonymous-UUID row is orphaned, never wiped); re-bootstrap sequencing in `frontend/src/main.ts` (depends on T056a RED)
+- [ ] T059 [US1] Implement `PresenceService.java` (heartbeat → registry upsert + lease extension; `@MessageMapping("/presence.heartbeat")` handling `{ office, activity, commute }` with **all timestamps server-stamped** on receipt; `@Scheduled` expiry sweep live → last-seen with durable flush; consent/visibility settings logic) and `PresenceController.java` (`GET /api/v1/presence`, `PUT /api/v1/presence/settings`) in `backend/src/main/java/com/lise/liseidle/presence/` (depends on T033 **and T060** — the sweep and heartbeat handling broadcast through `PresencePushService` and its message records, so T060 lands first despite the task numbering)
+- [ ] T060 [US1] Implement `PresencePushService.java` plus the message records `PresenceUpdate.java`, `PresenceRemove.java`, `CoopSegmentMessage.java` (TYPE-discriminated, static-factory style mirroring `session/SessionPushService.java`) broadcasting `/topic/presence` — exactly one record per `colleagueId`, visible colleagues only — in `backend/src/main/java/com/lise/liseidle/presence/`
+- [ ] T061 [US1] Extend `frontend/src/net/stompClient.ts`: bearer token in the STOMP CONNECT frame headers, supplying a **fresh access token per connection attempt** via `beforeConnect` updating `client.connectHeaders` (contracts §3 — access tokens live minutes while the socket lives hours; static headers would replay a stale token on every library-driven reconnect and silently kill presence after the first expiry); `/topic/presence` subscription inside the existing `client.onConnect` (self-healing on reconnect) with a `StompHandlers.onPresence` handler; `publishHeartbeat(payload)` guarded by `isConnected`
+- [ ] T062 [US1] Implement `frontend/src/net/presenceClient.ts`: presence snapshot fetch + the client presence model per T056's contract; re-fetch the snapshot after every (re)connect
+- [ ] T063 [US1] Heartbeat cadence + wiring in `frontend/src/main.ts` (the clock-owning module, matching the 30 s save / 60 s sync `setInterval` pattern): publish every `coop.heartbeatSeconds` with `{ office, activity, commute }` derived from save state — `office: null` + `commute` set while commuting; `activity` is a client-derived display label (commuting → `"commuting"`, active burner → `"burning tokens"`, else `"coding"`), never stored in the save
+- [ ] T064 [US1] Implement `frontend/src/ui/socialPanel.ts`: non-blocking sign-in offer ("see your colleagues" — never forced, FR-002), first-run consent dialog before any visibility (`PUT /api/v1/presence/settings`, FR-003), hide/show toggle, and the non-blocking "social offline" badge (FR-016)
+- [ ] T065 [US1] Render presence in the world: drive `frontend/src/scenes/world/avatars.ts` + `seats.ts` from the presence model in `frontend/src/scenes/world/CampusScene.ts` — live green / last-seen red avatars at distinct seat anchors in the correct building, name + activity labels per the zoom rule, tap/click shows the label below threshold (FR-005/006/023)
+- [ ] T066 [P] [US1] Implement `DevPresenceSeeder.java` (`@Profile("dev")`, never in prod): `POST /api/v1/dev/presence/seed` with `{ "live": n, "lastSeen": n, "commuting": n, "office": "office_1"? }` filling the in-memory registry with synthetic colleagues (distributed by default, single-building when `office` is given; seeded live entries heartbeat server-side and age out via the normal sweep) and `DELETE /api/v1/dev/presence/seed` — in `backend/src/main/java/com/lise/liseidle/presence/DevPresenceSeeder.java`; the endpoints are callable **without a bearer token** under the `dev` profile (T030 permits `/api/v1/dev/**` there; they do not exist in prod) (quickstart prerequisite for Scenarios 4, 7, 8)
+- [ ] T067 [US1] Deploy to prod & verify (Phase 4 — **the MVP deploy**): use the `deploy-lise-game` skill — verify the login redirect to `keycloak.novitasoft.de` (realm `LiseIdler`) round-trips from `https://lise-game.schmitz.gg`, then run quickstart Scenario 1 (two browsers, `alice`/`bob`, green ↔ last-seen), Scenario 2 (anonymous play regression-free, consent, identity adoption — no 403 in the network tab), and Scenario 3 (hide me — **visibility assertions only**: skip the co-op-bonus precondition and the recomputed-downgrade-segment bullet, which land with Phase 5/T072; the full Scenario 3 runs at T075) against prod
+
+**Checkpoint** (T067): US1 fully functional, independently tested, and live — the shared office MVP is deployed.
+
+---
+
+## Phase 5: User Story 2 - Cooperative Production Bonus (Priority: P2)
+
+**Goal**: Presence of colleagues in the player's active office grants a bounded, capped, deterministic production bonus via server-issued lease segments — offline spans stay baseline.
+
+**Independent Test**: quickstart Scenario 4 (bonus rises ~+10% per colleague, hard-caps at ×1.5 under a seeded crowd, decays to baseline within one lease) and Scenario 5 (offline credit matches Spec 001 baseline within tolerance plus at most the ≤ `leaseSeconds` residual-lease tail; replay from the saved segments is deterministic).
+
+### Tests for User Story 2 (write first, ensure RED)
+
+- [ ] T068 [P] [US2] Write `CoopService` tests: multiplier = `min(1 + n × perColleagueMultiplier, maxMultiplier)` where `n` counts **distinct, visible** colleagueIds in the sender's active office, self excluded; hidden/un-consented excluded; no segment while the sender is commuting; duplicate sessions counted once; cap holds for any crowd size (FR-010/011/014) — in `backend/src/test/java/com/lise/liseidle/presence/CoopServiceTest.java`
+- [ ] T069 [P] [US2] Write the segment-flow integration test (mock JWTs `alice` + `bob`): a heartbeat with another visible colleague present issues/extends a `coop.segment` on `/user/queue/coop` (server-authored ISO-8601 `from`/`until`, `until = serverNow + leaseSeconds`, capped multiplier; extension upserts the same `from`); a colleague hiding or leaving triggers **proactively pushed** recomputed downgrade segments with `from = serverTime` to every affected colleague (SC-006 — no wait for heartbeat or lease expiry) — in `backend/src/test/java/com/lise/liseidle/presence/CoopSegmentFlowIT.java` (backs quickstart Scenarios 3–4)
+- [ ] T070 [P] [US2] Write offline-baseline **characterization/regression tests** — explicitly **exempt from the RED gate**: the pure `advance` behavior they exercise shipped in Phase 2 (T024), so these arrive GREEN; they pin the carve-out down as a regression guard while T071/T072 land the server side. Cases: an offline span is covered only by the pre-offline lease tail (≤ `coop.leaseSeconds`) and integrates at baseline beyond it, matching the 001 offline result within the 001 tolerance; replaying the identical saved `coopSegments` reproduces identical credit (quickstart Scenario 5 form; FR-012/013 with the plan.md Complexity Tracking carve-out) — in `frontend/src/sim/advance.test.ts`
+
+### Implementation for User Story 2
+
+- [ ] T071 [US2] Implement `CoopService.java` (distinct-visible-colleague multiplier derivation, capped at `CoopConfig.maxMultiplier`) in `backend/src/main/java/com/lise/liseidle/presence/CoopService.java`
+- [ ] T072 [US2] Wire segment issuance into the heartbeat path in `backend/src/main/java/com/lise/liseidle/presence/PresenceService.java` (issue/extend the sender's lease segment when ≥ 1 other distinct visible colleague shares the office; none while commuting) and proactive recomputed-downgrade pushes on join/leave/hide/consent-revoke via `PresencePushService.java` to `/user/queue/coop`
+- [ ] T073 [US2] Client segment merge: subscribe `/user/queue/coop` in `frontend/src/net/stompClient.ts`; apply each `coop.segment` via `applyCoopPresence` and persist at the established safe mutation points (the `state = next; loop.load(state, Date.now()); saveGame(state)` template) in `frontend/src/main.ts` — missed segments during a disconnect are never retroactively issued (contracts §3)
+- [ ] T074 [US2] Display the active co-op bonus in the HUD (multiplier from `computeRate`'s covering-segment rule, e.g. "×1.2 co-op", baseline shows nothing) in `frontend/src/ui/hudPanel.ts`
+- [ ] T075 [US2] Deploy to prod & verify (Phase 5): use the `deploy-lise-game` skill — run quickstart Scenario 3 in **full** (hide me including the co-op-bonus precondition and the server-pushed recomputed downgrade segment — deferred from T067, now that T072 has landed; T069's integration test backs Scenarios 3–4), Scenario 4 (bonus on/off & cap; crowd via the dev seeder on a local dev-override stack, cap verification on prod with `alice`/`bob`), Scenario 5 (offline baseline & replay determinism), and Scenario 6 (backend-down degradation: stop the backend container, verify solo play + "social offline" badge, restart, verify auto-resume)
+
+**Checkpoint** (T075): US1 and US2 work independently in prod — presence is rewarding, bounded, and deterministic.
+
+---
+
+## Phase 6: User Story 3 - Live Presence That Feels Alive (Priority: P3)
+
+**Goal**: Real-time transitions — colleagues arrive, leave, change activity, and visibly commute along the streets between the buildings; duplicate sessions collapse to one avatar.
+
+**Independent Test**: quickstart Scenario 7 — with two sessions open, one colleague switches offices and the other watches the avatar leave, travel the street (no teleport, lane-offset under crowd), and arrive seated; plus Scenario 9 (duplicate-session collapse).
+
+### Tests for User Story 3 (write first, ensure RED)
+
+- [ ] T076 [P] [US3] Write commute presence tests: the **first** heartbeat reporting a commute gets `commute.startedAt` **server-stamped** (`office = null`, no client timestamp accepted) and broadcasts a `presence.update`; the arrival heartbeat clears `commute` and sets `office = toOffice`; no coop segment is issued while commuting — in `backend/src/test/java/com/lise/liseidle/presence/PresenceCommuteTest.java`
+- [ ] T077 [P] [US3] Write the duplicate-session collapse integration test: two STOMP sessions under one mock-JWT identity → one record in every snapshot/broadcast payload, max-of-heartbeats semantics (closing one session keeps the colleague live), last-seen only after **all** sessions stop heartbeating past the lease (quickstart Scenario 9 form) — in `backend/src/test/java/com/lise/liseidle/presence/DuplicateSessionIT.java`
+- [ ] T078 [P] [US3] Write avatar state-transition tests (Phaser-free derivation logic): live → last-seen produces a soft transition state (no abrupt removal), commute-in-progress resolves to a route position from `startedAt` + `coop.commuteSeconds`, arrival resolves back to a seat — in `frontend/src/scenes/world/avatars.test.ts`
+
+### Implementation for User Story 3
+
+- [ ] T079 [US3] Live delta transitions in the world: `presence.update`/`presence.remove` reconcile joins, leaves, office moves, and activity changes into the rendered avatars without any refresh, in `frontend/src/net/presenceClient.ts` + `frontend/src/scenes/world/CampusScene.ts` (US3 acceptance 1)
+- [ ] T080 [US3] Commute rendering: observed commuters travel the `CommutePaths` polyline with progress computed from the server-stamped `startedAt` against `coop.commuteSeconds`, deterministic per-colleague lane offsets, and in-transit label decluttering (labels on tap/hover only), in `frontend/src/scenes/world/commute.ts` + `frontend/src/scenes/world/CampusScene.ts` (FR-022, SC-010, edge case "commute rush")
+- [ ] T081 [US3] Live → last-seen soft transition: expired colleagues fade to the red/desaturated at-desk state (no pop, no error; honors `reducedMotion`) in `frontend/src/scenes/world/avatars.ts` (US3 acceptance 3)
+- [ ] T082 [US3] Office-switch affordance: a switch-office control in the DOM overlay wired to the `switchOffice` mutator (gated on the Office #2 unlock, 001 FR-014), with the next heartbeat reporting `{ office: null, commute }` so observers see the transition, in `frontend/src/ui/hudPanel.ts` + `frontend/src/main.ts`
+- [ ] T083 [US3] Deploy to prod & verify (Phase 6): use the `deploy-lise-game` skill — run quickstart Scenario 7 (live commute visible on the street end-to-end, commute-rush lane offsets via the seeder on the dev stack, locked-office viewer check) and Scenario 9 (two tabs as `alice`, one avatar, one bonus contribution, last-seen only after the final tab closes) against prod
+
+**Checkpoint** (T083): All three stories independently functional in prod — the office feels alive.
+
+---
+
+## Phase 7: Polish & Cross-Cutting Concerns
+
+**Purpose**: Retention, performance at design load, accessibility, docs, and the full validation pass.
+
+- [ ] T084 [P] Write RED retention-sweep test: `player_presence` rows with `lastSeenAt` older than `coop.lastSeenRetentionDays` are filtered from snapshots/broadcasts and deleted by a daily sweep (offboarding path: a disabled Keycloak account ages out with no IdP integration) — in `backend/src/test/java/com/lise/liseidle/presence/RetentionSweepTest.java`
+- [ ] T085 Implement the retention sweep (daily `@Scheduled` delete + snapshot/broadcast filtering) in `backend/src/main/java/com/lise/liseidle/presence/PresenceService.java` + `PresenceRepository.java` (depends on T084 RED)
+- [ ] T086 [P] Performance pass: hold 60 fps with ~30 live + ~20 last-seen avatars (seed via `POST /api/v1/dev/presence/seed {"live": 30, "lastSeen": 20}` on the dev stack) on desktop and phone; profile `frontend/src/scenes/world/CampusScene.ts` and pool avatar containers/labels if needed (SC-007, SC-009)
+- [ ] T087 Accessibility & reduced motion (**after T086** — both touch the world modules `CampusScene.ts`/`avatars.ts`, so they must not run in parallel; the a11y pass goes over the pooled containers): honor `state.settings.reducedMotion` across commute/avatar/panel/boost animations; keyboard focus order and ARIA labels for the DOM panels; touch targets ≥ 44 px — in `frontend/src/ui/styles.css`, `frontend/src/ui/*.ts`, and the world modules (FR-019)
+- [ ] T088 [P] Documentation: rewrite `frontend/public/assets/README.md` for the new assets (campus map structure, object layers, tileset sources + CC0 licenses, how to edit in Tiled); update the root `README.md` with Keycloak configuration (realm `LiseIdler`, issuer URI, client ids; document the secret policy — the backend secret lives only in the untracked host-side `.env` and is interpolated by compose, never committed; rotation per T003a), the `docker-compose.dev.yml` override, and `deploy-lise-game` skill usage
+- [ ] T089 Run the full `specs/002-shared-office-coop/quickstart.md` validation — Scenarios 0–9 end-to-end on the dev stack (`docker compose -f docker-compose.yml -f docker-compose.dev.yml up`): two-browser `alice`/`bob` flows, seeded crowds and commuters, backend-down degradation, phone-portrait legibility checks, and every cross-cutting check
+- [ ] T090 Final deploy to prod & verify: use the `deploy-lise-game` skill — full checklist on prod: `https://lise-game.schmitz.gg` loads; `GET https://lise-game-api.schmitz.gg/api/v1/content` → 200 with the `coop` block; WS connect OK; login redirect via `keycloak.novitasoft.de` works; two-browser `alice`/`bob` presence spot-check (Scenario 1); co-op bonus + decay spot-check (Scenario 4 steps 1–3, 6–7); phone-portrait spot-check (Scenario 8 steps 7–8); Spec 001 scenarios regression-free
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- **Setup (Phase 1)**: No dependencies — start immediately. T008 (deploy skill) blocks T009 and every later deploy task; T003/T004 (Keycloak realm) block all live-realm sign-in validation from Phase 4 on; T001/T002 block the code that imports the new deps.
+- **Foundational (Phase 2)**: Depends on Setup — **BLOCKS all user stories**. T024 (piecewise `advance`) and T030–T032 (resource server + STOMP principal + broker fix) are the load-bearing tasks; T020 (types) gates most frontend work.
+- **World (Phase 3)**: Depends on Phase 2 for full integration, but the map/asset/camera/DOM work (T037–T050) touches only new files and can be driven in parallel with Phase 2 by a second dev; T051 (loop wiring) needs both.
+- **US1 (Phase 4)**: Depends on Phases 2 + 3 (presence renders into the campus world). **= MVP.**
+- **US2 (Phase 5)**: Depends on Phase 2 (segments in the sim) and Phase 4 (the heartbeat/presence pipeline issues the segments).
+- **US3 (Phase 6)**: Depends on Phase 4; commute rendering builds on Phase 3's `commute.ts` module.
+- **Polish (Phase 7)**: Depends on all desired user stories being complete.
+- **Deploy tasks** (T009, T036, T052, T067, T075, T083, T090) are sequential barriers: everything in their phase lands first, gets pushed to `origin main` (push-first rule), then deploys via the `deploy-lise-game` skill.
+
+### Within Each Phase (TDD — Constitution Principle III)
+
+- Tests written, approved, and RED **before** their sibling implementation tasks — in every phase, including World and Polish
+- Pure sim / types / content before net/UI; backend records/entities before services before controllers/push
+- Phase complete (GREEN + deployed + verified) before moving to the next priority
+
+### Parallel Opportunities
+
+- Phase 1: T002–T008 all parallel after T001 starts (disjoint files/console work)
+- Phase 2: tests T010–T019b all parallel; impls T020/T021, then T027/T028 parallel with the frontend sim chain T022–T026
+- Phase 3: tests T037–T039 parallel; T041's `avatars.png` half parallel with map authoring, but **T040 depends on T041's `campus_tileset.png`** (the embedded-tileset input — author the atlas first); panels T048–T050 parallel
+- Phase 4: tests T053–T056a parallel; T057 (auth) and T066 (seeder) parallel with the presence backend chain T060 → T059 (push service + records before the service that broadcasts through them)
+- Phases 5–6: test batches parallel; backend and frontend impl tracks parallel where files are disjoint
+
+---
+
+## Parallel Example: User Story 1
+
+```bash
+# Launch all tests for User Story 1 together (RED first):
+Task: "Presence REST contract tests in backend/src/test/java/com/lise/liseidle/presence/PresenceControllerTest.java"
+Task: "PresenceService lease/sweep tests in backend/src/test/java/com/lise/liseidle/presence/PresenceServiceTest.java"
+Task: "Two-session integration test in backend/src/test/java/com/lise/liseidle/presence/TwoSessionPresenceIT.java"
+Task: "Presence-model tests in frontend/src/net/presenceClient.test.ts"
+Task: "Auth/identity-adoption client tests in frontend/src/net/restClient.test.ts"
+
+# Launch independent impl tracks in parallel:
+Task: "PKCE auth in frontend/src/net/auth.ts"
+Task: "DevPresenceSeeder in backend/src/main/java/com/lise/liseidle/presence/DevPresenceSeeder.java"
+```
+
+---
+
+## Implementation Strategy
+
+### Per-phase deploy cadence
+
+Every phase ends with a "Deploy to prod & verify" task executed via the `deploy-lise-game` skill (T008): push to `origin main`, `ssh -p 2222 root@schmitz.gg`, `cd /root/lise-idle-game && git pull && docker compose build && docker compose up -d`, then the phase-appropriate verification on `https://lise-game.schmitz.gg`. The live site is therefore always shippable, and regressions surface one phase at a time.
+
+### MVP First (through Phase 4)
+
+1. Phase 1: Setup (incl. Keycloak realm readiness + deploy skill, proven by T009)
+2. Phase 2: Foundational (CRITICAL — blocks all stories) → deployed by T036
+3. Phase 3: World & Rendering overhaul (story-mandated; fixes the audited baseline) → deployed by T052
+4. Phase 4: US1 → **STOP and VALIDATE** quickstart Scenarios 1–3 on prod → **MVP live** (T067)
+
+### Incremental Delivery
+
+1. Setup + Foundational → core layer deployed (baseline behavior unchanged)
+2. World overhaul → campus + responsive UI deployed (visible value even solo)
+3. US1 → see your colleagues → **MVP** (T067)
+4. US2 → co-op bonus, capped and deterministic (T075)
+5. US3 → live transitions + street commutes (T083)
+6. Polish → retention, perf, a11y, docs, full quickstart, final deploy (T090)
+
+---
+
+## Notes
+
+- **TDD is mandatory** (Constitution Principle III, non-negotiable): every test task must be RED before its sibling implementation.
+- The pure sim (`frontend/src/sim/`) stays I/O-free, Phaser-free, and wall-clock-free — co-op arrives only as data (`coopSegments` in state, `coop` block in content); only `dt` and state feed `advance` (Constitution Principle I).
+- Big numbers are strings end-to-end; co-op multipliers and lease timings are bounded plain scalars, never resources (contracts, global wire rules).
+- Every social call is best-effort: failure degrades to the Spec 001 experience at baseline bonus with the non-blocking "social offline" badge (FR-016..018) — no social code path may block, corrupt, or wipe the save.
+- Keycloak backend client secret: the current value is recorded once in this file's Keycloak reference block (Andre's explicit decision — testable now, rotated later via T003a; note the repo is public, so the rotation is due around the first push of this file). Runtime config never carries the literal: compose interpolates `KEYCLOAK_BACKEND_CLIENT_SECRET` from the untracked host-side `.env` (gitignored, T005); on rotation only the host `.env` changes (T008 documents the host location, T088 documents the policy).
+- Commit after each task or logical group; one branch per feature (`002-shared-office-coop`).
