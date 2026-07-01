@@ -13,7 +13,8 @@
 //
 // Keep this in sync with the backend content files when content changes
 // (T037/T043/T050). The `contentVersion` is bumped to match the backend's
-// `CONTENT_VERSION` so a client can detect staleness.
+// `CONTENT_VERSION` so a client can detect staleness. US2 economy content
+// (burner + upgrades) was added in T043.
 
 import type { ContentCatalog } from './types';
 
@@ -25,7 +26,7 @@ import type { ContentCatalog } from './types';
  */
 export const FALLBACK_CONTENT: ContentCatalog = {
   schemaVersion: 1,
-  contentVersion: '1.0.0',
+  contentVersion: '1.1.0',
   producers: [
     {
       id: 'manual_typing',
@@ -58,8 +59,31 @@ export const FALLBACK_CONTENT: ContentCatalog = {
       unlockRequirement: { type: 'ownsProducer', targetId: 'stack_overflow', threshold: null },
     },
   ],
-  upgrades: [],
+  upgrades: [
+    {
+      id: 'better_keyboards',
+      name: 'Better Keyboards',
+      cost: { resource: 'cash', amount: '500' },
+      effect: { type: 'globalMultiplier', multiplier: 2 },
+      prerequisite: null,
+    },
+    {
+      id: 'mechanical_switches',
+      name: 'Mechanical Switches',
+      cost: { resource: 'cash', amount: '200' },
+      effect: { type: 'producerRateMultiplier', producerId: 'manual_typing', multiplier: 3 },
+      prerequisite: { type: 'ownsProducer', targetId: 'stack_overflow', threshold: null },
+    },
+  ],
   trainings: [],
   milestones: [],
-  burners: [],
+  burners: [
+    {
+      id: 'gpu_cluster',
+      name: 'GPU Cluster',
+      fuelCostToActivate: '100',
+      burnRate: '10',
+      productionMultiplier: 3,
+    },
+  ],
 };

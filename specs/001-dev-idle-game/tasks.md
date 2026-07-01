@@ -118,7 +118,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T040 [P] [US2] Implement `cashOut`, `purchaseUpgrade`, `activateBurner` action mutators in `frontend/src/sim/actions.ts`
 - [ ] T041 [US2] Implement economy UI panel: cash display, cash-out button, upgrade shop, burner activation with fuel/fuel-remaining display in `frontend/src/scenes/EconomyScene.ts`
 - [ ] T042 [US2] Wire economy panel into game loop: `computeRate` reflects active burner multiplier live; bind purchase/activate to mutators in `frontend/src/game/gameLoop.ts`
-- [ ] T043 [P] [US2] Seed US2 content (cash conversion rate, AI-token burner def with fuel cost/burn rate/multiplier, at least one economy upgrade) in `backend/src/main/resources/content/`
+- [x] T043 [P] [US2] Seed US2 content (cash conversion rate, AI-token burner def with fuel cost/burn rate/multiplier, at least one economy upgrade) in `backend/src/main/resources/content/`
 
 **Checkpoint**: US1 and US2 both work independently. The reinvest tension loop is complete.
 
