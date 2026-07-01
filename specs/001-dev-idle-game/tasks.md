@@ -151,7 +151,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 
 **Purpose**: Improvements affecting multiple stories and production readiness.
 
-- [ ] T051 [P] Add numeric-integrity test: very large LOC values display and advance correctly (no NaN/Infinity) in `frontend/src/sim/bigNumber.test.ts`
+- [x] T051 [P] Add numeric-integrity test: very large LOC values display and advance correctly (no NaN/Infinity) in `frontend/src/sim/bigNumber.test.ts`
 - [ ] T052 [P] Add offline-capable test: Scenarios 1–3 pass with backend unreachable (sync deferred) in `frontend/tests/offline.test.ts`
 - [ ] T053 [P] Add corrupted-save test: invalid JSON refused safely without touching valid data in `frontend/src/save/localStorage.test.ts`
 - [ ] T054 [P] Add backend migration test: older `schemaVersion` save migrates forward, progress preserved in `backend/src/test/java/.../state/MigrationTest.java`

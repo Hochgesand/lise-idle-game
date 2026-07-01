@@ -675,3 +675,74 @@ describe('advance — milestone evaluation', () => {
     expect(state.earnedMilestones.has('iso_9001')).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T051 — advance with extreme LOC values (no NaN/Infinity)
+// ---------------------------------------------------------------------------
+
+describe('T051 — advance numeric integrity at extreme LOC values', () => {
+  /** Content with a single high-rate producer (1e30 LOC/sec). */
+  function makeExtremeContent(): ContentCatalog {
+    return {
+      schemaVersion: 1,
+      contentVersion: '1.0.0',
+      producers: [
+        {
+          id: 'mega_producer',
+          name: 'Mega Producer',
+          description: 'Extreme rate for numeric testing.',
+          baseRate: '1e30',
+          cost: { resource: 'cash', amount: '0' },
+          costGrowth: 1.15,
+          unlockRequirement: null,
+        },
+      ],
+      upgrades: [],
+      trainings: [],
+      milestones: [],
+      burners: [],
+    };
+  }
+
+  function makeExtremeState(loc: string): GameState {
+    return {
+      resources: { loc, cash: '0', aiTokens: '0' },
+      ownedProducers: new Set<string>(['mega_producer']),
+      ownedUpgrades: new Set<string>(),
+      ownedTrainings: new Set<string>(),
+      activeBurner: null,
+      earnedMilestones: new Set<string>(),
+      lastAdvancedAt: FIXED_ANCHOR,
+      schemaVersion: 1,
+      settings: { reducedMotion: false, muted: false },
+    };
+  }
+
+  it('advancing from loc=1e50 at rate 1e30/sec stays finite (no NaN/Infinity)', () => {
+    const content = makeExtremeContent();
+    const state = makeExtremeState('1e50');
+
+    const result = advance(state, 1000, content); // 1s @ 1e30/sec
+
+    // Result loc must be a finite big-number string (not NaN/Infinity).
+    expect(result.resources.loc).not.toBe('NaN');
+    expect(result.resources.loc).not.toBe('Infinity');
+    // parseFloat must yield a finite JS number (1e50 is within double range).
+    expect(Number.isFinite(parseFloat(result.resources.loc))).toBe(true);
+    // loc must be non-decreasing (at ~15 sig figs, 1e30 absorbed into 1e50 is
+    // expected — the gain is 20 orders of magnitude smaller than the base).
+    expect(compare(bn(result.resources.loc), bn('1e50'))).toBeGreaterThanOrEqual(0);
+  });
+
+  it('advancing beyond Number.MAX_VALUE stays finite (no NaN/Infinity)', () => {
+    const content = makeExtremeContent();
+    const state = makeExtremeState('1e400'); // beyond double range
+
+    const result = advance(state, 1000, content);
+
+    expect(result.resources.loc).not.toBe('NaN');
+    expect(result.resources.loc).not.toBe('Infinity');
+    // The value is non-decreasing (monotonic production).
+    expect(compare(bn(result.resources.loc), bn('1e400'))).toBeGreaterThanOrEqual(0);
+  });
+});

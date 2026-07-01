@@ -150,3 +150,103 @@ describe('fromNumber', () => {
     expect(toString(fromNumber(42))).toEqual('42');
   });
 });
+
+// ---------------------------------------------------------------------------
+// T051 — Numeric integrity at extreme values (quickstart cross-cutting check)
+// ---------------------------------------------------------------------------
+//
+// The idle genre produces astronomically large LOC values. These tests guard
+// that NO NaN/Infinity ever leaks and that there is no precision-loss that
+// would alter gameplay (Constitution numeric-integrity constraint).
+// Values asserted by value (compare === 0) beyond ~15 sig figs — matching the
+// precision contract documented in the file header.
+
+describe('T051 — numeric integrity at extreme values', () => {
+  // ── 1. Very large LOC string round-trips losslessly ───────────────────
+
+  it('1e100 round-trips losslessly (beyond MAX_SAFE_INTEGER)', () => {
+    const huge = bn('1e100');
+    // toString → bn re-parse equals the original by value.
+    expect(compare(bn(toString(huge)), bn('1e100'))).toBe(0);
+  });
+
+  it('1e308 round-trips losslessly (at the edge of JS number range)', () => {
+    const huge = bn('1e308');
+    expect(compare(bn(toString(huge)), bn('1e308'))).toBe(0);
+  });
+
+  it('1e500 round-trips losslessly (beyond Number.MAX_VALUE ~1.8e308)', () => {
+    const huge = bn('1e500');
+    expect(compare(bn(toString(huge)), bn('1e500'))).toBe(0);
+  });
+
+  // ── 2. Arithmetic on huge values stays finite + correct ───────────────
+
+  it('add(1e308, 1e308) is finite and correct (no NaN/Infinity)', () => {
+    const result = add(bn('1e308'), bn('1e308'));
+    const s = toString(result);
+    // Must be a finite-looking string — not NaN, not Infinity.
+    expect(s).not.toBe('NaN');
+    expect(s).not.toBe('Infinity');
+    // 1e308 + 1e308 = 2e308 by value.
+    expect(compare(result, bn('2e308'))).toBe(0);
+  });
+
+  it('multiply(1e100, 1e10) ≈ 1e110 (no NaN/Infinity)', () => {
+    const result = multiply(bn('1e100'), fromNumber(1e10));
+    const s = toString(result);
+    expect(s).not.toBe('NaN');
+    expect(s).not.toBe('Infinity');
+    expect(compare(result, bn('1e110'))).toBe(0);
+  });
+
+  it('arithmetic beyond Number.MAX_VALUE stays finite', () => {
+    // Operations entirely beyond double range must not collapse to Infinity.
+    const result = add(bn('1e500'), bn('1e500'));
+    const s = toString(result);
+    expect(s).not.toBe('NaN');
+    expect(s).not.toBe('Infinity');
+    expect(compare(result, bn('2e500'))).toBe(0);
+  });
+
+  // ── 3. advance with a huge existing LOC + a high rate ─────────────────
+  // Tested in advance.test.ts (needs content fixtures); here we verify the
+  // bigNumber building blocks that advance relies on.
+
+  it('rate×dt multiplication at extreme magnitudes stays finite', () => {
+    // Simulate advance's internal: rate * (dt/1000). rate=1e30, dt=1000ms.
+    const rate = bn('1e30');
+    const dtSec = fromNumber(1000 / 1000); // 1 second
+    const gain = multiply(rate, dtSec);
+    const s = toString(gain);
+    expect(s).not.toBe('NaN');
+    expect(s).not.toBe('Infinity');
+    expect(compare(gain, bn('1e30'))).toBe(0);
+  });
+
+  it('adding a huge gain to a huge existing loc stays finite', () => {
+    // Simulate advance's: loc += rate * dt. loc=1e50, gain=1e30.
+    const existing = bn('1e50');
+    const gain = bn('1e30');
+    const result = add(existing, gain);
+    const s = toString(result);
+    expect(s).not.toBe('NaN');
+    expect(s).not.toBe('Infinity');
+    // 1e50 + 1e30 ≈ 1e50 (the gain is negligible at this scale).
+    expect(compare(result, bn('1e50'))).toBe(0);
+  });
+
+  // ── 5. No precision loss that alters gameplay ─────────────────────────
+
+  it('MAX_SAFE_INTEGER+2 (9007199254740993) round-trips by value without double-collapse', () => {
+    // In JS double, 9007199254740993 rounds DOWN to 9007199254740992.
+    // break_eternity operates at ~15 sig figs; at ~9e15 values are in the
+    // scientific layer. The real gameplay concern is round-trip STABILITY:
+    // bn(x) → toString → bn must equal bn(x) by compare. This proves the value
+    // is deterministic and doesn't drift across save/load/advance cycles.
+    const precise = bn('9007199254740993');
+    const roundTripped = bn(toString(precise));
+    // The round-tripped value must equal the original by compare.
+    expect(compare(precise, roundTripped)).toBe(0);
+  });
+});

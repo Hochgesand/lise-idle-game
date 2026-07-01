@@ -79,3 +79,37 @@ describe('formatRate', () => {
     expect(formatRate('1500')).toBe('+1.50K/s');
   });
 });
+
+// ---------------------------------------------------------------------------
+// T051 — formatLoc never returns NaN/Infinity at extreme inputs
+// ---------------------------------------------------------------------------
+
+describe('T051 — formatLoc never returns NaN/Infinity at extreme values', () => {
+  /**
+   * Helper: assert a formatLoc result is a valid non-NaN/non-Infinity display
+   * string (starts with a digit, contains no "NaN"/"Infinity" substring).
+   */
+  function assertFiniteDisplay(input: string): void {
+    const result = formatLoc(input);
+    expect(result).not.toContain('NaN');
+    expect(result).not.toContain('Infinity');
+    expect(result.length).toBeGreaterThan(0);
+    expect(result).toMatch(/^[0-9]/); // starts with a digit
+  }
+
+  it('formatLoc("1e400") — beyond Number.MAX_VALUE — never NaN/Infinity', () => {
+    assertFiniteDisplay('1e400');
+  });
+
+  it('formatLoc("1e308") — at Number.MAX_VALUE edge — never NaN/Infinity', () => {
+    assertFiniteDisplay('1e308');
+  });
+
+  it('formatLoc("0") — zero — never NaN/Infinity', () => {
+    assertFiniteDisplay('0');
+  });
+
+  it('formatLoc("1e1000") — far beyond any double — never NaN/Infinity', () => {
+    assertFiniteDisplay('1e1000');
+  });
+});
