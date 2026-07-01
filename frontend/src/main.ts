@@ -27,9 +27,10 @@ import Phaser from 'phaser';
 import type { ContentCatalog, ContentEnvelope, GameState } from './sim/types';
 import { loadContent } from './sim/content';
 import { manualBoost } from './sim/actions';
-import { grantStarterProducer } from './sim/freshPlayer';
 import { bn, compare } from './sim/bigNumber';
 import { GameLoop } from './game/gameLoop';
+import { prepareInitialState } from './game/prepareState';
+import { FALLBACK_CONTENT } from './sim/fallbackContent';
 import { loadGame, saveGame, createInitialState } from './save/localStorage';
 import { restClient } from './net/restClient';
 import { stompClient } from './net/stompClient';
@@ -46,21 +47,13 @@ import { HudScene } from './scenes/HudScene';
 let state: GameState = createInitialState();
 
 /**
- * The validated content catalog. Starts as an empty fallback so the game
- * renders before the backend fetch resolves; replaced with real content once
- * the fetch succeeds. If the backend is unreachable, the fallback persists
- * (the game is playable but produces nothing until content loads — offline-
- * capable, Constitution IV).
+ * The validated content catalog. Starts as the bundled `FALLBACK_CONTENT`
+ * (mirroring the backend's producers.json) so the game produces LOC from the
+ * very first tick — even before the backend fetch resolves, and even if the
+ * backend is completely unreachable (Constitution IV — offline-capable core).
+ * Replaced with served content once the fetch succeeds.
  */
-let content: ContentCatalog = {
-  schemaVersion: 1,
-  contentVersion: '0.0.0',
-  producers: [],
-  upgrades: [],
-  trainings: [],
-  milestones: [],
-  burners: [],
-};
+let content: ContentCatalog = FALLBACK_CONTENT;
 
 /** The game loop orchestrator (constructed during boot). */
 let loop: GameLoop;
@@ -102,7 +95,7 @@ async function fetchContent(): Promise<void> {
     content = loadContent(envelope);
   } catch (err) {
     console.warn(
-      '[main] Content fetch failed — using empty fallback. The game is still playable.',
+      '[main] Content fetch failed — using bundled fallback content. The game is fully playable offline.',
       err,
     );
   }
@@ -225,12 +218,17 @@ class ControllerScene extends Phaser.Scene {
  * the game still boots, renders, and saves locally (Constitution IV).
  */
 async function boot(): Promise<void> {
-  // 1. Load local save + grant starter producer (manual_typing for fresh players).
+  // 1. Load local save and prepare the initial state.
+  //    `prepareInitialState` handles the fresh-vs-returning decision: a FRESH
+  //    player is re-anchored to NOW (so no phantom epoch credit — the epoch
+  //    default in createInitialState would otherwise credit ~1.77e9 LOC),
+  //    granted manual_typing, and has LOC "0". A RETURNING player gets offline
+  //    catch-up at the real rate. This is pure (nowMs passed in).
   const loaded = loadGame();
-  state = loaded !== null ? loaded : createInitialState();
-  state = grantStarterProducer(state);
+  const now = Date.now();
+  state = prepareInitialState(loaded, content, now);
 
-  // 2. Construct the game loop with the current (empty-fallback) content.
+  // 2. Construct the game loop.
   loop = new GameLoop({
     getContent: (): ContentCatalog => content,
     getState: (): GameState => state,
@@ -239,8 +237,10 @@ async function boot(): Promise<void> {
     },
     save: () => saveGame(state),
   });
+  // Anchor the loop's tick to now (state is already caught up above).
+  loop.load(state, now);
 
-  // 3. Start Phaser immediately (renders office + HUD before content loads).
+  // 3. Start Phaser immediately (renders office + HUD).
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -250,20 +250,12 @@ async function boot(): Promise<void> {
       width: '100%',
       height: '100%',
     },
-    // ControllerScene is the active scene; OfficeScene + HudScene are launched
-    // by it as parallel scenes (not auto-started).
     scene: [ControllerScene, OfficeScene, HudScene],
   });
 
-  // 4. Fetch content (best-effort). The HUD/loop pick it up via the module-level
-  //    `content` variable — no restart needed.
+  // 4. Fetch content (best-effort). On failure the bundled FALLBACK_CONTENT
+  //    persists — the game stays fully playable offline (Constitution IV).
   await fetchContent();
-
-  // 5. Catch up offline progress now that real content is available.
-  //    For a fresh player this is a no-op (epoch → now with no producers before
-  //    the grant was applied, and now manual_typing is owned); for a returning
-  //    player it credits the offline interval at the correct production rate.
-  loop.load(state, Date.now());
 
   // 6. Best-effort backend sync + STOMP (all non-fatal on failure).
   void loadFromBackend();
