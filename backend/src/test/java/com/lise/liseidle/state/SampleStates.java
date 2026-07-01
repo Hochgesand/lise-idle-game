@@ -8,7 +8,7 @@ package com.lise.liseidle.state;
  * {@link PlayerSettings}) are implemented by T018; until then this helper does
  * not compile, which is the required TDD RED state.
  */
-final class SampleStates {
+public final class SampleStates {
 
     private SampleStates() {
     }
@@ -17,7 +17,7 @@ final class SampleStates {
      * A fully populated {@link GameState} exercising every field, including a
      * {@link BurnerState} and big-number values beyond {@code MAX_SAFE_INTEGER}.
      */
-    static GameState populated() {
+    public static GameState populated() {
         ResourceSet resources = new ResourceSet(
                 /* loc       */ "9007199254740993", // beyond MAX_SAFE_INTEGER
                 /* cash      */ "42",
@@ -48,7 +48,7 @@ final class SampleStates {
      * A {@link GameState} with no active burner, exercising the
      * {@code activeBurner = null} case.
      */
-    static GameState withNoActiveBurner() {
+    public static GameState withNoActiveBurner() {
         ResourceSet resources = new ResourceSet(
                 "10", "5", "0");
 
@@ -70,7 +70,7 @@ final class SampleStates {
      * A fresh, empty {@link GameState} — the state a brand-new player starts
      * with (all ownership sets empty, resources at zero, no burner).
      */
-    static GameState fresh() {
+    public static GameState fresh() {
         ResourceSet resources = new ResourceSet("0", "0", "0");
         PlayerSettings settings = new PlayerSettings(false, false);
 
