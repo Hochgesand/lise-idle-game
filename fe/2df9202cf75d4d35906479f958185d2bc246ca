@@ -1,0 +1,21 @@
+specs/001-dev-idle-game/tasks.md
+  s_8604cdc8797e2e::t_47d455471d86a7 114
+frontend/src/sim/advance.test.ts
+  s_8604cdc8797e2e::t_2c5b96f128b6ab 255-375
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "fe2df9202cf75d4d35906479f958185d2bc246ca",
+  "prompts": {},
+  "sessions": {
+    "s_8604cdc8797e2e": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1eb5-6a79-7fff-8f5e-7f72c16f1df2",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
