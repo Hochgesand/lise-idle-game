@@ -32,6 +32,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadContent, ContentValidationError } from './content';
 import type { ContentEnvelope, ContentCatalog } from './types';
+import { FALLBACK_CONTENT } from './fallbackContent';
 
 // ---------------------------------------------------------------------------
 // Fixture builders (DRY) — each returns a fresh deep clone so a test may
@@ -100,6 +101,22 @@ function burner(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
+/**
+ * A valid coop tuning block (data-model.md CoopConfig; T021 placeholder
+ * values). Override fields per test via `coop({ ... })`.
+ */
+function coop(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    perColleagueMultiplier: 0.1,
+    maxMultiplier: 1.5,
+    leaseSeconds: 60,
+    heartbeatSeconds: 20,
+    commuteSeconds: 30,
+    lastSeenRetentionDays: 14,
+    ...overrides,
+  };
+}
+
 /** A fresh, fully-valid envelope with one entry of each type. */
 function validEnvelope(): ContentEnvelope {
   return {
@@ -110,6 +127,7 @@ function validEnvelope(): ContentEnvelope {
     trainings: [training()],
     milestones: [milestone()],
     burners: [burner()],
+    coop: coop(),
   };
 }
 
@@ -145,6 +163,7 @@ describe('loadContent — valid input', () => {
       trainings: [],
       milestones: [],
       burners: [],
+      coop: coop(),
     });
 
     // Five empty arrays, no throw.
@@ -251,5 +270,117 @@ describe('loadContent — never runs with half-parsed data', () => {
     expect(() => loadContent(env)).toThrow(ContentValidationError);
     // No additional assertion needed: a thrown error means no return value,
     // hence no partial catalog can leak to the caller (the sim).
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadContent — coop block validation (002, FR-015)
+// ---------------------------------------------------------------------------
+//
+// The additive sixth content entry `coop` (data-model.md CoopConfig; contracts
+// §1 "Content loader" / §2). loadContent MUST validate it all-or-nothing and
+// throw ContentValidationError on any malformed value, as it does for the five
+// 001 arrays. These tests are RED until T026 adds the validation to content.ts.
+
+describe('loadContent — coop block validation (002)', () => {
+  it('parses a well-formed coop block into the typed catalog', () => {
+    const catalog = loadContent(validEnvelope());
+
+    expect(catalog.coop).toBeDefined();
+    expect(catalog.coop.perColleagueMultiplier).toBe(0.1);
+    expect(catalog.coop.maxMultiplier).toBe(1.5);
+    expect(catalog.coop.leaseSeconds).toBe(60);
+    expect(catalog.coop.heartbeatSeconds).toBe(20);
+    expect(catalog.coop.commuteSeconds).toBe(30);
+    expect(catalog.coop.lastSeenRetentionDays).toBe(14);
+  });
+
+  it('throws ContentValidationError when the coop block is missing', () => {
+    const env = validEnvelope();
+    // @ts-expect-error — intentionally malformed (coop is required, deleted).
+    delete env.coop;
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when coop is not an object', () => {
+    const env = validEnvelope();
+    env.coop = 'nope';
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when a coop field is missing (perColleagueMultiplier)', () => {
+    const env = validEnvelope();
+    env.coop = coop({ perColleagueMultiplier: undefined });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when perColleagueMultiplier < 0', () => {
+    const env = validEnvelope();
+    env.coop = coop({ perColleagueMultiplier: -0.1 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when maxMultiplier < 1', () => {
+    const env = validEnvelope();
+    env.coop = coop({ maxMultiplier: 0.9 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when leaseSeconds <= 0', () => {
+    const env = validEnvelope();
+    env.coop = coop({ leaseSeconds: 0 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when heartbeatSeconds <= 0', () => {
+    const env = validEnvelope();
+    env.coop = coop({ heartbeatSeconds: 0 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when heartbeatSeconds >= leaseSeconds (must be strictly less)', () => {
+    const env = validEnvelope();
+    env.coop = coop({ heartbeatSeconds: 60, leaseSeconds: 60 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when commuteSeconds <= 0', () => {
+    const env = validEnvelope();
+    env.coop = coop({ commuteSeconds: 0 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when lastSeenRetentionDays <= 0', () => {
+    const env = validEnvelope();
+    env.coop = coop({ lastSeenRetentionDays: 0 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when a coop field is not a number (maxMultiplier as string)', () => {
+    const env = validEnvelope();
+    env.coop = coop({ maxMultiplier: 'big' });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('accepts perColleagueMultiplier = 0 (lower bound inclusive) and maxMultiplier = 1 (lower bound inclusive)', () => {
+    const env = validEnvelope();
+    env.coop = coop({ perColleagueMultiplier: 0, maxMultiplier: 1 });
+    const catalog = loadContent(env);
+    expect(catalog.coop.perColleagueMultiplier).toBe(0);
+    expect(catalog.coop.maxMultiplier).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FALLBACK_CONTENT — coop block (002)
+// ---------------------------------------------------------------------------
+//
+// The bundled fallback (frontend/src/sim/fallbackContent.ts) MUST mirror the
+// identical coop block so an offline-booting client integrates with the same
+// values as the served envelope (contracts §1). RED until T026 mirrors it.
+
+describe('FALLBACK_CONTENT — coop block (002)', () => {
+  it('mirrors the placeholder coop values so offline boot integrates identically', () => {
+    expect(FALLBACK_CONTENT.coop).toEqual(coop());
   });
 });
