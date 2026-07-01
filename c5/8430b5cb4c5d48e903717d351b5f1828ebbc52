@@ -1,0 +1,25 @@
+frontend/nginx.conf
+  s_00d8bc93a1a614::t_ad203e39cb587e 1-71
+specs/001-dev-idle-game/tasks.md
+  s_00d8bc93a1a614::t_1478fedc099fc6 159
+frontend/.dockerignore
+  s_00d8bc93a1a614::t_1b956209f3dee0 1-12
+frontend/Dockerfile
+  s_00d8bc93a1a614::t_65bcf29d8a2796 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "c58430b5cb4c5d48e903717d351b5f1828ebbc52",
+  "prompts": {},
+  "sessions": {
+    "s_00d8bc93a1a614": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1cf2-99ea-7f1c-8f05-13e84ad08f79",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
