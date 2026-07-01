@@ -1,0 +1,25 @@
+frontend/src/sim/freshPlayer.test.ts
+  s_db8ced1ad3a5ba::t_d4c66096aecbd1 1-64
+frontend/src/main.ts
+  s_db8ced1ad3a5ba::t_3a2411c08bce81 1-25,27-124,127-178,180-181,183,185,189-207,211-292
+specs/001-dev-idle-game/tasks.md
+  s_db8ced1ad3a5ba::t_44a729359b286d 98
+frontend/src/sim/freshPlayer.ts
+  s_db8ced1ad3a5ba::t_c14da35c1a89bc 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "79e8d175ae92be00c6c42e390fe1459d72e7b269",
+  "prompts": {},
+  "sessions": {
+    "s_db8ced1ad3a5ba": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e8d-8ec6-7e5b-b5a3-2c2c6bde3fcf",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
