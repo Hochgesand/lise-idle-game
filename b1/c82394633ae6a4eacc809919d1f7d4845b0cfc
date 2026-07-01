@@ -1,0 +1,23 @@
+frontend/src/net/stompClient.test.ts
+  s_353546eb6f0836::t_837d2b0f9de4cf 1-227
+frontend/src/net/stompClient.ts
+  s_353546eb6f0836::t_99ac9c0e262cc9 1-201
+specs/001-dev-idle-game/tasks.md
+  s_353546eb6f0836::t_e3c30f1fa4e93c 93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "b1c82394633ae6a4eacc809919d1f7d4845b0cfc",
+  "prompts": {},
+  "sessions": {
+    "s_353546eb6f0836": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e32-904e-7f12-922b-e01e364618bb",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
