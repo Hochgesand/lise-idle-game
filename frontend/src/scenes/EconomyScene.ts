@@ -20,6 +20,7 @@ import Phaser from 'phaser';
 import type { ContentCatalog, GameState } from '../sim/types';
 import { formatLoc } from '../sim/format';
 import { getEconomyView } from '../sim/economy';
+import { bn, compare } from '../sim/bigNumber';
 
 // ── Init-data contract (T042 wires this) ─────────────────────────────────
 
@@ -220,9 +221,10 @@ export class EconomyScene extends Phaser.Scene {
     this.cashText.setText(formatLoc(state.resources.cash));
 
     // ── Cash-out button: green if affordable, grey if not ────────────────
+    // Big-number-safe comparison (parseFloat → Infinity at astronomical LOC,
+    // which would incorrectly show the button as affordable).
     const canCashOut =
-      parseFloat(state.resources.loc) >= parseFloat(CASH_OUT_AMOUNT) ||
-      state.resources.loc === CASH_OUT_AMOUNT;
+      compare(bn(state.resources.loc), bn(CASH_OUT_AMOUNT)) >= 0;
     this.cashOutButton.setColor(
       canCashOut ? COLOR_AFFORDABLE : COLOR_LOCKED,
     );

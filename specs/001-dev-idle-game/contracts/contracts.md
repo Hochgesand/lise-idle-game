@@ -35,7 +35,17 @@ Constitution Principle I mandates and Principle III requires to be tested.
   and `result.activeBurner == null`.
 - All eligible milestones in `result.earnedMilestones ⊇ state.earnedMilestones`.
 - Calling `advance(advance(s, a), b)` equals `advance(s, a + b)` for all
-  non-negative `a, b` (associativity = determinism = offline-correct).
+  non-negative `a, b` **up to floating-point ULP** in the `resources.loc`
+  accumulator (associativity = determinism = offline-correct). The
+  offline-correctness guarantee — that no progress is lost or phantom-credited
+  across a split vs. combined call — holds exactly: `lastAdvancedAt`,
+  `activeBurner`, ownership sets, and milestone state are byte-identical. The
+  `resources.loc` field accumulates an irreducible binary-64 rounding error
+  (~1e-15 relative) in the `rate × dtSec` product when `dtSec = ms / 1000` is
+  not exactly representable AND a split crosses the burner fuel-exhaustion
+  boundary (where the two-segment closed-form math takes different branches).
+  For integer-friendly `dt` values (multiples of 1000 ms) associativity is
+  exact.
 
 **Errors**: none thrown on valid input; invalid `state` (bad schema) → the
 caller's save-migration concern, not `advance`.

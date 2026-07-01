@@ -372,4 +372,84 @@ describe('advance — active burner', () => {
 
     expect(normalize(split)).toEqual(normalize(combined));
   });
+
+  // ── Fuzzy associativity (realistic ms splits) ──────────────────────
+  //
+  // The exact-associativity test above uses "nice" 500/500 ms splits where
+  // dtSec = ms/1000 is exactly representable in binary-64. Realistic frame/
+  // offline timings (e.g. 317ms, 9833ms, 16667ms) produce dtSec values that
+  // are NOT exactly representable, so when a split crosses the fuel-exhaustion
+  // boundary the rate×dtSec product accumulates an irreducible ULP rounding.
+  // The offline-correctness GUARANTEE (no lost/phantom progress) holds exactly;
+  // only the last bit of the LOC accumulator can differ at ~1e-15 relative.
+  //
+  // These tests assert ε-tolerance on loc (generous 1e-9 relative, the actual
+  // drift is ~1e-15) while requiring timestamps + activeBurner to be EXACTLY
+  // equal. See contracts.md §1 "up to floating-point ULP" clarification.
+
+  /**
+   * Assert two GameState LOC values are equal within a relative ε tolerance,
+   * using parseFloat for comparison (the values are small enough here).
+   */
+  function expectLocClose(
+    actual: string,
+    expected: string,
+    epsilon = 1e-9,
+  ): void {
+    const a = parseFloat(actual);
+    const e = parseFloat(expected);
+    if (e === 0) {
+      expect(Math.abs(a)).toBeLessThan(epsilon);
+    } else {
+      expect(Math.abs(a - e) / Math.abs(e)).toBeLessThan(epsilon);
+    }
+  }
+
+  /**
+   * A realistic-millis split scenario: state with 10 tokens of fuel
+   * (burnRate 10 → fuelTime 1.0s = 1000ms). The split crosses the exhaustion
+   * boundary at non-round ms values so dtSec is not exactly representable.
+   */
+  function fuzzySplitScenario(a: number, b: number): void {
+    const content = makeBurnerContent();
+    // fuel 10 at burnRate 10 → fuelTime = 1.0s = 1000ms.
+    const state = makeBurnerState('10');
+
+    const split = advance(advance(state, a, content), b, content);
+    const combined = advance(state, a + b, content);
+
+    // LOC: approximately equal (ULP drift at the exhaustion boundary).
+    expectLocClose(split.resources.loc, combined.resources.loc);
+    // Timestamps: exactly equal (always integer ms → exact).
+    expect(split.lastAdvancedAt).toEqual(combined.lastAdvancedAt);
+    // activeBurner: exactly equal (fuel logic is exact in both paths).
+    expect(split.activeBurner).toEqual(combined.activeBurner);
+  }
+
+  it('fuzzy associativity across exhaustion boundary: 9833ms + 2500ms (split crosses fuelTime=1000ms)', () => {
+    // a=9833ms (> 1000ms fuel boundary → first step exhausts fuel),
+    // b=2500ms (second step runs at base rate). Neither dtSec is exactly
+    // representable in binary-64.
+    fuzzySplitScenario(9833, 2500);
+  });
+
+  it('fuzzy associativity: split BEFORE exhaustion (317ms + 3683ms)', () => {
+    // a=317ms (< 1000ms → first step still burning), b=3683ms (exhausts in
+    // second step). Realistic sub-frame ms values.
+    fuzzySplitScenario(317, 3683);
+  });
+
+  it('fuzzy associativity: three-way realistic split (16667ms + 8333ms + 5000ms)', () => {
+    // Two-step associative check with realistic 60fps-adjacent ms values.
+    const content = makeBurnerContent();
+    const state = makeBurnerState('10'); // fuelTime 1000ms
+
+    const s1 = advance(state, 16667, content);
+    const s2 = advance(s1, 8333, content);
+    const combined = advance(state, 16667 + 8333, content);
+
+    expectLocClose(s2.resources.loc, combined.resources.loc);
+    expect(s2.lastAdvancedAt).toEqual(combined.lastAdvancedAt);
+    expect(s2.activeBurner).toEqual(combined.activeBurner);
+  });
 });

@@ -193,8 +193,9 @@ export function purchaseUpgrade(
  * for becomes the fuel available to burn (`fuelRemaining = fuelCostToActivate`).
  *
  * `startedAt` is anchored to `state.lastAdvancedAt` to keep the sim pure (no
- * `Date.now()` — Constitution Principle I). The game loop re-anchors the
- * burner start time to the real clock when it wires the action to user input.
+ * `Date.now()` — Constitution Principle I). This field is informational only;
+ * it is not read by `advance` or any UI component. It does NOT need to be
+ * re-anchored to the real clock by the game loop.
  *
  * @param state     the current saveable snapshot (not mutated)
  * @param content   the versioned game content
