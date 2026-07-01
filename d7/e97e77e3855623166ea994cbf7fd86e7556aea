@@ -1,0 +1,26 @@
+specs/001-dev-idle-game/contracts/contracts.md
+  s_2c2d69cd24e40b::t_aa234cf92936c0 38-48
+frontend/src/scenes/EconomyScene.ts
+  s_2c2d69cd24e40b::t_0844d621fa27cf 23
+  s_2c2d69cd24e40b::t_c4968280721503 224-225,227
+frontend/src/sim/advance.test.ts
+  s_2c2d69cd24e40b::t_04e997ae9a835e 375-454
+frontend/src/sim/actions.ts
+  s_2c2d69cd24e40b::t_23ca66cb21187d 196-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "d7e97e77e3855623166ea994cbf7fd86e7556aea",
+  "prompts": {},
+  "sessions": {
+    "s_2c2d69cd24e40b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ed9-eaf4-7891-a538-f939408f2616",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
