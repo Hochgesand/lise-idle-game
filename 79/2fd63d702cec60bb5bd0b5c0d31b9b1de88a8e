@@ -1,0 +1,25 @@
+backend/src/test/java/com/lise/liseidle/state/SampleStates.java
+  s_c488cf290d48f8::t_9091ef24b25eb2 11,20,51,73
+specs/001-dev-idle-game/tasks.md
+  s_c488cf290d48f8::t_a5755c85ea7ed7 68
+backend/src/main/java/com/lise/liseidle/sync/StateMerger.java
+  s_c488cf290d48f8::t_03c4f25e41bd0f 1-136
+backend/src/test/java/com/lise/liseidle/sync/StateMergerTest.java
+  s_c488cf290d48f8::t_0e88730ec68eab 1-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "792fd63d702cec60bb5bd0b5c0d31b9b1de88a8e",
+  "prompts": {},
+  "sessions": {
+    "s_c488cf290d48f8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1cc9-02e9-7be9-beaa-6ef90a882eac",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
