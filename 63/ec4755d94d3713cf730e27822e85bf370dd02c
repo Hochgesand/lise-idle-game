@@ -1,0 +1,23 @@
+frontend/src/net/restClient.test.ts
+  s_92b628376f8ffd::t_9c83c1095b80b8 1-235
+frontend/src/net/restClient.ts
+  s_92b628376f8ffd::t_b163c899b41da1 1-215
+specs/001-dev-idle-game/tasks.md
+  s_92b628376f8ffd::t_dd44e5399494b5 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "63ec4755d94d3713cf730e27822e85bf370dd02c",
+  "prompts": {},
+  "sessions": {
+    "s_92b628376f8ffd": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e26-38f9-7846-bd03-cd835b8a13d8",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
