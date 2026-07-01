@@ -32,7 +32,7 @@
 // wire helper is a noted future refactor, out of scope here).
 
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
-import type { GameState } from '../sim/types';
+import type { GameState, CoopSegment, CommuteState } from '../sim/types';
 
 /** The single STOMP destination both message types arrive on. */
 const SUBSCRIPTION_DESTINATION = '/user/queue/state';
@@ -45,7 +45,14 @@ export interface StompHandlers {
   onContentUpdate?: (contentVersion: string) => void;
 }
 
-/** Wire-shape GameState with ownership fields as arrays (JSON has no Set). */
+/**
+ * Wire-shape GameState with ownership fields as arrays (JSON has no Set).
+ *
+ * (002) The co-op overlay fields are OPTIONAL on the wire: a state.correction
+ * from a v1/anonymous server may omit them. `fromWire` normalizes absent/null
+ * to the Spec 001 baseline (`[]`/`"office_1"`/`null`) so the push channel
+ * never NPEs the co-op overlay (mirrors restClient.ts).
+ */
 interface WireGameState {
   schemaVersion: number;
   resources: GameState['resources'];
@@ -56,6 +63,9 @@ interface WireGameState {
   earnedMilestones: string[];
   lastAdvancedAt: string;
   settings: GameState['settings'];
+  coopSegments?: CoopSegment[] | null;
+  activeOffice?: string | null;
+  commute?: CommuteState | null;
 }
 
 /** Convert a wire-shape (arrays) GameState into a live GameState (Sets). Pure. */
@@ -70,11 +80,12 @@ function fromWire(wire: WireGameState): GameState {
     earnedMilestones: new Set(wire.earnedMilestones),
     lastAdvancedAt: wire.lastAdvancedAt,
     settings: wire.settings,
-    // (002) T035 threads coopSegments/activeOffice/commute through WireGameState;
-    // until then the co-op overlay defaults to the Spec 001 baseline.
-    coopSegments: [],
-    activeOffice: 'office_1',
-    commute: null,
+    // (002) T035: normalize absent/null wire values to the Spec 001 baseline so
+    // a v1/anonymous state.correction never NPEs the co-op overlay. Present
+    // values pass through unchanged (mirrors restClient.ts leniency rule).
+    coopSegments: wire.coopSegments ?? [],
+    activeOffice: wire.activeOffice ?? 'office_1',
+    commute: wire.commute ?? null,
   };
 }
 

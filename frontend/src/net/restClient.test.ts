@@ -142,6 +142,73 @@ describe('RestClient.loadSession', () => {
     expect(state!.resources.loc).toBe('250');
     expect(state!.ownedProducers).toBeInstanceOf(Set);
     expect([...state!.ownedProducers!]).toEqual(['manual_typing', 'copilot']);
+
+    // (002) T035: the wire fixture omits the co-op fields, so fromWire must
+    // normalize them to the Spec 001 baseline (leniency rule) — never null/undefined.
+    expect(state!.coopSegments).toEqual([]);
+    expect(state!.activeOffice).toBe('office_1');
+    expect(state!.commute).toBeNull();
+  });
+
+  it('normalizes explicit null co-op fields to the baseline (002)', async () => {
+    const wireState = {
+      resources: { loc: '0', cash: '0', aiTokens: '0' },
+      ownedProducers: [],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: '2026-06-30T12:00:00.000Z',
+      schemaVersion: 1,
+      settings: { reducedMotion: false, muted: false },
+      coopSegments: null,
+      activeOffice: null,
+      commute: null,
+    };
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { playerId: 'p1', state: wireState }),
+    );
+
+    const client = new RestClient(BASE);
+    const state = await client.loadSession('p1');
+
+    expect(state!.coopSegments).toEqual([]);
+    expect(state!.activeOffice).toBe('office_1');
+    expect(state!.commute).toBeNull();
+  });
+
+  it('passes present coopSegments/activeOffice/commute through from the wire (002)', async () => {
+    const wireState = {
+      resources: { loc: '0', cash: '0', aiTokens: '0' },
+      ownedProducers: [],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: '2026-06-30T12:00:00.000Z',
+      schemaVersion: 1,
+      settings: { reducedMotion: false, muted: false },
+      coopSegments: [{ from: 1000, until: 2000, multiplier: 1.2 }],
+      activeOffice: 'office_2',
+      commute: { fromOffice: 'office_2', toOffice: 'office_3', startedAt: 1500 },
+    };
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { playerId: 'p1', state: wireState }),
+    );
+
+    const client = new RestClient(BASE);
+    const state = await client.loadSession('p1');
+
+    // Present values pass through unchanged (sim keeps ms numbers; no conversion).
+    expect(state!.coopSegments).toEqual([
+      { from: 1000, until: 2000, multiplier: 1.2 },
+    ]);
+    expect(state!.activeOffice).toBe('office_2');
+    expect(state!.commute).toEqual({
+      fromOffice: 'office_2',
+      toOffice: 'office_3',
+      startedAt: 1500,
+    });
   });
 
   it('returns null on 404 (no save — fresh-player contract)', async () => {
@@ -188,6 +255,12 @@ describe('RestClient.saveState', () => {
     expect(body.clientTime).toBe('2026-06-30T12:00:00.000Z');
     expect(body.state.ownedProducers).toEqual(['manual_typing']);
     expect(body.state.resources.loc).toBe('100');
+
+    // (002) T035: toWire serializes the co-op overlay fields onto the wire
+    // (same shape as the live state — the baseline defaults ride through).
+    expect(body.state.coopSegments).toEqual([]);
+    expect(body.state.activeOffice).toBe('office_1');
+    expect(body.state.commute).toBeNull();
 
     // Merged state returned with Sets reconstructed from wire arrays.
     expect(result.resources.loc).toBe('300');

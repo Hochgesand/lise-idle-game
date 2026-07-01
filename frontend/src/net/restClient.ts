@@ -26,7 +26,7 @@
 // `vite/client` (its ImportMetaEnv carries an index signature, so custom
 // `VITE_*` keys need no extra declaration).
 
-import type { ContentEnvelope, GameState } from '../sim/types';
+import type { ContentEnvelope, GameState, CoopSegment, CommuteState } from '../sim/types';
 
 // ── Errors ───────────────────────────────────────────────────────────────
 
@@ -63,7 +63,16 @@ export class SchemaTooNewError extends RestError {
 // This mirrors the Set<->array conversion in save/localStorage.ts; the two
 // share a concern that a future refactor could centralize into one helper.
 
-/** GameState with ownership sets flattened to arrays — the JSON wire shape. */
+/**
+ * GameState with ownership sets flattened to arrays — the JSON wire shape.
+ *
+ * (002) The co-op overlay fields ride the session-sync wire as-is (ms numbers
+ * for `coopSegments`/`commute` timestamps, a string office id) — no ISO<->ms
+ * conversion happens here; the backend GameState (T028) mirrors this shape.
+ * They are OPTIONAL on the wire so a v1/anonymous server response that omits
+ * them is accepted leniently; `fromWire` normalizes absent/null to the
+ * Spec 001 baseline (`[]`/`"office_1"`/`null`).
+ */
 interface WireGameState {
   schemaVersion: number;
   resources: GameState['resources'];
@@ -74,6 +83,9 @@ interface WireGameState {
   earnedMilestones: string[];
   lastAdvancedAt: string;
   settings: GameState['settings'];
+  coopSegments?: CoopSegment[] | null;
+  activeOffice?: string | null;
+  commute?: CommuteState | null;
 }
 
 /** Live GameState -> wire object (Sets become arrays). Pure. */
@@ -88,6 +100,11 @@ function toWire(state: GameState): WireGameState {
     earnedMilestones: [...state.earnedMilestones],
     lastAdvancedAt: state.lastAdvancedAt,
     settings: state.settings,
+    // (002) T035: serialize the co-op overlay fields (same ms/string shape as
+    // the live state — the sim keeps ms numbers, no conversion here).
+    coopSegments: state.coopSegments,
+    activeOffice: state.activeOffice,
+    commute: state.commute,
   };
 }
 
@@ -103,11 +120,13 @@ function fromWire(wire: WireGameState): GameState {
     earnedMilestones: new Set(wire.earnedMilestones),
     lastAdvancedAt: wire.lastAdvancedAt,
     settings: wire.settings,
-    // (002) T035 threads coopSegments/activeOffice/commute through WireGameState;
-    // until then the co-op overlay defaults to the Spec 001 baseline.
-    coopSegments: [],
-    activeOffice: 'office_1',
-    commute: null,
+    // (002) T035: normalize absent/null wire values to the Spec 001 baseline so
+    // a v1/anonymous server response (fields omitted or null) never NPEs the
+    // co-op overlay. Present values pass through unchanged (leniency rule,
+    // contracts §2 / data-model.md "Save migration").
+    coopSegments: wire.coopSegments ?? [],
+    activeOffice: wire.activeOffice ?? 'office_1',
+    commute: wire.commute ?? null,
   };
 }
 
