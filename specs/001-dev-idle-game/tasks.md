@@ -88,7 +88,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 
 ### Implementation for User Story 1
 
-- [ ] T029 [P] [US1] Implement manual-boost action mutator in `frontend/src/sim/actions.ts` (pure; `advance` then catches up)
+- [x] T029 [P] [US1] Implement manual-boost action mutator in `frontend/src/sim/actions.ts` (pure; `advance` then catches up)
 - [ ] T030 [P] [US1] Implement REST client (`getContent`, `loadSession`, `saveState`) in `frontend/src/net/restClient.ts`
 - [ ] T031 [P] [US1] Implement STOMP client (subscribe `StateCorrection`/`ContentUpdate`) in `frontend/src/net/stompClient.ts`
 - [ ] T032 [US1] Implement game loop wiring: tick `advance` each frame using real elapsed `dt`, re-anchor `lastAdvancedAt` on load, catch up offline on load in `frontend/src/game/gameLoop.ts`
