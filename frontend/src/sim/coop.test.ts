@@ -345,23 +345,23 @@ describe('applyCoopPresence — purity (never touches lastAdvancedAt or resource
 
   it('never touches lastAdvancedAt or resources on a successful merge', () => {
     const state = makeState();
-    const before = normalize({
-      ...state,
-      // snapshot only the fields that must be invariant across a merge
+    // Snapshot ONLY the fields that must be invariant across a merge (the
+    // merge legitimately grows `coopSegments`, so a whole-state compare would
+    // invert — passing in RED, failing in GREEN).
+    const invariantBefore = {
       lastAdvancedAt: state.lastAdvancedAt,
-      resources: state.resources,
-    });
+      resources: { ...state.resources },
+    };
 
     const result = applyCoopPresence(state, freshSegment(), makeContent());
 
+    // The merge DID happen (sanity: this is a successful-merge path, not a
+    // no-op) — and yet the clock + resources stay byte-identical.
+    expect(result.coopSegments).toHaveLength(1);
     expect(result.lastAdvancedAt).toBe(state.lastAdvancedAt);
     expect(result.resources).toEqual(state.resources);
-    expect(
-      normalize({
-        ...result,
-        lastAdvancedAt: result.lastAdvancedAt,
-        resources: result.resources,
-      }),
-    ).toEqual(before);
+    expect({ lastAdvancedAt: result.lastAdvancedAt, resources: result.resources }).toEqual(
+      invariantBefore,
+    );
   });
 });
