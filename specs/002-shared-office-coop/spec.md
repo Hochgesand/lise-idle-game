@@ -44,6 +44,108 @@ of feature. It is an **additive overlay**, not a replacement:
   the Spec 001 experience with no loss of progress and with the co-op bonus at
   baseline.
 
+## World & Setting — The Two lise Offices
+
+The overlay is set in a top-down, pixel-art rendering of lise GmbH's two real
+office buildings, sitting on separate city blocks and joined by the streets
+between them. This section fixes the world that shared presence lives in. It
+**refines and enlarges** the world established in Spec 001 (FR-002): each
+building's recognizable footprint and room layout is **preserved**, while the
+scale is increased so that roughly **30 colleagues can be active at once** with
+room to spare.
+
+### The campus (the world between the offices)
+
+The two buildings do not float in a void — they anchor a small urban campus.
+A broad avenue and cross streets, drawn in muted grey against a warm off-white
+ground, separate them, with a tram/rail line skirting the southern edge. That
+open space is not filler: **it is the commute route**. When a colleague switches
+their active office (Spec 001, FR-016), their avatar travels the street between
+the two buildings, so a commuting colleague is seen *in transit* rather than
+teleporting. Pavements, crossings, and block edges give both offices a shared
+sense of place.
+
+### Office #1 — "The First Home" (the smaller building)
+
+A single long wing running east–west: the compact, cozy office lise started in.
+Its plan is three parallel bands — a row of rooms along the north wall, a central
+circulation spine, and a row of rooms along the south wall.
+
+- **West end**: a light service annex leads in; just inside, a coffee point
+  steams beside the manager's **Office** (the room marked with the figure icon).
+  The building's single vertical core lives here — an **Elevator** and, a few
+  steps east, the **Stairs** — next to a little kitchenette of stacked coffee
+  stations.
+- **North band (meeting rooms)**: the whimsically named rooms line the top —
+  **corkscrew** (a small focus room with a lone occupant), **spiderweb** (a
+  bright glass-walled meeting room), and beyond them a run of open-plan pods where
+  colleagues cluster three and four to a table.
+- **South band (working floor + amenities)**: past the stairs the corridor slips
+  by a phone booth and the **Restroom (Women)**, then opens into the south desk
+  pods and **skier**, a green breakout room crowned with a trophy — the shelf
+  where the building's earned credentials are shown off. A dual-monitor dev pod
+  anchors the east end before the wing closes on a second small annex.
+
+Office #1 reads as intimate and full: every room is within sight of the next, the
+single stair-and-lift core is always busy, and even a handful of colleagues make
+it feel like home.
+
+### Office #2 — "The Second Location" (the larger building)
+
+The building lise grew into — an L-shaped complex several times the first
+building's footprint, unlocked as the major milestone from Spec 001 (FR-014). It
+reads as a proper headquarters: two vertical circulation cores, long open-plan
+corridors, and far more desks.
+
+- **North wing** (the top bar, reaching east — the representative floor): from
+  the west it runs **deco-office-chair** and **frog** (a coffee-stocked huddle
+  room), a formal conference room, then the executive **Office** — marked with an
+  award/goblet, the building's trophy cabinet — beside a twin-monitor dev pod.
+  **bongo** sits further east, and the wing ends in a wide open hall packed with
+  rows of desks and long tables (the town-hall / canteen space).
+- **The upper core**: where the north wing meets the spine, a **Stairs** and
+  **Elevator** pair serves the top floors, ringed by green desk pods already
+  filling with colleagues.
+- **The spine** (the L's long leg, running north–south — the engineering heart):
+  a long double-loaded corridor lined desk-pair after desk-pair with colleagues,
+  broken halfway by **bridge** (a green collaboration room) and a phone booth for
+  quiet calls.
+- **The lower core & south wing**: a second **Stairs**/**Elevator** pair anchors
+  the bottom, opening onto another broad floor of desk pods, phone booths, coffee
+  points, and green breakout rooms that stretch east — room for a full shift of
+  colleagues at once.
+
+Where Office #1 is one busy room after another, Office #2 sprawls: you can lose
+sight of a colleague around a corner, watch commute traffic arrive at either
+core, and still find an empty desk to settle at.
+
+### Reading the crowd (how presence appears in the world)
+
+Colleagues appear as avatars seated at desks and moving through the rooms. The
+world uses two clear states, matching the live + last-seen clarification:
+
+- **Green avatars** — colleagues **online now** (live presence).
+- **Red avatars** — colleagues seen recently but currently away (**last-seen**,
+  "idle at their desk").
+
+A busy building shows a warm mix of green and red across its desk pods, so the
+office looks lived-in even when only a few colleagues are truly online — exactly
+the "we work here together" feeling the feature exists for.
+
+### Scale for a full house (~30 concurrent)
+
+The world is enlarged so the expected load — about **30 colleagues active at the
+same time**, plus the last-seen avatars of everyone else — fits comfortably:
+
+- Each building offers clearly more visible desk/seat positions than its peak
+  concurrent crowd, so avatars are never forced to overlap illegibly (Office #2,
+  the larger building, carries the greater share).
+- Corridors and cores are wide enough that arriving/commuting avatars and seated
+  colleagues stay individually readable and tappable at the supported zoom
+  levels, on both phone and desktop.
+- The recognizable footprint of each real building is preserved; enlargement adds
+  floor area, desks, and breathing room — it never redraws the plan.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -181,6 +283,16 @@ commute state, and appear in Office #2 without a manual refresh.
 - **Social failure never harms the core**: a dropped connection, malformed
   presence data, or backend error never blocks, corrupts, or wipes the local
   save or the single-player loop.
+- **Peak crowd (~30 concurrent)**: as an office fills toward its peak, colleagues
+  occupy additional seats/rooms rather than stacking illegibly on one desk;
+  avatars stay individually readable and selectable, and the world layout does
+  not break.
+- **More colleagues than seats**: if presence ever exceeds available seats,
+  overflow is handled gracefully (e.g., standing/roaming positions or a legible
+  clustering) without hiding colleagues silently or breaking the plan.
+- **Commute rush**: many colleagues commuting between offices at the same time all
+  appear on the route between buildings without overlap that makes them
+  unreadable.
 
 ## Requirements *(mandatory)*
 
@@ -257,6 +369,28 @@ commute state, and appear in Office #2 without a manual refresh.
   touch-and-pointer, mobile-and-desktop co-equal requirements established in
   Spec 001 (phone portrait/landscape through desktop).
 
+#### World & Capacity
+
+- **FR-020**: The shared world MUST render both lise office buildings with their
+  recognizable footprints and named rooms as established in Spec 001 (FR-002),
+  connected by the surrounding streets that serve as the visible commute route
+  between them. Enlarging the world MUST NOT redraw or distort either building's
+  floor plan.
+- **FR-021**: Each office MUST provide clearly more visible desk/seat positions
+  than its expected peak concurrent crowd, so present colleagues (live and
+  last-seen) can be shown seated without illegible overlap. The design target is
+  ~30 colleagues active simultaneously across the world, plus last-seen avatars of
+  the wider colleague population.
+- **FR-022**: A commuting colleague (Spec 001, FR-016) MUST be shown traveling
+  the streets between the two buildings for the duration of their commute, rather
+  than disappearing and reappearing.
+- **FR-023**: Live and last-seen presence MUST be visually distinguishable at a
+  glance in the world (distinct avatar states), consistent with FR-006.
+- **FR-024**: Individual avatars MUST remain individually legible and
+  selectable/tappable across the supported viewport and zoom range even when an
+  office is at its peak crowd (~30 concurrent), on both touch and pointer
+  (extends FR-019).
+
 ### Key Entities
 
 - **Player Identity (lise colleague)**: a stable, authenticated identity with a
@@ -273,6 +407,14 @@ commute state, and appear in Office #2 without a manual refresh.
   Player Identity and carrying the player's visibility/consent setting. The
   online overlay MUST NOT be required to load or migrate an existing
   single-player save.
+- **Shared World / Campus**: the top-down scene containing both office buildings
+  (their preserved footprints, named rooms, and desk/seat positions) and the
+  streets between them that serve as the commute route. It is enlarged from
+  Spec 001's world to seat the expected concurrent crowd.
+- **Avatar**: the in-world representation of a colleague — placed at a desk/seat
+  or traveling the commute route, showing a display name, a live/last-seen state,
+  and current activity. Purely a projection of a Presence Record; carries no
+  authority over any player's state.
 
 ## Success Criteria *(mandatory)*
 
@@ -293,17 +435,34 @@ commute state, and appear in Office #2 without a manual refresh.
 - **SC-006**: A player who hides themselves stops appearing to other colleagues
   within a bounded, defined time, and immediately stops contributing to their
   co-op bonuses.
-- **SC-007**: The shared office renders presence for the full expected lise
-  colleague population without dropping the core interaction responsiveness
-  established in Spec 001 (SC-003 of Spec 001).
+- **SC-007**: The shared world renders presence for ~30 colleagues active at once
+  (plus last-seen avatars of the wider population) without dropping the core
+  interaction responsiveness established in Spec 001 (SC-003 of Spec 001).
 - **SC-008**: A returning player never loses progress as a result of any social
   or network failure (zero save-loss incidents attributable to the overlay).
+- **SC-009**: At the peak design load (~30 concurrently active colleagues across
+  the two offices, plus last-seen avatars), every avatar remains individually
+  visible and selectable/tappable at the supported zoom levels on both phone and
+  desktop.
+- **SC-010**: A colleague commuting between offices is visible on the street
+  between the buildings for the whole commute (no teleport), and multiple
+  simultaneous commuters all render without breaking the world layout.
 
 ## Assumptions
 
 - **Builds on Spec 001**: the single-player idle core is a prerequisite and is
   unchanged; this feature is an additive online overlay and the single-player
   experience is the fallback whenever offline or disconnected.
+- **World is derived from the real floor plans**: the building footprints, room
+  arrangement, and the whimsical room names (corkscrew, spiderweb, skier, frog,
+  bongo, bridge, deco-office-chair, …) come from the provided lise floor-plan
+  render and refine Spec 001's generic world. Exact pixel scale and asset
+  fidelity remain a plan decision, as in Spec 001 — the plan need only keep each
+  building recognizable, not architecturally exact.
+- **~30 concurrent is a design target, not a hard cap**: the world is sized so
+  ~30 colleagues can be active at once comfortably; if the number is exceeded the
+  world MUST degrade gracefully (per the peak-crowd edge cases) rather than fail.
+  The real simultaneous population may be lower most of the time.
 - **First online capability**: this spec is the first exercise of Constitution
   Principle VI (Online & Multiplayer as an Additive Overlay), added in
   constitution v1.1.0, and carries the prioritized-user-story justification that
