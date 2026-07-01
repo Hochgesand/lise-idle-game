@@ -3,19 +3,23 @@ package com.lise.liseidle.session;
 import com.lise.liseidle.state.GameState;
 import com.lise.liseidle.state.PlayerSettings;
 import com.lise.liseidle.state.ResourceSet;
+import com.lise.liseidle.state.SampleStates;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -162,5 +166,53 @@ class SessionControllerTest {
             .andExpect(jsonPath("$.state.resources.loc").value("100"))
             // union of {manual_typing} and {stack_overflow}
             .andExpect(jsonPath("$.state.ownedProducers", hasItems("manual_typing", "stack_overflow")));
+    }
+
+    /**
+     * 6. Full value-identity round-trip (T028): PUT a fully-populated state to a
+     * FRESH player (no server save, so no merge happens) → POST returns that
+     * state IDENTICALLY across every field. Proves the save/load path is
+     * lossless (Constitution Principle IV) and that big-number values beyond
+     * {@code MAX_SAFE_INTEGER} survive the JSON serialize → persist →
+     * deserialize hop with no {@code double}-precision loss (numeric
+     * integrity constraint). Merge semantics are already isolated by test 5.
+     */
+    @Test
+    void putThenPost_returnsIdenticalState_forFullyPopulatedSave() throws Exception {
+        GameState original = SampleStates.populated();
+        String playerId = "identity-roundtrip-player";
+
+        // First PUT on a fresh player stores the state as-is (no merge).
+        mockMvc.perform(put("/api/v1/session/" + playerId + "/state")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(putBody(original, original.lastAdvancedAt())))
+            .andExpect(status().isOk());
+
+        // POST reloads the persisted state from the DB.
+        MvcResult result = mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody(playerId)))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        JsonNode stateNode = objectMapper.readTree(result.getResponse().getContentAsString()).get("state");
+        GameState returned = objectMapper.treeToValue(stateNode, GameState.class);
+
+        // Strongest correct assertion: recursive comparison handles the
+        // concrete Set type difference (Jackson deserializes to a HashSet,
+        // the fixture uses Set.of) and is order-independent for the sets.
+        assertThat(returned).usingRecursiveComparison().isEqualTo(original);
+
+        // Explicit spot-checks on the highest-risk fields (big-number precision,
+        // nested burner object, settings) — redundant with the recursive
+        // compare above but documents intent for reviewers.
+        assertThat(returned.resources().loc()).isEqualTo("9007199254740993");
+        assertThat(returned.ownedProducers()).containsExactlyInAnyOrder("manual_typing", "copilot");
+        assertThat(returned.activeBurner()).isNotNull();
+        assertThat(returned.activeBurner().definitionId()).isEqualTo("burner1");
+        assertThat(returned.activeBurner().fuelRemaining()).isEqualTo("100");
+        assertThat(returned.settings().muted()).isTrue();
+        assertThat(returned.settings().reducedMotion()).isFalse();
+        assertThat(returned.schemaVersion()).isEqualTo(1);
     }
 }
