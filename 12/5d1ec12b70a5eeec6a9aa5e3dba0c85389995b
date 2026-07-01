@@ -1,0 +1,27 @@
+frontend/src/sim/bigNumber.test.ts
+  s_e64f825bb641a8::t_d0c2b01c1287f7 153-240,242,247-252
+  s_e64f825bb641a8::t_73d71f70d07b80 241,243-246
+specs/001-dev-idle-game/tasks.md
+  s_e64f825bb641a8::t_2cdc03c8949ccf 154
+frontend/src/sim/advance.test.ts
+  s_e64f825bb641a8::t_daaeb5f4c9e6c8 732-734,745-746
+  s_e64f825bb641a8::t_149b7db0204298 678-731,735-744,747-748
+frontend/src/sim/format.test.ts
+  s_e64f825bb641a8::t_7faf7035cced36 82-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "125d1ec12b70a5eeec6a9aa5e3dba0c85389995b",
+  "prompts": {},
+  "sessions": {
+    "s_e64f825bb641a8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1f00-1c0f-7123-a56f-b3e6712a8885",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
