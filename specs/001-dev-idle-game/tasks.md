@@ -93,7 +93,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [x] T031 [P] [US1] Implement STOMP client (subscribe `StateCorrection`/`ContentUpdate`) in `frontend/src/net/stompClient.ts`
 - [x] T032 [US1] Implement game loop wiring: tick `advance` each frame using real elapsed `dt`, re-anchor `lastAdvancedAt` on load, catch up offline on load in `frontend/src/game/gameLoop.ts`
 - [x] T033 [P] [US1] Acquire/create top-down pixel-art office tilemap + dev sprite (Tiled export) in `frontend/public/assets/`
-- [ ] T034 [US1] Implement Phaser office scene: load tilemap, render dev sprite at workstation with idle animation in `frontend/src/scenes/OfficeScene.ts`
+- [x] T034 [US1] Implement Phaser office scene: load tilemap, render dev sprite at workstation with idle animation in `frontend/src/scenes/OfficeScene.ts`
 - [ ] T035 [US1] Implement HUD overlay: LOC counter (live, big-number formatted), manual-boost interaction bound to scene click in `frontend/src/scenes/HudScene.ts`
 - [ ] T036 [US1] Wire end-to-end: new player starts at zero → fetch content → start loop → render office → save on close/periodically → restore on reload in `frontend/src/main.ts`
 - [x] T037 [US1] Seed initial content for US1 (manual_typing + 1-2 early producers, their costs/growth) in `backend/src/main/resources/content/producers.json`
