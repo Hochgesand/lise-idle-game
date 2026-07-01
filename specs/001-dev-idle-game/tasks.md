@@ -157,7 +157,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [ ] T054 [P] Add backend migration test: older `schemaVersion` save migrates forward, progress preserved in `backend/src/test/java/.../state/MigrationTest.java`
 - [x] T055 [P] Write backend `Dockerfile` (Java 25 runtime, multi-stage build) in `backend/Dockerfile`
 - [x] T056 [P] Write frontend production build + static serve config (Vite build, nginx or Traefik static) in `frontend/Dockerfile`
-- [ ] T057 Configure root `docker-compose.yml`: backend + frontend services, volumes for `/mnt/user/appdata/lise-game`, Traefik labels/routing in `docker-compose.yml`
+- [x] T057 Configure root `docker-compose.yml`: backend + frontend services, volumes for `/mnt/user/appdata/lise-game`, NPM-published host ports (8086/8087) in `docker-compose.yml`
 - [ ] T058 Deploy to Unraid host (`root@schmitz.gg:2222`): create `/mnt/user/appdata/lise-game`, bring up compose stack behind existing Traefik in `docker-compose.yml`
 - [ ] T059 Performance validation: confirm `advance` is O(active features) not O(dt) for multi-day offline catch-up (profile + property test) in `frontend/src/sim/advance.test.ts`
 - [ ] T060 [P] Documentation: update `README.md` with run/build/deploy instructions and link to quickstart.md

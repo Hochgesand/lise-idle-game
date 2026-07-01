@@ -1,72 +1,64 @@
 # docker-compose.yml — Lise Dev Idle Game
 #
-# Two-service stack for the Unraid deploy target (host: root@schmitz.gg:2222,
-# appdata: /mnt/user/appdata/lise-game), fronted by the existing Traefik
-# reverse proxy on the host's external `traefik` network.
+# Two-service stack deployed on the Unraid host (root@schmitz.gg:2222,
+# appdata /mnt/user/appdata/lise-game). The host already runs
+# **Nginx Proxy Manager** (NPM, container `nginx_proxy_webui-app-1`,
+# owning host ports 80/443) as the reverse proxy. NPM is NOT Traefik and
+# there is no shared proxy Docker network, so — like the host's other
+# apps (e.g. planning-poker) — these containers simply PUBLISH host ports
+# and NPM proxy hosts map the public domains onto them:
 #
-# This is an initial scaffold (T001). Routing/volumes are finalized in T057.
-# Build contexts (./backend, ./frontend) are created by T002/T003.
+#   lise-game.schmitz.gg       ->  <host>:8087   (frontend, nginx static)
+#   lise-game-api.schmitz.gg   ->  <host>:8086   (backend, /api + /ws)
+#                                 (enable "Websockets Support" on the API
+#                                  proxy host for the STOMP /ws endpoint)
 #
-# Bring up locally:        docker compose up --build
-# Validate the YAML:       docker compose config -q
+# NPM proxy hosts + Let's Encrypt certs are configured in the NPM UI/API,
+# NOT here. SSL termination happens at NPM; traffic to the containers is HTTP.
+#
+# Bring up on the host:        docker compose up -d
+# Validate the YAML:           docker compose config -q
+#
+# NOTE — non-root /data ownership (IMPORTANT):
+#   The backend image (backend/Dockerfile) runs as a non-root user `lise`
+#   (uid=100, gid=101). The bind-mounted /mnt/user/appdata/lise-game dir
+#   (-> /data) MUST be writable by uid 100 so H2 can create gamedb.* files.
+#   On the Unraid host create it BEFORE the first `docker compose up`:
+#       mkdir -p /mnt/user/appdata/lise-game
+#       chown -R 100:101 /mnt/user/appdata/lise-game
+#   Container security is NOT weakened (we keep USER lise).
 
 services:
   backend:
     build:
       context: ./backend
+    image: lise-game-backend
     container_name: lise-game-backend
     restart: unless-stopped
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      # Persist H2/Postgres data under the bind-mounted /data volume.
+      # Persist H2 data under the bind-mounted /data volume.
       - SPRING_DATASOURCE_URL=jdbc:h2:file:/data/gamedb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
       - SPRING_DATASOURCE_USERNAME=sa
       - SPRING_DATASOURCE_PASSWORD=
+    ports:
+      # NPM proxies lise-game-api.schmitz.gg (/api + /ws) onto host :8086.
+      # Matches the host convention (apps publish a host port; NPM maps the
+      # domain onto it). Backend listens on 8080 inside the container.
+      - "8086:8080"
     volumes:
-      # Durable backend state (DB files, saves) on the Unraid appdata share.
+      # Durable backend state (H2 db files, saves) on the Unraid appdata share.
       - /mnt/user/appdata/lise-game:/data
-    networks:
-      - traefik
-    labels:
-      - traefik.enable=true
-      # Plaintext HTTP router (entrypoint `web` on :80).
-      - traefik.http.routers.lise-game-api.rule=Host(`lise-game-api.schmitz.gg`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))
-      - traefik.http.routers.lise-game-api.entrypoints=web
-      # HTTPS router (entrypoint `websecure` on :443) with cert resolver.
-      - traefik.http.routers.lise-game-api-secure.rule=Host(`lise-game-api.schmitz.gg`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))
-      - traefik.http.routers.lise-game-api-secure.entrypoints=websecure
-      - traefik.http.routers.lise-game-api-secure.tls=true
-      - traefik.http.routers.lise-game-api-secure.tls.certresolver=letsencrypt
-      # Backend listens on 8080 inside the container.
-      - traefik.http.services.lise-game-api.loadbalancer.server.port=8080
-      - traefik.http.routers.lise-game-api.service=lise-game-api
-      - traefik.http.routers.lise-game-api-secure.service=lise-game-api
 
   frontend:
     build:
       context: ./frontend
+    image: lise-game-frontend
     container_name: lise-game-frontend
     restart: unless-stopped
     depends_on:
       - backend
-    networks:
-      - traefik
-    labels:
-      - traefik.enable=true
-      # Plaintext HTTP router for the static frontend.
-      - traefik.http.routers.lise-game.rule=Host(`lise-game.schmitz.gg`)
-      - traefik.http.routers.lise-game.entrypoints=web
-      # HTTPS router for the static frontend.
-      - traefik.http.routers.lise-game-secure.rule=Host(`lise-game.schmitz.gg`)
-      - traefik.http.routers.lise-game-secure.entrypoints=websecure
-      - traefik.http.routers.lise-game-secure.tls=true
-      - traefik.http.routers.lise-game-secure.tls.certresolver=letsencrypt
-      # nginx serves on port 80 inside the container.
-      - traefik.http.services.lise-game.loadbalancer.server.port=80
-      - traefik.http.routers.lise-game.service=lise-game
-      - traefik.http.routers.lise-game-secure.service=lise-game
-
-networks:
-  traefik:
-    # The host already runs Traefik with this external network.
-    external: true
+    ports:
+      # NPM proxies lise-game.schmitz.gg onto host :8087. nginx serves the
+      # Vite build on container port 80.
+      - "8087:80"
