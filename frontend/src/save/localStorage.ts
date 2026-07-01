@@ -286,7 +286,8 @@ function toCoopSegments(v: unknown): CoopSegment[] {
   return out;
 }
 
-/** `activeOffice`: absent/null/non-string → `"office_1"`; present string → as-is. */
+/** `activeOffice`: absent/null → `"office_1"` (lenient default — v1 save);
+ * present string → as-is; present non-string → `CorruptedSaveError`. */
 function toActiveOffice(v: unknown): string {
   if (v === undefined || v === null) {
     return 'office_1'; // lenient default — v1 save
