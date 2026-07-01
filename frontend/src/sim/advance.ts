@@ -21,7 +21,14 @@
 // `dt` is in milliseconds (integer >= 0). `computeRate` returns LOC per SECOND.
 // `advance` converts internally: `loc_gain = rate_per_sec * (dt / 1000)`.
 
-import type { ContentCatalog, Effect, GameState, Requirement, ResourceType } from './types';
+import type {
+  ContentCatalog,
+  CoopSegment,
+  Effect,
+  GameState,
+  Requirement,
+  ResourceType,
+} from './types';
 import {
   add,
   bn,
@@ -34,6 +41,11 @@ import {
   toString,
 } from './bigNumber';
 import type { BigNumber } from './bigNumber';
+// (002) co-op segment clip/overlap helpers (contracts §1) — the latest-`from`
+// overlap rule, [1, maxMultiplier] clamp, and interval clipping live in coop.ts
+// next to the merge rule so the co-op invariants have one home. `advance` and
+// `computeRate` consume them for piecewise integration + the rate preview.
+import { clipSegment, effectiveMultiplier } from './coop';
 
 // ── Timestamp helper ─────────────────────────────────────────────────────
 
@@ -141,6 +153,21 @@ export function computeRate(state: GameState, content: ContentCatalog): BigNumbe
     const def = content.burners.find((b) => b.id === state.activeBurner!.definitionId);
     if (def) {
       rate = multiply(rate, fromNumber(def.productionMultiplier));
+    }
+  }
+  // (002) Apply the covering co-op segment's multiplier at `lastAdvancedAt`
+  // (contracts §1 — the sim's only notion of "now", keeping the function pure):
+  // latest-`from`-wins, cap-clamped to `coop.maxMultiplier`. `manualBoost` is
+  // derived from `computeRate`, so lease multipliers apply to boosts identically
+  // to the preview (consistency is contractual). With no covering segment the
+  // multiplier is exactly 1 (baseline), so a `coopSegments: []` state returns
+  // the unchanged 001 rate.
+  const coop = content.coop;
+  if (coop !== undefined && state.coopSegments.length > 0) {
+    const nowMs = Date.parse(state.lastAdvancedAt);
+    if (Number.isFinite(nowMs)) {
+      const mult = effectiveMultiplier(state.coopSegments, nowMs, coop.maxMultiplier);
+      rate = multiply(rate, fromNumber(mult));
     }
   }
   return rate;
@@ -251,19 +278,178 @@ function cloneState(state: GameState): GameState {
   };
 }
 
+// ── (002) Co-op piecewise-integration helpers ───────────────────────────
+
+/**
+ * (002, data-model step 1) Resolve an in-progress commute whose arrival at
+ * `commute.startedAt + coop.commuteSeconds` falls at or before the advanced
+ * timeline `t0 + dt`: set `activeOffice := commute.toOffice`, `commute := null`.
+ * A pure function of state + content, so it resolves correctly across offline
+ * spans. Commutes never affect production and add no rate split point.
+ *
+ * `t0` is `Date.parse(state.lastAdvancedAt)` (the contracts §1 anchor); the
+ * commute's `startedAt` shares that numeric ms timeline (types.ts).
+ */
+function resolveCommute(
+  result: GameState,
+  t0: number,
+  dt: number,
+  content: ContentCatalog,
+): void {
+  if (result.commute === null) return;
+  const coop = content.coop;
+  if (coop === undefined || !Number.isFinite(t0)) return;
+  const arrivalMs = result.commute.startedAt + coop.commuteSeconds * 1000;
+  if (arrivalMs <= t0 + dt) {
+    result.activeOffice = result.commute.toOffice;
+    result.commute = null;
+  }
+}
+
+/**
+ * (002) The segments overlapping `[startMs, endMs)`, each clipped to the
+ * interval (contracts §1 "Clock-skew clamping"). Used to enumerate the split
+ * points; coverage/multiplier lookup still queries the ORIGINAL segments
+ * (see `integratePiecewise`) so the latest-`from` rule is correct even when
+ * several segments began before the interval.
+ */
+function clippedOverlapping(
+  segments: CoopSegment[],
+  startMs: number,
+  endMs: number,
+): CoopSegment[] {
+  const out: CoopSegment[] = [];
+  for (const s of segments) {
+    const clipped = clipSegment(s, startMs, endMs);
+    if (clipped !== null) out.push(clipped);
+  }
+  return out;
+}
+
+/**
+ * (002, data-model steps 3–4) Integrate LOC gain piecewise over `[t0, t0+dt]`,
+ * splitting the interval at every clipped segment boundary AND at the burner
+ * fuel-exhaustion instant. Per sub-interval:
+ *
+ *     gain_i = rate_i × multiplier_i × len_i
+ *
+ * where `rate_i` is the burner rate while fuel lasts (else base) and
+ * `multiplier_i` is the covering segment's effective multiplier (latest-`from`,
+ * cap-clamped to `coop.maxMultiplier`), or 1 where uncovered. The multiplier
+ * scales PRODUCTION only — fuel burns at the unscaled `burnRate`, so fuel math
+ * stays linear across segment boundaries (data-model BurnerState note).
+ *
+ * `coverageSegments` are the ORIGINAL (un-clipped, un-pruned) segments, passed
+ * explicitly so the latest-`from` overlap rule is evaluated against the
+ * server-authored `from` values (clipping would tie segments that began before
+ * the interval and break the tiebreak).
+ */
+function integratePiecewise(
+  result: GameState,
+  baseRate: BigNumber,
+  dtSec: BigNumber,
+  t0: number,
+  dt: number,
+  overlapping: CoopSegment[],
+  coverageSegments: CoopSegment[],
+  content: ContentCatalog,
+): void {
+  // `coop` is always present on catalogs from loadContent/FALLBACK; if a partial
+  // fixture omits it, skip the upper clamp (multipliers still clamp to >= 1).
+  const maxMultiplier = content.coop?.maxMultiplier ?? Infinity;
+
+  // Split points (relative ms within [0, dt]): interval ends + clipped segment
+  // boundaries + the burner fuel-exhaustion instant.
+  const points = new Set<number>([0, dt]);
+  for (const seg of overlapping) {
+    points.add(seg.from - t0);
+    points.add(seg.until - t0);
+  }
+
+  // Burner setup + fuel-exhaustion split point (mirrors the 001 closed form).
+  let burnerRate = baseRate;
+  let burnRateBn: BigNumber | null = null;
+  let fuelRemainingBn: BigNumber | null = null;
+  let exhaustRel = dt; // active through the whole interval unless it exhausts earlier
+  if (result.activeBurner !== null) {
+    const def = content.burners.find((b) => b.id === result.activeBurner!.definitionId);
+    if (def === undefined) {
+      // Burner definition vanished from content (version drift): drop it.
+      result.activeBurner = null;
+    } else {
+      burnerRate = multiply(baseRate, fromNumber(def.productionMultiplier));
+      burnRateBn = bn(def.burnRate);
+      fuelRemainingBn = bn(result.activeBurner.fuelRemaining);
+      if (!isZero(burnRateBn)) {
+        const wouldBurn = multiply(burnRateBn, dtSec);
+        if (compare(fuelRemainingBn, wouldBurn) < 0) {
+          // Exhausts partway: fuelTime = fuelRemaining / burnRate seconds.
+          const fuelTimeSec = divide(fuelRemainingBn, burnRateBn);
+          let ex = fuelTimeSec.toNumber() * 1000;
+          if (!Number.isFinite(ex) || ex < 0) ex = 0;
+          if (ex > dt) ex = dt;
+          exhaustRel = ex;
+          points.add(ex);
+        }
+      }
+    }
+  }
+
+  const sorted = Array.from(points)
+    .filter((p) => p >= 0 && p <= dt)
+    .sort((a, b) => a - b);
+
+  let gain = bn('0');
+  let fuelBurned = bn('0');
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const startRel = sorted[i];
+    const endRel = sorted[i + 1];
+    const lenMs = endRel - startRel;
+    if (lenMs <= 0) continue;
+    const lenSec = fromNumber(lenMs / 1000);
+    // Burner active strictly before the exhaustion instant; off at/after it.
+    const burnerOn = result.activeBurner !== null && startRel < exhaustRel;
+    const rate = burnerOn ? burnerRate : baseRate;
+    // Each sub-interval lies wholly within one segment's coverage (boundaries
+    // are split points), so the multiplier at its start applies throughout.
+    const mult = effectiveMultiplier(coverageSegments, t0 + startRel, maxMultiplier);
+    gain = add(gain, multiply(multiply(rate, fromNumber(mult)), lenSec));
+    if (burnerOn && burnRateBn !== null) {
+      fuelBurned = add(fuelBurned, multiply(burnRateBn, lenSec));
+    }
+  }
+
+  result.resources.loc = toString(add(bn(result.resources.loc), gain));
+  if (result.activeBurner !== null && fuelRemainingBn !== null) {
+    const newFuel = subtract(fuelRemainingBn, fuelBurned);
+    if (compare(newFuel, bn('0')) <= 0) {
+      result.activeBurner = null;
+    } else {
+      result.activeBurner = { ...result.activeBurner, fuelRemaining: toString(newFuel) };
+    }
+  }
+}
+
 // ── The core mutator ─────────────────────────────────────────────────────
 
 /**
  * Advance `state` by `deltaTimeMs` milliseconds and return a NEW GameState.
  *
- * Algorithm (data-model.md "State transitions", 5 steps), computed in CLOSED
- * FORM over the whole interval — O(active features), never O(dt):
+ * Algorithm (data-model.md "State transitions", extended by 002), computed in
+ * CLOSED FORM over the whole interval — O(active features + #segments
+ * overlapping the interval), never O(dt):
  *
- *  1. baseRate  = rateWithoutBurner(state, content)            [LOC/sec]
- *  2. burner fuel budgeting + two-segment LOC gain (see below)
- *  3. resources.loc += (rate effectively applied) * (dt/1000)
- *  4. milestone check: earn newly-satisfied milestones + grant one-time rewards
- *  5. lastAdvancedAt = advanceTime(state.lastAdvancedAt, dt)
+ *  1. (002) resolve an in-progress commute at startedAt + coop.commuteSeconds;
+ *  2. (002) compact — prune fully-integrated coopSegments;
+ *  3. (002) split [t0, t0+dt] at clipped segment boundaries + fuel exhaustion;
+ *  4. gain = Σ rate_i × multiplier_i × len_i (cap-clamped, production only);
+ *  5. resources.loc += gain;
+ *  6. milestone check: earn newly-satisfied milestones + grant one-time rewards;
+ *  7. lastAdvancedAt = advanceTime(state.lastAdvancedAt, dt).
+ *
+ * When no segment overlaps the interval, step 4 takes the EXACT 001 two-segment
+ * burner/base path verbatim — byte-identical 001 behavior for `coopSegments: []`
+ * (every 001 save). The piecewise loop runs only when a segment overlaps.
  *
  * ## Burner fuel math (associativity guarantee)
  * Let R_b = baseRate, R_f = baseRate * productionMultiplier (with burner).
@@ -276,17 +462,10 @@ function cloneState(state: GameState): GameState {
  *    `dt_sec - fuelTime` runs at base R_b. LOC gain = R_f*fuelTime + R_b*rem.
  *
  * This is associative (advance(advance(s,a),b) === advance(s,a+b)) because
- * fuel burn and LOC gain are both LINEAR in time:
- *  - Splitting at a >= fuelTime: advance(s,a) fully exhausts fuel (active for
- *    fuelTime, LOC = R_f*fuelTime + R_b*(a-fuelTime)); advance(_,b) has no
- *    burner (LOC += R_b*b). Total active time = fuelTime, matching the single
- *    call.
- *  - Splitting at a < fuelTime: advance(s,a) burns burnRate*a of fuel and is
- *    active the whole a (LOC += R_f*a); advance(_,b) continues with the
- *    remaining fuel for min(b, fuelTime-a). Total active time =
- *    a + min(b, fuelTime-a) = min(a+b, fuelTime) — identical to the single call.
- * Fuel remaining and `lastAdvancedAt` are likewise additive, so the full
- * normalized state matches byte-for-byte.
+ * fuel burn and LOC gain are both LINEAR in time, and every split point
+ * (segment boundary, fuel exhaustion, commute arrival) is a pure function of
+ * state, never wall clock. Exact for multiples of 1000 ms (the same ULP
+ * caveat as 001 applies to a non-integer-second split on a boundary).
  */
 export function advance(
   state: GameState,
@@ -298,17 +477,48 @@ export function advance(
   const result = cloneState(state);
 
   // dt === 0: a pure no-op. Nothing is produced, no milestones can newly be
-  // earned, and the timestamp is unchanged. Return the clone immediately so
-  // the no-op is exact (no incidental burner-state churn).
+  // earned, NO compaction runs, and the timestamp is unchanged. Return the
+  // clone immediately so the no-op is exact (contracts §1).
   if (dt === 0) {
     return result;
   }
 
   const dtSec = fromNumber(dt / 1000);
   const baseRate = rateWithoutBurner(state, content);
+  const t0 = Date.parse(state.lastAdvancedAt);
 
-  // Steps 2 + 3: burner fuel budgeting + LOC gain.
-  if (result.activeBurner !== null) {
+  // (002) Step 1: resolve an in-progress commute (data-model step 1).
+  resolveCommute(result, t0, dt, content);
+
+  // (002) Step 2: compaction — prune fully-integrated segments. After advance,
+  // `result.coopSegments` holds no segment with `until <= result.lastAdvancedAt`
+  // (== t0 + dt). Pruning is idempotent and expired segments contribute
+  // nothing, so this preserves associativity and keeps the array bounded.
+  if (Number.isFinite(t0)) {
+    const endMs = t0 + dt;
+    result.coopSegments = result.coopSegments.filter((s) => s.until > endMs);
+  }
+
+  // (002) Step 3: split points — segments overlapping [t0, t0+dt] (clipped).
+  const overlapping = Number.isFinite(t0)
+    ? clippedOverlapping(state.coopSegments, t0, t0 + dt)
+    : [];
+
+  // (002) Step 4: piecewise gain when a segment overlaps; otherwise the EXACT
+  // 001 two-segment burner/base path (byte-identical for coopSegments: []).
+  if (overlapping.length > 0) {
+    integratePiecewise(
+      result,
+      baseRate,
+      dtSec,
+      t0,
+      dt,
+      overlapping,
+      state.coopSegments,
+      content,
+    );
+  } else if (result.activeBurner !== null) {
+    // === Spec 001 burner fuel budgeting + LOC gain (unchanged) ===
     const def = content.burners.find((b) => b.id === result.activeBurner!.definitionId);
     if (def === undefined) {
       // Burner definition vanished from content (version drift): drop it and
@@ -362,10 +572,10 @@ export function advance(
     );
   }
 
-  // Step 4: milestone evaluation (against the now-updated resources).
+  // Step 6: milestone evaluation (against the now-updated resources).
   applyMilestones(result, content);
 
-  // Step 5: re-anchor the clock.
+  // Step 7: re-anchor the clock.
   result.lastAdvancedAt = advanceTime(state.lastAdvancedAt, dt);
 
   return result;
