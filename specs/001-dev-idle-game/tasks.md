@@ -81,7 +81,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 
 ### Tests for User Story 1 (write first, ensure RED)
 
-- [ ] T025 [P] [US1] Write property test for offline catch-up: large `dt` (minutes/hours) yields expected LOC within tolerance in `frontend/src/sim/advance.test.ts`
+- [x] T025 [P] [US1] Write property test for offline catch-up: large `dt` (minutes/hours) yields expected LOC within tolerance in `frontend/src/sim/advance.test.ts`
 - [ ] T026 [P] [US1] Write test for manual-boost mutator (discrete action then `advance` catch-up) in `frontend/src/sim/actions.test.ts`
 - [ ] T027 [P] [US1] Write integration test for localStorage save → reload restores identical `GameState` in `frontend/src/save/localStorage.test.ts`
 - [ ] T028 [P] [US1] Write integration test for backend session: save then load returns same state in `backend/src/test/java/.../session/SessionControllerTest.java`

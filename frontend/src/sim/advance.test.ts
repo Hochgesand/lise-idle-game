@@ -18,6 +18,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { advance, computeRate } from './advance';
+import { bn, compare } from './bigNumber';
 import type { GameState, ContentCatalog } from './types';
 
 // ---------------------------------------------------------------------------
@@ -180,5 +181,74 @@ describe('computeRate', () => {
 
     // One producer at baseRate 1 LOC/sec => "1".
     expect(rate.toString()).toEqual('1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// advance — offline catch-up (large dt)
+//
+// quickstart.md Scenario 1: a closed tab for N minutes should credit LOC by
+// ~rate×N on reopen. `advance` is closed-form (O(active features), never
+// O(dt)), so a multi-day catch-up is as cheap as a 1s tick (Constitution
+// "Performance of time skips"). These tests guard that property and the
+// correctness of large-delta progression.
+// ---------------------------------------------------------------------------
+
+describe('advance — offline catch-up (large dt)', () => {
+  it('minutes: 2 min @ 1 LOC/s yields ~120 LOC', () => {
+    const state = makeFixtureState();
+    const content = makeFixtureContent();
+
+    const result = advance(state, 120_000, content); // 120 s @ 1 LOC/s
+
+    // Exact integer (well within break_eternity layer-0 exactness).
+    expect(compare(bn(result.resources.loc), bn('120'))).toBe(0);
+  });
+
+  it('hours: 3 h @ 1 LOC/s yields ~10800 LOC', () => {
+    const state = makeFixtureState();
+    const content = makeFixtureContent();
+
+    const result = advance(state, 3 * 3600_000, content); // 10800 s
+
+    expect(compare(bn(result.resources.loc), bn('10800'))).toBe(0);
+  });
+
+  it('multi-day catch-up is cheap and correct: 7 days @ 1 LOC/s yields ~604800 LOC (O(features), not O(dt))', () => {
+    const state = makeFixtureState();
+    const content = makeFixtureContent();
+
+    const result = advance(state, 7 * 86400_000, content); // 604800 s
+
+    expect(compare(bn(result.resources.loc), bn('604800'))).toBe(0);
+  });
+
+  it('offline catch-up equals online sum (associativity at scale: 1h + 2h === 3h)', () => {
+    const state = makeFixtureState();
+    const content = makeFixtureContent();
+    const a = 3600_000; // 1 hour
+    const b = 2 * 3600_000; // 2 hours
+
+    const split = advance(advance(state, a, content), b, content);
+    const combined = advance(state, a + b, content);
+
+    expect(normalize(split)).toEqual(normalize(combined));
+  });
+
+  it('monotonicity holds at scale: loc never decreases, lastAdvancedAt advances by exactly dt', () => {
+    const state = makeFixtureState();
+    const content = makeFixtureContent();
+    const dt = 5 * 3600_000; // 5 hours
+
+    const result = advance(state, dt, content);
+
+    // loc is monotonic (>= original).
+    expect(compare(bn(result.resources.loc), bn(state.resources.loc))).
+      toBeGreaterThanOrEqual(0);
+    // lastAdvancedAt advanced by exactly dt.
+    const expectedTs = new Date(
+      Date.parse(state.lastAdvancedAt) + dt,
+    ).toISOString();
+    expect(result.lastAdvancedAt).toEqual(expectedTs);
   });
 });
