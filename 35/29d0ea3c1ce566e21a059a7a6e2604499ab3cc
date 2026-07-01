@@ -1,0 +1,22 @@
+specs/001-dev-idle-game/tasks.md
+  s_5103bd7cdb7797::t_6429ae56d2b624 86
+frontend/src/save/localStorage.test.ts
+  s_5103bd7cdb7797::t_a91d1709e82483 5-8,13-23,25-26,29-64
+  s_5103bd7cdb7797::t_c817a45ecf2da5 1-4,9-12,24,27-28,65-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "3529d0ea3c1ce566e21a059a7a6e2604499ab3cc",
+  "prompts": {},
+  "sessions": {
+    "s_5103bd7cdb7797": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e09-1bda-7c8f-b847-24548db80e62",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
