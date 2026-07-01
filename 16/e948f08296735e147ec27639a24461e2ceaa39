@@ -1,0 +1,51 @@
+.specify/feature.json
+  s_cb0b044ded5b16::t_2cde45a48d861e 2
+frontend/src/game/gameLoop.test.ts
+  s_35f52eb945c232::t_bb8921ea2108de 1-224
+frontend/src/game/gameLoop.ts
+  s_35f52eb945c232::t_eafec5a8a5854c 1-26,28-101,103-113,115-146,156-157
+  s_35f52eb945c232::t_29d0c92a3037a7 27
+  s_35f52eb945c232::t_413a83bda2e95e 147-153,155
+  s_35f52eb945c232::t_f62854f942682e 102,114,154
+specs/002-shared-office-coop/spec.md
+  s_cb0b044ded5b16::t_6dabc04402104f 31
+  s_cb0b044ded5b16::t_5a65530d56236f 1-30,32-34,39-306,311-317,319-329
+  s_cb0b044ded5b16::t_bf32a3fc5f28fa 307-310
+  s_cb0b044ded5b16::t_55aee379a41d69 318
+  s_cb0b044ded5b16::t_037dd68235b9f7 35-38
+specs/002-shared-office-coop/checklists/requirements.md
+  s_cb0b044ded5b16::t_e8a5475292d70a 1-33,36,39,41-52
+  s_cb0b044ded5b16::t_b0e384298d6576 34-35,37-38,40
+.specify/memory/constitution.md
+  s_cb0b044ded5b16::t_5757d9726f02a5 225
+  s_cb0b044ded5b16::t_0f71515c974e0a 130-158
+  s_cb0b044ded5b16::t_e260261beb3892 5-20,23,29,33-34,37-43
+  s_cb0b044ded5b16::t_433c215f87b805 109-111
+  s_cb0b044ded5b16::t_2a6675c5ae46b1 166-169
+specs/001-dev-idle-game/tasks.md
+  s_35f52eb945c232::t_63a09edac535af 94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "16e948f08296735e147ec27639a24461e2ceaa39",
+  "prompts": {},
+  "sessions": {
+    "s_35f52eb945c232": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e3f-43ce-7b96-8f34-fc5bfc86e37c",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    },
+    "s_cb0b044ded5b16": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e97964b8-afa3-4e1e-87e3-c32fe5f67676",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
