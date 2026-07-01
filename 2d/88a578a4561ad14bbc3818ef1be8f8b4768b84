@@ -1,0 +1,19 @@
+frontend/src/sim/actions.test.ts
+  s_90c58bda129c4c::t_85a2846e225993 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "2d88a578a4561ad14bbc3818ef1be8f8b4768b84",
+  "prompts": {},
+  "sessions": {
+    "s_90c58bda129c4c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1cbf-2006-7385-8bfb-0168476d3266",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
