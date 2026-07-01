@@ -18,8 +18,12 @@ import type { GameState } from '../sim/types';
 /**
  * The current save-format version. Bump this whenever the persisted GameState
  * shape changes, and add a migration keyed by the previous version below.
+ *
+ * v2 (002-shared-office-coop): the GameState gained the additive co-op
+ * overlay fields `coopSegments`, `activeOffice`, and `commute`
+ * (data-model.md "Save migration"). See `migrations[1]` below.
  */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /** A migration transforms a state AT a given source version into the next. */
 export type Migration = (state: GameState) => GameState;
@@ -28,13 +32,24 @@ export type Migration = (state: GameState) => GameState;
  * Registry of migrations keyed by SOURCE version.
  * - Key `n` migrates a state whose schemaVersion === n to schemaVersion === n+1.
  * - `migrate` walks from `state.schemaVersion` up to CURRENT_SCHEMA_VERSION.
- *
- * For v1 there are no migrations yet — the chain is intentionally empty.
- * Example for a future v2:
- *   migrations[1] = (s) => ({ ...deepClone(s), schemaVersion: 2, <field changes> });
  */
 const migrations: Record<number, Migration> = {
-  // empty for v1 — nothing to migrate yet
+  // v1 → v2 (002-shared-office-coop): introduce the co-op overlay fields at
+  // their Spec 001 baseline. A v1 save never carried `coopSegments`,
+  // `activeOffice`, or `commute`; this step defaults them so the result is a
+  // complete, valid v2 state. The migration is ADDITIVE — it spreads every
+  // Spec 001 field through untouched and only adds the three overlay fields +
+  // the version bump (data-model.md "Save migration": changes nothing else).
+  // `toGameState` (localStorage.ts) already applies these same lenient
+  // defaults before the chain runs, so in practice this re-affirms them; it is
+  // defensive so `migrate()` is total even when handed a raw pre-002 save shape.
+  1: (s): GameState => ({
+    ...s,
+    schemaVersion: 2,
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
+  }),
 };
 
 /**

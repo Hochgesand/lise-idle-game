@@ -16,7 +16,7 @@
 // understands throws `SaveVersionTooNewError` (refuse, do not corrupt). The
 // loader never silently discards a save.
 
-import type { GameState, PlayerSettings } from '../sim/types';
+import type { GameState, PlayerSettings, CoopSegment, CommuteState } from '../sim/types';
 import { CURRENT_SCHEMA_VERSION, migrate } from './migrations';
 
 /** Fixed localStorage key for the v1 save. */
@@ -65,6 +65,13 @@ interface SerializedGameState {
   earnedMilestones: string[];
   lastAdvancedAt: string;
   settings: PlayerSettings;
+  // (002) Co-op overlay fields — persisted so v2 saves round-trip losslessly
+  // (data-model.md: "save round-trips remain lossless with the new field
+  // included"). CoopSegment / CommuteState are plain JSON data (numbers /
+  // strings), so they serialize as-is.
+  coopSegments: CoopSegment[];
+  activeOffice: string;
+  commute: CommuteState | null;
 }
 
 /**
@@ -82,6 +89,11 @@ export function serializeState(state: GameState): string {
     earnedMilestones: [...state.earnedMilestones].sort(),
     lastAdvancedAt: state.lastAdvancedAt,
     settings: state.settings,
+    // (002) Persist the co-op overlay verbatim so server-issued segments, the
+    // active office, and an in-progress commute survive a save → load cycle.
+    coopSegments: state.coopSegments,
+    activeOffice: state.activeOffice,
+    commute: state.commute,
   };
   return JSON.stringify(serialized);
 }
@@ -162,6 +174,18 @@ function toGameState(parsed: unknown): GameState {
 
   const settings = toPlayerSettings(parsed.settings);
 
+  // (002) Co-op overlay fields — LENIENT: default the MISSING fields before the
+  // migration chain runs, so a v1 save (which never carried them) parses into a
+  // structurally valid GameState that `migrate()` can walk to v2, and so a v2
+  // save round-trips losslessly. data-model.md "Save migration": "Structural
+  // validation on load treats the missing fields leniently (defaults them
+  // before the migration chain runs), so every existing v1 save stays
+  // loadable." A present-but-malformed value is still treated as corruption
+  // (never silently wiped) per Constitution IV.
+  const coopSegments = toCoopSegments(parsed.coopSegments);
+  const activeOffice = toActiveOffice(parsed.activeOffice);
+  const commute = toCommute(parsed.commute);
+
   return {
     resources: { loc, cash, aiTokens },
     ownedProducers,
@@ -172,13 +196,11 @@ function toGameState(parsed: unknown): GameState {
     lastAdvancedAt: parsed.lastAdvancedAt,
     schemaVersion: parsed.schemaVersion,
     settings,
-    // (002) Co-op overlay fields default to the Spec 001 baseline. T022 adds
-    // lenient parsing of these from the save + the v1->v2 migration chain; for
-    // now every loadable save is schemaVersion 1 (no such fields), so the
-    // defaults make a v1 save byte-identical to 001 behavior.
-    coopSegments: [],
-    activeOffice: 'office_1',
-    commute: null,
+    // (002) Co-op overlay — baseline defaults make a v1 save byte-identical to
+    // Spec 001 behavior; `migrate()` re-affirms them for v1 → v2.
+    coopSegments,
+    activeOffice,
+    commute,
   };
 }
 
@@ -228,6 +250,71 @@ function toPlayerSettings(v: unknown): PlayerSettings {
     throw new CorruptedSaveError('`settings.muted` is not a boolean.');
   }
   return { reducedMotion: v.reducedMotion, muted: v.muted };
+}
+
+// ── (002) Lenient co-op overlay validators ───────────────────────────────
+//
+// Each defaults the field when it is ABSENT (a v1 save never carried these),
+// and validates strictly when PRESENT (a v2 save must carry well-formed
+// values; a malformed value is corruption, not a defaultable miss). Defaults
+// are applied in `toGameState`, i.e. BEFORE the migration chain runs.
+
+/** `coopSegments`: absent/null → `[]`; present → array of valid segments. */
+function toCoopSegments(v: unknown): CoopSegment[] {
+  if (v === undefined || v === null) {
+    return []; // lenient default — v1 save
+  }
+  if (!Array.isArray(v)) {
+    throw new CorruptedSaveError('`coopSegments` is not an array.');
+  }
+  const out: CoopSegment[] = [];
+  for (const el of v) {
+    if (!isObject(el)) {
+      throw new CorruptedSaveError('`coopSegments` contains a non-object element.');
+    }
+    if (
+      typeof el.from !== 'number' ||
+      typeof el.until !== 'number' ||
+      typeof el.multiplier !== 'number'
+    ) {
+      throw new CorruptedSaveError(
+        '`coopSegments` element is missing numeric `from`/`until`/`multiplier`.',
+      );
+    }
+    out.push({ from: el.from, until: el.until, multiplier: el.multiplier });
+  }
+  return out;
+}
+
+/** `activeOffice`: absent/null/non-string → `"office_1"`; present string → as-is. */
+function toActiveOffice(v: unknown): string {
+  if (v === undefined || v === null) {
+    return 'office_1'; // lenient default — v1 save
+  }
+  if (typeof v !== 'string') {
+    throw new CorruptedSaveError('`activeOffice` is not a string.');
+  }
+  return v;
+}
+
+/** `commute`: absent/null → `null`; present → validated CommuteState. */
+function toCommute(v: unknown): CommuteState | null {
+  if (v === undefined || v === null) {
+    return null; // lenient default — v1 save
+  }
+  if (!isObject(v)) {
+    throw new CorruptedSaveError('`commute` is neither null nor an object.');
+  }
+  if (
+    typeof v.fromOffice !== 'string' ||
+    typeof v.toOffice !== 'string' ||
+    typeof v.startedAt !== 'number'
+  ) {
+    throw new CorruptedSaveError(
+      '`commute` is missing `fromOffice`/`toOffice` (string) or `startedAt` (number).',
+    );
+  }
+  return { fromOffice: v.fromOffice, toOffice: v.toOffice, startedAt: v.startedAt };
 }
 
 // ── Fresh state factory ──────────────────────────────────────────────────

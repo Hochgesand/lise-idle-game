@@ -223,4 +223,46 @@ describe('localStorage save → reload round-trip', () => {
     expect(restored!.activeBurner).not.toBeUndefined();
     expect(restored!.activeBurner).toEqual(null);
   });
+
+  it('(002) co-op overlay fields round-trip losslessly, including non-default values', () => {
+    // A v2 save carrying real server-issued segments, a non-default office, and
+    // an in-progress commute MUST persist verbatim (data-model.md: "save
+    // round-trips remain lossless with the new field included"). Dropping these
+    // on save would silently lose the co-op bonus / commute.
+    const state: GameState = {
+      resources: { loc: '9007199254740993', cash: '42', aiTokens: '100' },
+      ownedProducers: new Set<string>(['manual_typing', 'copilot']),
+      ownedUpgrades: new Set<string>(['u1']),
+      ownedTrainings: new Set<string>(['t1']),
+      activeBurner: {
+        definitionId: 'burner1',
+        startedAt: '2026-06-30T11:30:00.000Z',
+        fuelRemaining: '250',
+      },
+      earnedMilestones: new Set<string>(['iso9001']),
+      lastAdvancedAt: FIXED_ANCHOR,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      settings: { reducedMotion: true, muted: true },
+      coopSegments: [
+        { from: 1000, until: 2000, multiplier: 1.2 },
+        { from: 3000, until: 4000, multiplier: 1.5 },
+      ],
+      activeOffice: 'office_2',
+      commute: { fromOffice: 'office_1', toOffice: 'office_2', startedAt: 5000 },
+    };
+
+    saveGame(state);
+    const restored = loadGame();
+
+    expect(restored).not.toBeNull();
+    expect(restored!.coopSegments).toEqual(state.coopSegments);
+    expect(restored!.activeOffice).toBe('office_2');
+    expect(restored!.commute).toEqual({
+      fromOffice: 'office_1',
+      toOffice: 'office_2',
+      startedAt: 5000,
+    });
+    // Already-current schemaVersion → no migration, full value equality holds.
+    expect(normalize(restored!)).toEqual(normalize(state));
+  });
 });
