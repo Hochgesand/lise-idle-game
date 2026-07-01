@@ -1,0 +1,27 @@
+specs/001-dev-idle-game/tasks.md
+  s_f9b87dd7b1ec8a::t_b8d4b7817714bf 119
+frontend/src/sim/economy.test.ts
+  s_f9b87dd7b1ec8a::t_b2575413f22a1e 110-112,114,116-117
+  s_f9b87dd7b1ec8a::t_cb5f718831b7a3 1-109,113,115,118-249
+frontend/src/sim/economy.ts
+  s_f9b87dd7b1ec8a::t_c135d0caf215a3 1-138
+frontend/src/scenes/EconomyScene.ts
+  s_f9b87dd7b1ec8a::t_253ac0df24a184 98-99
+  s_f9b87dd7b1ec8a::t_60051118d7989a 1-97,100-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5c2587a3386349caffe9d75c7f6278e8636a8c14",
+  "prompts": {},
+  "sessions": {
+    "s_f9b87dd7b1ec8a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ec3-0071-7260-b775-d1ebd1b10f6d",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
