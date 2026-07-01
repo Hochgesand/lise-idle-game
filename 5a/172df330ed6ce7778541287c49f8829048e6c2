@@ -1,0 +1,25 @@
+frontend/src/main.ts
+  s_6d0f514f12360a::t_16e8aa0858b8bb 230-249
+  s_6d0f514f12360a::t_a45e8579fa7cba 311
+  s_6d0f514f12360a::t_0f363d21e8151a 29,40
+specs/001-dev-idle-game/tasks.md
+  s_6d0f514f12360a::t_1ab3ca3a44a081 143
+frontend/src/game/academyWiring.test.ts
+  s_6d0f514f12360a::t_eb6c1b087506ab 1-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5a172df330ed6ce7778541287c49f8829048e6c2",
+  "prompts": {},
+  "sessions": {
+    "s_6d0f514f12360a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ef1-e1b4-7152-8498-b1656832dfbe",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
