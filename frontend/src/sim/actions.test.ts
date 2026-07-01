@@ -30,11 +30,12 @@ import {
   cashOut,
   purchaseUpgrade,
   activateBurner,
+  purchaseTraining,
   InsufficientResourcesError,
 } from './actions';
-import { computeRate } from './advance';
+import { computeRate, advance } from './advance';
 import { add, bn, compare, multiply, toString } from './bigNumber';
-import type { GameState, ContentCatalog } from './types';
+import type { GameState, ContentCatalog, Training } from './types';
 
 // ---------------------------------------------------------------------------
 // Fixtures (mirror advance.test.ts conventions)
@@ -674,5 +675,293 @@ describe('activateBurner — determinism', () => {
     expect(r1.activeBurner!.definitionId).toEqual(r2.activeBurner!.definitionId);
     expect(r1.activeBurner!.fuelRemaining).toEqual(r2.activeBurner!.fuelRemaining);
     expect(r1.resources.aiTokens).toEqual(r2.resources.aiTokens);
+  });
+});
+
+// ===========================================================================
+// T044 — RED tests for US3 `purchaseTraining` mutator (permanent multiplier
+//         persists). `purchaseTraining` does NOT exist yet (implemented by
+//         T046); the import at the top fails to resolve = RED.
+//
+// ## Contract being tested (T046 must satisfy this exactly)
+// `purchaseTraining(state, content, trainingId): GameState` — PURE mutator.
+// Looks up the Training in `content.trainings` by id; checks affordability of
+// its Cost; deducts the cost resource; adds trainingId to `ownedTrainings`.
+// Throws `InsufficientResourcesError` if unaffordable (no partial mutation).
+// The permanent multiplier is NOT applied here — it is derived continuously
+// from `ownedTrainings` by `computeRate`/`advance` (rateWithoutBurner does
+// `globalMult *= training.permanentMultiplier` for owned trainings). So this
+// mutator only changes ownership + deducts the cost.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// US3 Fixtures
+// ---------------------------------------------------------------------------
+
+/**
+ * A content catalog with lise Academy trainings for US3.
+ * The producer manual_typing has baseRate 10 LOC/sec so rate changes are
+ * easily observable (×2 → 20, ×3 → 30, ×6 → 60).
+ */
+function makeAcademyContent(): ContentCatalog {
+  return {
+    schemaVersion: 1,
+    contentVersion: '1.0.0',
+    producers: [
+      {
+        id: 'manual_typing',
+        name: 'Manual Typing',
+        description: 'The dev types by hand.',
+        baseRate: '10', // 10 LOC/sec — easy to observe multipliers
+        cost: { resource: 'cash', amount: '0' },
+        costGrowth: 1.15,
+        unlockRequirement: null,
+      },
+    ],
+    upgrades: [],
+    trainings: [
+      {
+        id: 'iso_9001_course',
+        name: 'ISO 9001 Course',
+        description: 'A lise Academy quality course.',
+        cost: { resource: 'cash', amount: '200' },
+        permanentMultiplier: 2,
+        prerequisite: null,
+      },
+      {
+        id: 'agile_master',
+        name: 'Agile Master',
+        description: 'Master agile methodologies.',
+        cost: { resource: 'cash', amount: '500' },
+        permanentMultiplier: 3,
+        prerequisite: null,
+      },
+    ],
+    milestones: [],
+    burners: [],
+  };
+}
+
+/**
+ * A state with enough cash to buy trainings. loc=0, cash=1000, aiTokens=0.
+ * Owns manual_typing so computeRate is non-zero.
+ */
+function makeAcademyState(): GameState {
+  return {
+    resources: { loc: '0', cash: '1000', aiTokens: '0' },
+    ownedProducers: new Set<string>(['manual_typing']),
+    ownedUpgrades: new Set<string>(),
+    ownedTrainings: new Set<string>(),
+    activeBurner: null,
+    earnedMilestones: new Set<string>(),
+    lastAdvancedAt: FIXED_ANCHOR,
+    schemaVersion: 1,
+    settings: { reducedMotion: false, muted: false },
+  };
+}
+
+// ===========================================================================
+// purchaseTraining — success path
+// ===========================================================================
+
+describe('purchaseTraining — success path', () => {
+  it('adds the training id to ownedTrainings and deducts the cost resource', () => {
+    const state = makeAcademyState(); // cash=1000
+    const content = makeAcademyContent(); // 'iso_9001_course' costs 200 cash
+
+    const result = purchaseTraining(state, content, 'iso_9001_course');
+
+    expect(result.ownedTrainings.has('iso_9001_course')).toBe(true);
+    // cash: 1000 - 200 = 800
+    expect(result.resources.cash).toEqual('800');
+  });
+
+  it('only changes the cost resource and ownedTrainings; nothing else', () => {
+    const state = makeAcademyState();
+    const content = makeAcademyContent();
+
+    const result = purchaseTraining(state, content, 'iso_9001_course');
+
+    expect(result.resources.loc).toEqual(state.resources.loc);
+    expect(result.resources.aiTokens).toEqual(state.resources.aiTokens);
+    expect(result.ownedProducers).toEqual(state.ownedProducers);
+    expect(result.ownedUpgrades).toEqual(state.ownedUpgrades);
+    expect(result.earnedMilestones).toEqual(state.earnedMilestones);
+    expect(result.activeBurner).toEqual(state.activeBurner);
+    expect(result.schemaVersion).toEqual(state.schemaVersion);
+    expect(result.lastAdvancedAt).toEqual(state.lastAdvancedAt);
+    expect(result.settings).toEqual(state.settings);
+  });
+});
+
+// ===========================================================================
+// purchaseTraining — permanent multiplier persists across advance
+// ===========================================================================
+
+describe('purchaseTraining — permanent multiplier persists across advance', () => {
+  it('computeRate doubles after buying a training with permanentMultiplier 2', () => {
+    const state = makeAcademyState();
+    const content = makeAcademyContent();
+
+    const rateBefore = computeRate(state, content);
+
+    const afterPurchase = purchaseTraining(state, content, 'iso_9001_course');
+
+    const rateAfter = computeRate(afterPurchase, content);
+
+    // baseRate 10 × multiplier 2 = 20 (exactly 2× the before-rate of 10).
+    expect(rateAfter.toString()).toEqual('20');
+    expect(rateBefore.toString()).toEqual('10');
+    // Exactly 2× (verified numerically, not just string-equal).
+    expect(
+      compare(
+        rateAfter,
+        multiply(rateBefore, bn('2')),
+      ),
+    ).toBe(0);
+  });
+
+  it('LOC gain from advance reflects the multiplied rate', () => {
+    const state = makeAcademyState();
+    const content = makeAcademyContent();
+
+    const afterPurchase = purchaseTraining(state, content, 'iso_9001_course');
+
+    // Advance 1 second (1000ms): LOC gain = 10 × 2 = 20.
+    const advanced = advance(afterPurchase, 1000, content);
+
+    // Started at loc 0 → 20 after 1s with the ×2 training.
+    expect(advanced.resources.loc).toEqual('20');
+  });
+});
+
+// ===========================================================================
+// purchaseTraining — permanent multiplier persists across reload
+// ===========================================================================
+
+describe('purchaseTraining — permanent multiplier persists across reload', () => {
+  it('the multiplier survives a structuredClone reload (encoded in ownedTrainings, not transient)', () => {
+    const state = makeAcademyState();
+    const content = makeAcademyContent();
+
+    const afterPurchase = purchaseTraining(state, content, 'iso_9001_course');
+
+    // Simulate a reload: structuredClone is the purest way to prove the
+    // multiplier is encoded in ownedTrainings (a saveable field), not in some
+    // transient runtime state.
+    const reloaded = structuredClone(afterPurchase);
+
+    const rateReloaded = computeRate(reloaded, content);
+    const rateOriginal = computeRate(afterPurchase, content);
+
+    // Same rate after reload — the multiplier is durable.
+    expect(rateReloaded.toString()).toEqual(rateOriginal.toString());
+    expect(rateReloaded.toString()).toEqual('20'); // 10 × 2
+  });
+});
+
+// ===========================================================================
+// purchaseTraining — InsufficientResourcesError
+// ===========================================================================
+
+describe('purchaseTraining — InsufficientResourcesError', () => {
+  it('throws InsufficientResourcesError when the player cannot afford the cost', () => {
+    // A state with only 100 cash (training costs 200).
+    const state: GameState = {
+      ...makeAcademyState(),
+      resources: { loc: '0', cash: '100', aiTokens: '0' },
+    };
+    const content = makeAcademyContent();
+
+    expect(() => purchaseTraining(state, content, 'iso_9001_course')).toThrow(
+      InsufficientResourcesError,
+    );
+  });
+
+  it('does NOT partially mutate on failure (input unchanged)', () => {
+    const state: GameState = {
+      ...makeAcademyState(),
+      resources: { loc: '0', cash: '100', aiTokens: '0' },
+    };
+    const before = normalize(state);
+
+    try {
+      purchaseTraining(state, makeAcademyContent(), 'iso_9001_course');
+    } catch {
+      // expected
+    }
+
+    expect(normalize(state)).toEqual(before);
+  });
+});
+
+// ===========================================================================
+// purchaseTraining — purity / no mutation
+// ===========================================================================
+
+describe('purchaseTraining — purity / no mutation', () => {
+  it('returns a new state object (referential transparency)', () => {
+    const state = makeAcademyState();
+    const content = makeAcademyContent();
+
+    const result = purchaseTraining(state, content, 'iso_9001_course');
+
+    expect(result).not.toBe(state);
+  });
+
+  it('does not mutate the input state', () => {
+    const state = makeAcademyState();
+    const before = normalize(state);
+
+    purchaseTraining(state, makeAcademyContent(), 'iso_9001_course');
+
+    expect(normalize(state)).toEqual(before);
+  });
+});
+
+// ===========================================================================
+// purchaseTraining — determinism
+// ===========================================================================
+
+describe('purchaseTraining — determinism', () => {
+  it('calling it twice on equal states yields equal results', () => {
+    const content = makeAcademyContent();
+
+    const r1 = purchaseTraining(makeAcademyState(), content, 'iso_9001_course');
+    const r2 = purchaseTraining(makeAcademyState(), content, 'iso_9001_course');
+
+    expect(normalize(r1)).toEqual(normalize(r2));
+  });
+});
+
+// ===========================================================================
+// purchaseTraining — stacking (multipliers multiply)
+// ===========================================================================
+
+describe('purchaseTraining — stacking', () => {
+  it('buying two trainings (multipliers 2 and 3) yields 6× base rate', () => {
+    const state = makeAcademyState();
+    const content = makeAcademyContent();
+
+    const baseRate = computeRate(state, content);
+    expect(baseRate.toString()).toEqual('10');
+
+    // Buy the first training (×2).
+    const afterFirst = purchaseTraining(state, content, 'iso_9001_course');
+    const rateAfterFirst = computeRate(afterFirst, content);
+    expect(rateAfterFirst.toString()).toEqual('20');
+
+    // Buy the second training (×3) on top.
+    const afterSecond = purchaseTraining(afterFirst, content, 'agile_master');
+    const rateAfterSecond = computeRate(afterSecond, content);
+
+    // 10 × 2 × 3 = 60 (exactly 6× base).
+    expect(rateAfterSecond.toString()).toEqual('60');
+    expect(
+      compare(
+        rateAfterSecond,
+        multiply(baseRate, bn('6')),
+      ),
+    ).toBe(0);
   });
 });
