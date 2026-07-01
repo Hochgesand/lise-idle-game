@@ -155,7 +155,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [ ] T052 [P] Add offline-capable test: Scenarios 1–3 pass with backend unreachable (sync deferred) in `frontend/tests/offline.test.ts`
 - [ ] T053 [P] Add corrupted-save test: invalid JSON refused safely without touching valid data in `frontend/src/save/localStorage.test.ts`
 - [ ] T054 [P] Add backend migration test: older `schemaVersion` save migrates forward, progress preserved in `backend/src/test/java/.../state/MigrationTest.java`
-- [ ] T055 [P] Write backend `Dockerfile` (Java 25 runtime, multi-stage build) in `backend/Dockerfile`
+- [x] T055 [P] Write backend `Dockerfile` (Java 25 runtime, multi-stage build) in `backend/Dockerfile`
 - [ ] T056 [P] Write frontend production build + static serve config (Vite build, nginx or Traefik static) in `frontend/Dockerfile`
 - [ ] T057 Configure root `docker-compose.yml`: backend + frontend services, volumes for `/mnt/user/appdata/lise-game`, Traefik labels/routing in `docker-compose.yml`
 - [ ] T058 Deploy to Unraid host (`root@schmitz.gg:2222`): create `/mnt/user/appdata/lise-game`, bring up compose stack behind existing Traefik in `docker-compose.yml`

@@ -1,0 +1,9 @@
+# Keep the Docker build context small and avoid copying stale local build
+# artifacts (target/) or IDE/Maven caches into the image.
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.log
+.idea/
+.vscode/
+*.iml
+.DS_Store
