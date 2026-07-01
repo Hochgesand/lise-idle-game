@@ -53,6 +53,11 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        # Baked into the Vite bundle at build time (VITE_* → import.meta.env).
+        # Backend API + WebSocket live on the separate API host (NPM proxies it).
+        - VITE_API_BASE_URL=https://lise-game-api.schmitz.gg
+        - VITE_WS_BASE_URL=wss://lise-game-api.schmitz.gg/ws
     image: lise-game-frontend
     container_name: lise-game-frontend
     restart: unless-stopped

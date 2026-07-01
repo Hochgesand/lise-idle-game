@@ -27,6 +27,15 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Build-time configuration for the API + WebSocket base URLs.
+# Vite inlines `import.meta.env.VITE_*` at build time, so these become constants
+# in the bundle. docker-compose.yml passes them via `build.args`. Defaults point
+# at the local dev backend so a plain `docker build` still works for development.
+ARG VITE_API_BASE_URL=http://localhost:8080
+ARG VITE_WS_BASE_URL=ws://localhost:8080/ws
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_WS_BASE_URL=$VITE_WS_BASE_URL
+
 # Copy the rest of the project and build. `npm run build` = `tsc -b && vite build`
 # (per package.json), which emits dist/index.html + hashed dist/assets/*.js|css.
 COPY . .
