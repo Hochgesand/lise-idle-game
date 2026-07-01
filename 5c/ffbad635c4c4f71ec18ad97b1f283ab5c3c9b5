@@ -1,0 +1,29 @@
+backend/src/main/resources/content/upgrades.json
+  s_fc117f252998ec::t_ccd56bcb6d7fe0 1-16
+specs/001-dev-idle-game/tasks.md
+  s_fc117f252998ec::t_0dedaa0ed7c9b0 121
+frontend/src/sim/fallbackContent.test.ts
+  s_fc117f252998ec::t_5eccd83eaba4a7 21
+backend/src/main/resources/content/burners.json
+  s_fc117f252998ec::t_d028d01693cf6c 1-9
+frontend/src/sim/fallbackContent.ts
+  s_fc117f252998ec::t_49cf19b84cd538 16-17,29,62-77,80-88
+backend/src/main/java/com/lise/liseidle/content/ContentLoader.java
+  s_fc117f252998ec::t_4e69e7896edd23 38-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5cffbad635c4c4f71ec18ad97b1f283ab5c3c9b5",
+  "prompts": {},
+  "sessions": {
+    "s_fc117f252998ec": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ec3-0080-7fe8-bf71-02e2c1bd6671",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
