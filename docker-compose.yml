@@ -41,6 +41,13 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:h2:file:/data/gamedb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
       - SPRING_DATASOURCE_USERNAME=sa
       - SPRING_DATASOURCE_PASSWORD=
+      # --- Keycloak / OAuth2 resource server (backend acts as resource server) ---
+      # Client id + issuer are reserved for the resource server config.
+      # The client SECRET is interpolated from the untracked host-side .env
+      # (gitignored) — no real secret value is committed here.
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://keycloak.novitasoft.de/realms/LiseIdler
+      - KEYCLOAK_BACKEND_CLIENT_ID=lise-idler-backend
+      - KEYCLOAK_BACKEND_CLIENT_SECRET=${KEYCLOAK_BACKEND_CLIENT_SECRET}
     ports:
       # NPM proxies lise-game-api.schmitz.gg (/api + /ws) onto host :8086.
       # Matches the host convention (apps publish a host port; NPM maps the
