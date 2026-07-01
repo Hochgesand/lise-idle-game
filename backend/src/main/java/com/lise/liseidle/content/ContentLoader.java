@@ -35,8 +35,8 @@ public class ContentLoader {
     /** Content-format schema version (constant until a breaking change). */
     static final int SCHEMA_VERSION = 1;
 
-    /** Balance version for the placeholder empty content. */
-    static final String CONTENT_VERSION = "0.0.0";
+    /** Balance version — bumped to 1.0.0 with the first real content (T037). */
+    static final String CONTENT_VERSION = "1.0.0";
 
     private final ObjectMapper objectMapper;
 

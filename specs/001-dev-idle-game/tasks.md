@@ -96,7 +96,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 - [ ] T034 [US1] Implement Phaser office scene: load tilemap, render dev sprite at workstation with idle animation in `frontend/src/scenes/OfficeScene.ts`
 - [ ] T035 [US1] Implement HUD overlay: LOC counter (live, big-number formatted), manual-boost interaction bound to scene click in `frontend/src/scenes/HudScene.ts`
 - [ ] T036 [US1] Wire end-to-end: new player starts at zero → fetch content → start loop → render office → save on close/periodically → restore on reload in `frontend/src/main.ts`
-- [ ] T037 [US1] Seed initial content for US1 (manual_typing + 1-2 early producers, their costs/growth) in `backend/src/main/resources/content/producers.json`
+- [x] T037 [US1] Seed initial content for US1 (manual_typing + 1-2 early producers, their costs/growth) in `backend/src/main/resources/content/producers.json`
 
 **Checkpoint**: US1 fully functional and independently testable. This is the shippable MVP — the idle core + the visual world.
 

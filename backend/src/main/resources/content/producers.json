@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "id": "manual_typing",
+    "name": "Manual Typing",
+    "description": "The dev types by hand, one keystroke at a time. Every great codebase starts here.",
+    "baseRate": "1",
+    "cost": { "resource": "loc", "amount": "0" },
+    "costGrowth": 1.15,
+    "unlockRequirement": null
+  },
+  {
+    "id": "stack_overflow",
+    "name": "Stack Overflow Copier",
+    "description": "Copy, paste, adapt. The dev has discovered the collective knowledge of the internet.",
+    "baseRate": "8",
+    "cost": { "resource": "loc", "amount": "100" },
+    "costGrowth": 1.15,
+    "unlockRequirement": { "type": "resourceGte", "targetId": "loc", "threshold": "50" }
+  },
+  {
+    "id": "copilot",
+    "name": "GitHub Copilot",
+    "description": "An AI pair-programmer suggests entire functions. The dev reviews and ships faster than ever.",
+    "baseRate": "47",
+    "cost": { "resource": "loc", "amount": "1100" },
+    "costGrowth": 1.15,
+    "unlockRequirement": { "type": "ownsProducer", "targetId": "stack_overflow", "threshold": null }
+  }
+]
