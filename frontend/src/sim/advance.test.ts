@@ -18,8 +18,16 @@
 
 import { describe, it, expect } from 'vitest';
 import { advance, computeRate } from './advance';
+import { manualBoost } from './actions';
 import { bn, compare } from './bigNumber';
-import type { GameState, ContentCatalog, Milestone } from './types';
+import type {
+  CommuteState,
+  ContentCatalog,
+  CoopConfig,
+  CoopSegment,
+  GameState,
+  Milestone,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -750,5 +758,416 @@ describe('T051 — advance numeric integrity at extreme LOC values', () => {
     expect(result.resources.loc).not.toBe('Infinity');
     // The value is non-decreasing (monotonic production).
     expect(compare(bn(result.resources.loc), bn('1e400'))).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ===========================================================================
+// T011 — RED: piecewise coopSegment integration + commute resolution.
+//
+// These assert the 002 extension of `advance`/`computeRate` (contracts §1;
+// data-model.md "State transitions"). Against the UN-extended 001 `advance`
+// (which ignores `coopSegments`/`commute`) every gain / cap-clamp /
+// compaction / commute-resolution / computeRate assertion below FAILS — the
+// RED TDD starting state (Constitution Principle III).
+//
+// ## Timestamp model (types.ts; contracts §1 "T0 = Date.parse(state.lastAdvancedAt)")
+// `state.lastAdvancedAt` stays an ISO-8601 STRING (byte-identical to 001).
+// `CoopSegment.from`/`until` and `CommuteState.startedAt` are sim-timeline
+// NUMBERS (ms) on the same numeric timeline `Date.parse(lastAdvancedAt)`
+// yields. Segment/commute times below are offsets from `T0`.
+// ===========================================================================
+
+/** Sim-timeline ms anchor = Date.parse(FIXED_ANCHOR). */
+const T0 = Date.parse(FIXED_ANCHOR);
+
+/** The (002) coop tuning block (placeholder values, data-model.md CoopConfig). */
+const COOP_CONFIG: CoopConfig = {
+  perColleagueMultiplier: 0.1,
+  maxMultiplier: 1.5,
+  leaseSeconds: 60,
+  heartbeatSeconds: 20,
+  commuteSeconds: 30,
+  lastSeenRetentionDays: 14,
+};
+
+/** Fixture content carrying the (002) coop tuning block. */
+function makeCoopContent(): ContentCatalog {
+  return { ...makeFixtureContent(), coop: COOP_CONFIG };
+}
+
+/** Fixture content with the test burner AND the coop block. */
+function makeCoopBurnerContent(): ContentCatalog {
+  return { ...makeBurnerContent(), coop: COOP_CONFIG };
+}
+
+/** A fixture state (base producer owned, 1 LOC/s) with the given coopSegments. */
+function makeCoopState(segments: CoopSegment[]): GameState {
+  return { ...makeFixtureState(), coopSegments: segments };
+}
+
+// ---------------------------------------------------------------------------
+// T011 — advance: piecewise coopSegment integration (interval split)
+// contracts §1: gain = Σ rate_i × multiplier_i × len_i; multiplier exactly 1
+// outside any segment; segments clipped to [lastAdvancedAt, lastAdvancedAt+dt].
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: piecewise coopSegment integration', () => {
+  it('splits the interval at a segment boundary: middle sub-interval boosted, edges baseline', () => {
+    // Segment covers [T0+1s, T0+3s] at ×1.2; dt = 5s.
+    // gain = 1×1×1 (1s) + 1×1.2×2 (2s) + 1×1×2 (2s) = 1 + 2.4 + 2 = 5.4.
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 + 1000, until: T0 + 3000, multiplier: 1.2 },
+    ]);
+
+    const result = advance(state, 5000, content);
+
+    expect(compare(bn(result.resources.loc), bn('5.4'))).toBe(0);
+  });
+
+  it('clips a segment that overhangs the interval: whole interval covered, gain = rate×mult×dt', () => {
+    // Segment [T0-1s, T0+10s] clipped to [T0, T0+2s]; dt = 2s → 1×1.5×2 = 3.
+    const content = makeCoopContent();
+    const seg: CoopSegment = { from: T0 - 1000, until: T0 + 10_000, multiplier: 1.5 };
+    const state = makeCoopState([seg]);
+
+    const result = advance(state, 2000, content);
+
+    expect(compare(bn(result.resources.loc), bn('3'))).toBe(0);
+    // Clipping is integration-only: the stored segment keeps server-authored times.
+    expect(result.coopSegments).toEqual([seg]);
+  });
+
+  it('multiplier is exactly 1 outside segments (future segment contributes nothing)', () => {
+    // Segment lies entirely beyond the interval → baseline only.
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 + 10_000, until: T0 + 20_000, multiplier: 1.5 },
+    ]);
+
+    const result = advance(state, 2000, content);
+
+    // Baseline 1 LOC/s × 2s = 2 (NOT boosted).
+    expect(compare(bn(result.resources.loc), bn('2'))).toBe(0);
+  });
+
+  it('triple split: burner fuel-exhaustion point + segment boundary both honoured', () => {
+    // Burner: rate 2, burnRate 10, fuel 10 → fuelTime = 1s (exhausts at T0+1s).
+    // Segment [T0+2s, T0+5s] at ×1.5; dt = 4s. Split points: T0+1s (exhaust),
+    // T0+2s (seg from). Sub-intervals:
+    //   [0,1s] burner rate 2, no segment → 2×1×1 = 2
+    //   [1s,2s] base rate 1, no segment → 1×1×1 = 1
+    //   [2s,4s] base rate 1, segment ×1.5 → 1×1.5×2 = 3
+    //   total = 6. Fuel burns 10 (NOT scaled) → 0 → burner dropped.
+    const content = makeCoopBurnerContent();
+    const state: GameState = {
+      ...makeBurnerState('10'),
+      coopSegments: [{ from: T0 + 2000, until: T0 + 5000, multiplier: 1.5 }],
+    };
+
+    const result = advance(state, 4000, content);
+
+    expect(compare(bn(result.resources.loc), bn('6'))).toBe(0);
+    expect(result.activeBurner).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — advance: overlap rule (latest-from wins) + cap clamp
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: overlap rule + cap clamp', () => {
+  it('latest-`from` wins on overlap (NOT max multiplier): later lower-mult segment overrides', () => {
+    // seg1 [T0, T0+4s] ×1.5; seg2 [T0+1s, T0+3s] ×1.2 (later `from`).
+    // [0,1s] seg1 ×1.5 → 1.5; [1s,3s] seg2 ×1.2 (latest-from) → 2.4;
+    // [3s,4s] seg1 ×1.5 → 1.5; total = 5.4 (would be 6.0 under max-mult rule).
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0, until: T0 + 4000, multiplier: 1.5 },
+      { from: T0 + 1000, until: T0 + 3000, multiplier: 1.2 },
+    ]);
+
+    const result = advance(state, 4000, content);
+
+    expect(compare(bn(result.resources.loc), bn('5.4'))).toBe(0);
+  });
+
+  it('cap clamp (tampered-save defense): multiplier 99 clamped to maxMultiplier 1.5', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0, until: T0 + 2000, multiplier: 99 },
+    ]);
+
+    const result = advance(state, 2000, content);
+
+    // Clamped to 1.5 → 1×1.5×2 = 3 (NOT 198).
+    expect(compare(bn(result.resources.loc), bn('3'))).toBe(0);
+  });
+
+  it('clamp lower bound: multiplier 0.5 clamped to 1 (monotonicity — loc never reduced)', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0, until: T0 + 2000, multiplier: 0.5 },
+    ]);
+
+    const result = advance(state, 2000, content);
+
+    // Clamped to 1 → baseline 2 (post-clamp multiplier is always ≥ 1).
+    expect(compare(bn(result.resources.loc), bn('2'))).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — advance: multiplier scales PRODUCTION only, never burnRate
+// data-model: fuel burn stays linear across segment boundaries.
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: production-only multiplier (burnRate unaffected)', () => {
+  it('segment multiplier scales LOC production, but fuel burns at the unscaled burnRate', () => {
+    // Burner rate 2, burnRate 10, fuel 100 (plenty). Segment ×1.5 over [T0, T0+2s].
+    // dt = 1s: LOC = burnerRate(2) × segMult(1.5) × 1 = 3; fuel = 100 − 10×1 = 90.
+    const content = makeCoopBurnerContent();
+    const state: GameState = {
+      ...makeBurnerState('100'),
+      coopSegments: [{ from: T0, until: T0 + 2000, multiplier: 1.5 }],
+    };
+
+    const result = advance(state, 1000, content);
+
+    // Production scaled by the segment multiplier.
+    expect(compare(bn(result.resources.loc), bn('3'))).toBe(0);
+    // Fuel burn NOT scaled (10 tokens, not 15).
+    expect(result.activeBurner).not.toBeNull();
+    expect(result.activeBurner!.fuelRemaining).toEqual('90');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — advance: compaction prunes integrated segments (idempotent)
+// contracts §1: result.coopSegments has no segment with until <= lastAdvancedAt.
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: compaction (prune fully-integrated segments)', () => {
+  it('prunes segments with until <= lastAdvancedAt; keeps segments still overlapping', () => {
+    // past seg (until <= T0) pruned; future seg (until T0+3s > new ts T0+2s) kept.
+    const content = makeCoopContent();
+    const future: CoopSegment = { from: T0 + 1000, until: T0 + 3000, multiplier: 1.2 };
+    const state = makeCoopState([
+      { from: T0 - 5000, until: T0 - 1000, multiplier: 1.2 }, // fully past
+      future,
+    ]);
+
+    const result = advance(state, 2000, content);
+
+    expect(result.coopSegments).toEqual([future]);
+    // The kept segment still integrates over [T0+1s, T0+2s]: 1×1×1 + 1×1.2×1 = 2.2.
+    expect(compare(bn(result.resources.loc), bn('2.2'))).toBe(0);
+  });
+
+  it('idempotent: a boundary segment (until == lastAdvancedAt) is pruned and stays gone', () => {
+    // until == T0 == lastAdvancedAt → pruned on first advance; empty thereafter.
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 - 2000, until: T0, multiplier: 1.2 },
+    ]);
+
+    const first = advance(state, 1000, content);
+    expect(first.coopSegments).toEqual([]);
+
+    const second = advance(first, 1000, content);
+    // Still empty — pruned segments are never resurrected.
+    expect(second.coopSegments).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — advance: commute resolution at startedAt + coop.commuteSeconds
+// data-model step 1: resolve when startedAt + commuteSeconds <= lastAdvancedAt + dt.
+// Works across offline spans (pure function of state + content).
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: commute resolution', () => {
+  it('resolves at the exact boundary (startedAt + commuteSeconds == lastAdvancedAt + dt)', () => {
+    // commuteSeconds = 30; dt = 30s → arrival exactly at the interval end.
+    const content = makeCoopContent();
+    const commute: CommuteState = {
+      fromOffice: 'office_1',
+      toOffice: 'office_2',
+      startedAt: T0,
+    };
+    const state: GameState = { ...makeCoopState([]), commute };
+
+    const result = advance(state, 30_000, content);
+
+    expect(result.activeOffice).toEqual('office_2');
+    expect(result.commute).toBeNull();
+    // Commutes do not affect production (no rate split): baseline gain only.
+    expect(compare(bn(result.resources.loc), bn('30'))).toBe(0);
+  });
+
+  it('does NOT resolve when dt < commuteSeconds (commute still in progress)', () => {
+    const content = makeCoopContent();
+    const commute: CommuteState = {
+      fromOffice: 'office_1',
+      toOffice: 'office_2',
+      startedAt: T0,
+    };
+    const state: GameState = { ...makeCoopState([]), commute };
+
+    const result = advance(state, 10_000, content); // 10s < 30s
+
+    expect(result.commute).toEqual(commute);
+    expect(result.activeOffice).toEqual('office_1');
+  });
+
+  it('resolves across an offline span (startedAt far in the past, large catch-up dt)', () => {
+    // Commute started 200s ago; catch up 100s. startedAt+30s is well within reach.
+    const content = makeCoopContent();
+    const commute: CommuteState = {
+      fromOffice: 'office_1',
+      toOffice: 'office_2',
+      startedAt: T0 - 200_000,
+    };
+    const state: GameState = { ...makeCoopState([]), commute };
+
+    const result = advance(state, 100_000, content);
+
+    expect(result.activeOffice).toEqual('office_2');
+    expect(result.commute).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — advance: dt=0 no-op (NO pruning) + empty-segments baseline
+// contracts §1: dt=0 is an exact no-op; coopSegments:[] is byte-identical to 001.
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: dt=0 no-op + empty-segment baseline', () => {
+  it('dt=0 is an exact no-op: segments (even past ones) retained, timestamp unchanged', () => {
+    const content = makeCoopContent();
+    const past: CoopSegment = { from: T0 - 5000, until: T0 - 1000, multiplier: 1.2 };
+    const future: CoopSegment = { from: T0 + 1000, until: T0 + 3000, multiplier: 1.2 };
+    const state = makeCoopState([past, future]);
+
+    const result = advance(state, 0, content);
+
+    // No compaction at dt=0 — both segments retained verbatim.
+    expect(result.coopSegments).toEqual([past, future]);
+    expect(result.lastAdvancedAt).toEqual(state.lastAdvancedAt);
+    expect(result.resources.loc).toEqual(state.resources.loc);
+  });
+
+  it('coopSegments: [] is byte-identical to 001 (coop block present but no effect)', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([]);
+
+    const result = advance(state, 2000, content);
+
+    // Baseline gain only; segments still empty.
+    expect(compare(bn(result.resources.loc), bn('2'))).toBe(0);
+    expect(result.coopSegments).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — advance: associativity with coopSegments (exact for multiples of 1000ms)
+// contracts §1: advance(advance(s,a),b) === advance(s,a+b). Segment and
+// commute boundaries are pure functions of state, so splitting is stable.
+// ---------------------------------------------------------------------------
+
+describe('T011 — advance: associativity with coopSegments', () => {
+  it('advance(advance(s,a),b) === advance(s,a+b) with a segment present (a,b multiples of 1000ms)', () => {
+    // Segment [T0+1s, T0+4s] ×1.5 (dyadic-exact). a=2s, b=3s.
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 + 1000, until: T0 + 4000, multiplier: 1.5 },
+    ]);
+    const a = 2000;
+    const b = 3000;
+
+    const split = advance(advance(state, a, content), b, content);
+    const combined = advance(state, a + b, content);
+
+    // Exact value-equality (integer-second boundaries + dyadic multiplier 1.5).
+    expect(normalize(split)).toEqual(normalize(combined));
+  });
+
+  it('loc gain matches across the split (covered sub-interval identical either way)', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 + 1000, until: T0 + 4000, multiplier: 1.5 },
+    ]);
+    const a = 2000;
+    const b = 3000;
+
+    const split = advance(advance(state, a, content), b, content);
+    const combined = advance(state, a + b, content);
+
+    // [1s,4s] covered at ×1.5 (3s) + 2s baseline = 1×1.5×3 + 1×1×2 = 6.5.
+    expect(compare(bn(split.resources.loc), bn('6.5'))).toBe(0);
+    expect(compare(bn(combined.resources.loc), bn('6.5'))).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T011 — computeRate + manualBoost: covering-segment consistency
+// contracts §1: computeRate applies the covering segment at lastAdvancedAt
+// (latest-from, cap-clamped); manualBoost is DERIVED from computeRate, so the
+// preview and the boost MUST agree (consistency is contractual).
+// ---------------------------------------------------------------------------
+
+describe('T011 — computeRate + manualBoost: covering-segment consistency', () => {
+  it('computeRate applies the covering segment multiplier at lastAdvancedAt', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 - 1000, until: T0 + 10_000, multiplier: 1.2 }, // covers T0
+    ]);
+
+    const rate = computeRate(state, content);
+
+    // base 1 × covering ×1.2 = 1.2.
+    expect(compare(rate, bn('1.2'))).toBe(0);
+  });
+
+  it('computeRate returns baseline with no covering segment', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([]);
+
+    const rate = computeRate(state, content);
+
+    expect(compare(rate, bn('1'))).toBe(0);
+  });
+
+  it('computeRate: latest-from wins AND cap-clamps (tampered ×99 → 1.5)', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([
+      { from: T0 - 5000, until: T0 + 5000, multiplier: 1.5 },
+      { from: T0 - 1000, until: T0 + 3000, multiplier: 99 }, // latest-from, capped
+    ]);
+
+    const rate = computeRate(state, content);
+
+    // Latest-from (×99) clamped to maxMultiplier 1.5 → base 1 × 1.5 = 1.5.
+    expect(compare(rate, bn('1.5'))).toBe(0);
+  });
+
+  it('manualBoost matches the preview under an active segment (both apply the multiplier)', () => {
+    const content = makeCoopContent();
+    const withSeg = makeCoopState([
+      { from: T0 - 1000, until: T0 + 10_000, multiplier: 1.2 },
+    ]);
+    const baseline = makeCoopState([]);
+
+    // manualBoost grants computeRate × factor (factor 1). Under the segment
+    // computeRate = 1.2 → boost = +1.2 LOC; baseline computeRate = 1 → +1.0.
+    const boostedWithSeg = manualBoost(withSeg, content, 1);
+    const boostedBaseline = manualBoost(baseline, content, 1);
+
+    expect(compare(bn(boostedWithSeg.resources.loc), bn('1.2'))).toBe(0);
+    expect(compare(bn(boostedBaseline.resources.loc), bn('1'))).toBe(0);
+    // The boost gain ratio equals the covering multiplier (1.2) — preview and
+    // boost agree because manualBoost is derived from computeRate.
+    expect(parseFloat(boostedWithSeg.resources.loc) /
+      parseFloat(boostedBaseline.resources.loc)).toBeCloseTo(1.2, 10);
   });
 });
