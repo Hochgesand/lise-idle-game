@@ -83,9 +83,6 @@ export class AcademyScene extends Phaser.Scene {
   /** Text objects for milestone entries (created once, updated each frame). */
   private milestoneTexts: Phaser.GameObjects.Text[] = [];
 
-  /** Cached training ids aligned with trainingTexts (for click handlers). */
-  private trainingIds: string[] = [];
-
   constructor() {
     super('AcademyScene');
   }
@@ -118,7 +115,6 @@ export class AcademyScene extends Phaser.Scene {
     let yPos = PANEL_Y + 32;
     const content = this.getContent();
     this.trainingTexts = [];
-    this.trainingIds = [];
     for (const training of content.trainings) {
       const txt = this.add.text(PANEL_X, yPos, '', {
         fontFamily: 'monospace',
@@ -136,7 +132,6 @@ export class AcademyScene extends Phaser.Scene {
         this.onPurchaseTraining(trainingId);
       });
       this.trainingTexts.push(txt);
-      this.trainingIds.push(trainingId);
       yPos += ENTRY_SPACING;
     }
 

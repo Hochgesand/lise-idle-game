@@ -50,8 +50,8 @@ class ContentControllerTest {
     void getContent_returns200WithEnvelopeStructure() throws Exception {
         mockMvc.perform(get("/api/v1/content"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.schemaVersion").exists())
-            .andExpect(jsonPath("$.contentVersion").exists())
+            .andExpect(jsonPath("$.schemaVersion").value(1))
+            .andExpect(jsonPath("$.contentVersion").value("1.2.0"))
             .andExpect(jsonPath("$.producers").isArray())
             .andExpect(jsonPath("$.upgrades").isArray())
             .andExpect(jsonPath("$.trainings").isArray())
@@ -83,5 +83,63 @@ class ContentControllerTest {
         mockMvc.perform(get("/api/v1/content"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+    }
+
+    /**
+     * Value-level assertions proving the seeded content deserializes with
+     * correct ids and field values — not just that the arrays exist. Guards
+     * against silent content-shape drift (Constitution Principle II).
+     */
+    @Test
+    void getContent_returnsSeededProducersWithCorrectValues() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.producers.length()").value(3))
+            .andExpect(jsonPath("$.producers[0].id").value("manual_typing"))
+            .andExpect(jsonPath("$.producers[0].baseRate").value("1"))
+            .andExpect(jsonPath("$.producers[1].id").value("stack_overflow"))
+            .andExpect(jsonPath("$.producers[2].id").value("copilot"));
+    }
+
+    @Test
+    void getContent_returnsSeededUpgradesWithCorrectValues() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.upgrades.length()").value(2))
+            .andExpect(jsonPath("$.upgrades[0].id").value("better_keyboards"))
+            .andExpect(jsonPath("$.upgrades[0].effect.type").value("globalMultiplier"))
+            .andExpect(jsonPath("$.upgrades[1].id").value("mechanical_switches"));
+    }
+
+    @Test
+    void getContent_returnsSeededTrainingsWithCorrectValues() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.trainings.length()").value(2))
+            .andExpect(jsonPath("$.trainings[0].id").value("iso_9001_course"))
+            .andExpect(jsonPath("$.trainings[0].permanentMultiplier").value(2.0))
+            .andExpect(jsonPath("$.trainings[1].id").value("agile_master"));
+    }
+
+    @Test
+    void getContent_returnsSeededMilestonesWithCorrectValues() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.milestones.length()").value(3))
+            .andExpect(jsonPath("$.milestones[0].id").value("iso_9001_certified"))
+            .andExpect(jsonPath("$.milestones[0].reward.type").value("grantResource"))
+            .andExpect(jsonPath("$.milestones[1].id").value("ms_gold_partner"))
+            .andExpect(jsonPath("$.milestones[2].id").value("ai_design_sprint_facilitator"));
+    }
+
+    @Test
+    void getContent_returnsSeededBurnersWithCorrectValues() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.burners.length()").value(1))
+            .andExpect(jsonPath("$.burners[0].id").value("gpu_cluster"))
+            .andExpect(jsonPath("$.burners[0].fuelCostToActivate").value("100"))
+            .andExpect(jsonPath("$.burners[0].burnRate").value("10"))
+            .andExpect(jsonPath("$.burners[0].productionMultiplier").value(3.0));
     }
 }

@@ -38,3 +38,11 @@ These are intentionally empty placeholders. Real content is seeded in:
 All big-number fields (`baseRate`, `cost.amount`, `fuelCostToActivate`,
 `burnRate`, `threshold`) MUST be **strings** (never `double`) per the
 project constitution's numeric-integrity constraint.
+
+## Notes
+
+- The `grantResource` reward in `milestones.json` carries a redundant
+  `"multiplier": 0` field. Jackson 3 (used by the backend) maps the shared
+  `Effect` record for all effect types; its `double multiplier` field is a
+  primitive and cannot be absent. `grantResource` never reads it, so the 0 is
+  a no-op convenience for the deserializer, not a gameplay value.
