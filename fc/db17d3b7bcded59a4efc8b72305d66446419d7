@@ -1,0 +1,31 @@
+backend/src/main/java/com/lise/liseidle/content/ContentLoader.java
+  s_c63cd1896e5feb::t_316a2351fec910 39
+frontend/src/sim/fallbackContent.ts
+  s_c63cd1896e5feb::t_48a0b7861bb07f 78-117
+  s_c63cd1896e5feb::t_7f559b35d713e0 29
+frontend/src/sim/fallbackContent.test.ts
+  s_c63cd1896e5feb::t_af7e9da8f6b2cf 21
+specs/001-dev-idle-game/tasks.md
+  s_c63cd1896e5feb::t_f0ebd3a2582291 144
+backend/src/main/resources/content/trainings.json
+  s_c63cd1896e5feb::t_d01ad3343d138b 1-18
+backend/src/main/resources/content/milestones.json
+  s_c63cd1896e5feb::t_589167077d2308 1-5,7-20
+  s_c63cd1896e5feb::t_32e6e85cf6dd36 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "fcdb17d3b7bcded59a4efc8b72305d66446419d7",
+  "prompts": {},
+  "sessions": {
+    "s_c63cd1896e5feb": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ef4-e6a6-7797-9774-dc07f9a87d79",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
