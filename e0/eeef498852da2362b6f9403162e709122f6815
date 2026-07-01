@@ -1,0 +1,19 @@
+specs/001-dev-idle-game/tasks.md
+  s_7bec50fa115f5b::t_ca4796c6fac9d6 135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "e0eeef498852da2362b6f9403162e709122f6815",
+  "prompts": {},
+  "sessions": {
+    "s_7bec50fa115f5b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ede-923f-76ff-8046-6a0db012a822",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
