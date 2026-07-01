@@ -133,7 +133,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 ### Tests for User Story 3 (write first, ensure RED)
 
 - [x] T044 [P] [US3] Write tests for `purchaseTraining` (permanent multiplier persists across `advance` and reload) in `frontend/src/sim/actions.test.ts`
-- [ ] T045 [P] [US3] Write `advance` test: milestone requirement met → id appended to `earnedMilestones` and reward applied in `frontend/src/sim/advance.test.ts`
+- [x] T045 [P] [US3] Write `advance` test: milestone requirement met → id appended to `earnedMilestones` and reward applied in `frontend/src/sim/advance.test.ts`
 
 ### Implementation for User Story 3
 

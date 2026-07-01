@@ -19,7 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { advance, computeRate } from './advance';
 import { bn, compare } from './bigNumber';
-import type { GameState, ContentCatalog } from './types';
+import type { GameState, ContentCatalog, Milestone } from './types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -451,5 +451,227 @@ describe('advance — active burner', () => {
     expectLocClose(s2.resources.loc, combined.resources.loc);
     expect(s2.lastAdvancedAt).toEqual(combined.lastAdvancedAt);
     expect(s2.activeBurner).toEqual(combined.activeBurner);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// advance — milestone evaluation (US3: lise Academy progression)
+//
+// data-model.md "Milestone"/"Reward"/"Requirement" + quickstart.md Scenario 3.
+// `advance` evaluates milestone requirements AFTER the LOC gain for the
+// interval, then loops (cascade) until stable. Only `grantResource` rewards
+// are applied once at earn-time; multiplier rewards (globalMultiplier /
+// producerRateMultiplier) are derived continuously from `earnedMilestones` by
+// `computeRate`/`rateWithoutBurner`, so they must NOT be double-counted.
+// These tests guard the US3 regression: buy training → permanent boost → reach
+// milestone → earn + reward → persist.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fixture content with milestones. Base producer manual_typing at 1 LOC/sec
+ * (from makeFixtureContent). Caller supplies the milestone definitions.
+ */
+function makeMilestoneContent(milestones: Milestone[]): ContentCatalog {
+  return {
+    ...makeFixtureContent(),
+    milestones,
+  };
+}
+
+/**
+ * A fixture state with the given LOC and optional pre-seeded milestones /
+ * producers. Everything else at zero/empty.
+ */
+function makeStateWithLoc(
+  locStr: string,
+  opts: { ownedProducers?: string[]; earnedMilestones?: string[] } = {},
+): GameState {
+  return {
+    ...makeFixtureState(),
+    resources: { loc: locStr, cash: '0', aiTokens: '0' },
+    ownedProducers: new Set<string>(
+      opts.ownedProducers ?? ['manual_typing'],
+    ),
+    earnedMilestones: new Set<string>(opts.earnedMilestones ?? []),
+  };
+}
+
+describe('advance — milestone evaluation', () => {
+  // ── 1. resourceGte earns on threshold cross ────────────────────────────
+
+  it('resourceGte: loc crosses threshold during advance → milestone earned + grantResource cash reward applied', () => {
+    const milestone: Milestone = {
+      id: 'iso_9001',
+      name: 'ISO 9001 Certified',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100' },
+      reward: { type: 'grantResource', resource: 'cash', amount: '50' },
+    };
+    const content = makeMilestoneContent([milestone]);
+    const state = makeStateWithLoc('99'); // 1 LOC/s; 2s → 101 ≥ 100
+
+    const result = advance(state, 2000, content); // +2 LOC → 101
+
+    expect(result.earnedMilestones.has('iso_9001')).toBe(true);
+    expect(result.resources.cash).toEqual('50');
+  });
+
+  // ── 2. resourceGte does NOT earn below threshold ───────────────────────
+
+  it('resourceGte: loc stays below threshold → no earn, no reward', () => {
+    const milestone: Milestone = {
+      id: 'iso_9001',
+      name: 'ISO 9001 Certified',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100' },
+      reward: { type: 'grantResource', resource: 'cash', amount: '50' },
+    };
+    const content = makeMilestoneContent([milestone]);
+    const state = makeStateWithLoc('98'); // 1 LOC/s; 1s → 99 < 100
+
+    const result = advance(state, 1000, content); // +1 LOC → 99
+
+    expect(result.earnedMilestones.has('iso_9001')).toBe(false);
+    expect(result.resources.cash).toEqual('0');
+  });
+
+  // ── 3. ownsProducer milestone earns when owned ─────────────────────────
+
+  it('ownsProducer: milestone requiring a producer earns when the producer is already owned', () => {
+    const milestone: Milestone = {
+      id: 'copilot_user',
+      name: 'Copilot Adopter',
+      requirement: { type: 'ownsProducer', targetId: 'copilot', threshold: null },
+      reward: { type: 'grantResource', resource: 'cash', amount: '10' },
+    };
+    const content = makeMilestoneContent([milestone]);
+    // Pre-seed: copilot is owned (advance only checks; it does not grant).
+    const state = makeStateWithLoc('0', { ownedProducers: ['manual_typing', 'copilot'] });
+
+    const result = advance(state, 1000, content); // any dt triggers milestone check
+
+    expect(result.earnedMilestones.has('copilot_user')).toBe(true);
+    expect(result.resources.cash).toEqual('10');
+  });
+
+  // ── 4. ownsProducer does NOT earn when not owned ───────────────────────
+
+  it('ownsProducer: milestone does NOT earn when the producer is not owned', () => {
+    const milestone: Milestone = {
+      id: 'copilot_user',
+      name: 'Copilot Adopter',
+      requirement: { type: 'ownsProducer', targetId: 'copilot', threshold: null },
+      reward: { type: 'grantResource', resource: 'cash', amount: '10' },
+    };
+    const content = makeMilestoneContent([milestone]);
+    const state = makeStateWithLoc('0', { ownedProducers: ['manual_typing'] }); // no copilot
+
+    const result = advance(state, 1000, content);
+
+    expect(result.earnedMilestones.has('copilot_user')).toBe(false);
+    expect(result.resources.cash).toEqual('0');
+  });
+
+  // ── 5. globalMultiplier reward is derived, not double-counted ──────────
+
+  it('globalMultiplier reward: rate doubles via computeRate, but NO spurious lump grant', () => {
+    const milestone: Milestone = {
+      id: 'efficiency_expert',
+      name: 'Efficiency Expert',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100' },
+      reward: { type: 'globalMultiplier', multiplier: 2 },
+    };
+    const content = makeMilestoneContent([milestone]);
+    const state = makeStateWithLoc('99'); // 1 LOC/s; 2s → 101 ≥ 100
+
+    const result = advance(state, 2000, content); // +2 LOC → 101, milestone earns
+
+    // Milestone was earned.
+    expect(result.earnedMilestones.has('efficiency_expert')).toBe(true);
+    // The multiplier is derived from earnedMilestones — computeRate doubles.
+    const baselineRate = computeRate(makeStateWithLoc('99'), content);
+    const afterRate = computeRate(result, content);
+    expect(afterRate.toString()).toEqual('2');
+    expect(baselineRate.toString()).toEqual('1');
+    // NO spurious lump grant: the LOC gain for THIS interval was computed
+    // using the pre-earn base rate (1×2s = +2), so loc = 99+2 = 101. The
+    // multiplier applies to FUTURE intervals via computeRate, not retroactively.
+    // No extra resource (cash/aiTokens) was granted.
+    expect(compare(bn(result.resources.loc), bn('101'))).toBe(0);
+    expect(result.resources.cash).toEqual('0');
+    expect(result.resources.aiTokens).toEqual('0');
+  });
+
+  // ── 6. Cascade: A earns → reward enables B → B also earns ──────────────
+
+  it('cascade: milestone A (loc≥100, reward +1000 loc) enables milestone B (loc≥1000, reward +50 cash) in the same advance', () => {
+    const milestones: Milestone[] = [
+      {
+        id: 'milestone_a',
+        name: 'Milestone A',
+        requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100' },
+        reward: { type: 'grantResource', resource: 'loc', amount: '1000' },
+      },
+      {
+        id: 'milestone_b',
+        name: 'Milestone B',
+        requirement: { type: 'resourceGte', targetId: 'loc', threshold: '1000' },
+        reward: { type: 'grantResource', resource: 'cash', amount: '50' },
+      },
+    ];
+    const content = makeMilestoneContent(milestones);
+    const state = makeStateWithLoc('99'); // 1 LOC/s; 2s → 101 ≥ 100 (A earns, +1000 loc → 1101 ≥ 1000, B earns)
+
+    const result = advance(state, 2000, content);
+
+    // Both milestones earned in a single advance (cascade resolved).
+    expect(result.earnedMilestones.has('milestone_a')).toBe(true);
+    expect(result.earnedMilestones.has('milestone_b')).toBe(true);
+    // B's reward applied: +50 cash.
+    expect(result.resources.cash).toEqual('50');
+  });
+
+  // ── 7. Idempotent: already-earned milestone is not re-applied ──────────
+
+  it('idempotent: advancing with an already-earned milestone does NOT re-apply the reward', () => {
+    const milestone: Milestone = {
+      id: 'iso_9001',
+      name: 'ISO 9001 Certified',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100' },
+      reward: { type: 'grantResource', resource: 'cash', amount: '50' },
+    };
+    const content = makeMilestoneContent([milestone]);
+    // Pre-seed the milestone as already earned; loc well above threshold.
+    const state = makeStateWithLoc('500', { earnedMilestones: ['iso_9001'] });
+    expect(state.resources.cash).toEqual('0');
+
+    const result = advance(state, 1000, content);
+
+    // earnedMilestones size unchanged (not re-added).
+    expect(result.earnedMilestones.size).toBe(1);
+    // Cash NOT re-granted (stays 0; only LOC grew by +1 from production).
+    expect(result.resources.cash).toEqual('0');
+  });
+
+  // ── 8. Monotonic: loc never decreases through milestone evaluation ─────
+
+  it('monotonic: loc never decreases across multiple advances with milestone evaluation', () => {
+    const milestone: Milestone = {
+      id: 'iso_9001',
+      name: 'ISO 9001 Certified',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '100' },
+      reward: { type: 'grantResource', resource: 'loc', amount: '500' },
+    };
+    const content = makeMilestoneContent([milestone]);
+    let state = makeStateWithLoc('97'); // 1 LOC/s
+
+    let prevLoc = state.resources.loc;
+    for (let i = 0; i < 5; i++) {
+      state = advance(state, 1000, content); // +1 LOC each second
+      expect(
+        compare(bn(state.resources.loc), bn(prevLoc)),
+      ).toBeGreaterThanOrEqual(0);
+      prevLoc = state.resources.loc;
+    }
+    // The milestone (loc≥100) should have earned during this sequence.
+    expect(state.earnedMilestones.has('iso_9001')).toBe(true);
   });
 });
