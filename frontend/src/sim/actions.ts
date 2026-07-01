@@ -293,3 +293,42 @@ export function purchaseTraining(
   result.ownedTrainings.add(trainingId);
   return result;
 }
+
+// ── 002: switchOffice (closes 001 FR-016's saved commute) ────────────────
+
+/**
+ * Start an in-progress office switch (contracts.md §1; data-model.md
+ * "CommuteState"; closes 001 FR-016's saved-commute gap). Sets `commute` to a
+ * fresh record derived purely from the current state — NO time advance, NO
+ * production change. `advance` (T024) resolves it later at
+ * `startedAt + content.coop.commuteSeconds` (`activeOffice := toOffice`,
+ * `commute := null`).
+ *
+ * `startedAt` is a sim-timeline ms NUMBER written from `lastAdvancedAt` (an
+ * ISO-8601 string) via `Date.parse` — the SAME deterministic, pure conversion
+ * `advance.ts`'s `advanceTime` and contracts §1's `T0 = Date.parse(...)` use.
+ * It is NEVER `Date.now()` / wall clock, so the commute resolves
+ * deterministically from elapsed sim time on load (offline-correct).
+ *
+ * `activeOffice` is left as the origin while commuting (data-model:
+ * "activeOffice still holds the origin"); the dev is present in NO office
+ * while `commute != null` (the heartbeat reports `office: null` and the co-op
+ * bonus is suspended). Only `commute` changes here; `advance` flips
+ * `activeOffice` to `toOffice` on arrival.
+ *
+ * @param state     the current saveable snapshot (not mutated)
+ * @param toOffice  the destination office id
+ * @returns a NEW GameState with `commute` set; everything else unchanged.
+ *
+ * Pure: returns a new state, never mutates the input, no I/O, no time advance,
+ * no randomness, no `Date.now()`.
+ */
+export function switchOffice(state: GameState, toOffice: string): GameState {
+  const result = cloneState(state);
+  result.commute = {
+    fromOffice: state.activeOffice,
+    toOffice,
+    startedAt: Date.parse(state.lastAdvancedAt),
+  };
+  return result;
+}
