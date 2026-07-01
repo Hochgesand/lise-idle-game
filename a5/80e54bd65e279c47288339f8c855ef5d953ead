@@ -1,0 +1,21 @@
+backend/src/test/java/com/lise/liseidle/content/ContentControllerTest.java
+  s_a597d9fbeed323::t_15cccf4d1e15f8 53-54,87-144
+backend/src/main/resources/content/README.md
+  s_a597d9fbeed323::t_9734c077395c22 41-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "a580e54bd65e279c47288339f8c855ef5d953ead",
+  "prompts": {},
+  "sessions": {
+    "s_a597d9fbeed323": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1efc-8f42-763f-af0b-9bd3f0d440ee",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
