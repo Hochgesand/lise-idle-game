@@ -2,48 +2,45 @@
 ============================================================================
 SYNC IMPACT REPORT
 ============================================================================
-Version change: (uninitialized template) → 1.0.0
-Rationale:      Initial ratification. No prior version exists; first concrete
-                adoption of the constitution earns MAJOR 1, MINOR 0, PATCH 0.
+Version change: 1.0.0 → 1.1.0
+Rationale:      Amendment to sanction online/multiplayer capability as a
+                first-class, bounded concept (driven by spec 002 shared-office
+                co-op presence). One new principle added and two existing
+                constraints materially expanded; the deterministic offline core
+                is preserved unchanged → additive, backward compatible → MINOR.
 
-Modified principles (old → new):
-  - (none — all principles newly defined)
-  - I.   Deterministic, Pure Game Simulation          (NEW)
-  - II.  Data-Driven Content & Balance                (NEW)
-  - III. Test-First — NON-NEGOTIABLE                  (NEW)
-  - IV.  Player State Integrity & Persistence         (NEW)
-  - V.   Simplicity & YAGNI                           (NEW)
+Modified principles/sections (old → new):
+  - IV. Player State Integrity & Persistence
+        last bullet reworded: online capability now PERMITTED as an additive
+        overlay governed by Principle VI (still user-story-justified), rather
+        than "out of scope until justified".
+  - Additional Constraints: "Offline-capable, single-player core"
+        → "Offline-capable core": multiplayer/social allowed as an additive
+        overlay per Principle VI, but MUST NOT become a requirement for the
+        core loop to run.
 
 Added sections:
-  - Core Principles (I–V)
-  - Additional Constraints
-  - Development Workflow
-  - Governance
+  - VI. Online & Multiplayer as an Additive Overlay          (NEW)
 
 Removed sections: (none)
 
 Templates requiring updates:
   - .specify/templates/plan-template.md       ✅ reviewed, no change needed
-      ("Constitution Check" gate derives its gates from this file at plan time)
+      ("Constitution Check" gate is derived from this file at plan time)
   - .specify/templates/spec-template.md       ✅ reviewed, no change needed
-      (technology-agnostic success criteria align with these principles)
   - .specify/templates/tasks-template.md      ✅ reviewed, no change needed
-      (phase/test discipline matches Test-First + Workflow principles)
   - .specify/templates/checklist-template.md  ✅ reviewed, no change needed
+  - README.md / AGENTS.md                     ✅ reviewed, no hardcoded
+      "single-player" claim; offline-core statements remain accurate
   - .pi/prompts/speckit.*.md                  ✅ reviewed, agent-neutral (pi)
 
-Follow-up TODOs (intentionally deferred — belong in first plan.md, NOT here):
-  - Concrete language/runtime (NEEDS CLARIFICATION)
-  - Concrete persistence/save format (NEEDS CLARIFICATION)
-  - Target platform(s) (NEEDS CLARIFICATION)
-  - "Lise" theme/lore scope (NEEDS CLARIFICATION)
-  These are runtime/implementation choices; the constitution fixes
-  constraints and methodology, not the stack.
-
-Derivation note: User input was empty and no README/plan/spec/code exists.
-  Principles are INFERRED DEFAULTS derived from the project name (idle game
-  genre) and the installed methodology (speckit = spec-first TDD, pi agent).
-  Refine via amendment once the first spec/plan exists.
+Follow-up TODOs:
+  - specs/002-shared-office-coop/plan.md MUST record the presence-driven co-op
+    bonus (an online gameplay effect) in its Complexity Tracking table per
+    Principles I, V, and VI.
+  - Deferred stack decisions from v1.0.0 (language/runtime, persistence format,
+    platform, "Lise" theme scope) remain resolved in the per-feature plan.md
+    files, not here.
 ============================================================================
 -->
 
@@ -109,9 +106,9 @@ A player's accumulated progress is the most valuable thing the game holds.
   silently dropped, faked, or capped without explicit, documented design.
 - Saves MUST survive format/version drift through explicit migration or a
   safe fallback. The game MUST NEVER silently destroy or wipe progress.
-- The game MUST be playable offline and locally for its core loop; any
-  online capability is out of scope until explicitly justified by a user
-  story.
+- The game MUST be playable offline and locally for its core loop. Online
+  capability is permitted ONLY as an additive overlay governed by Principle VI,
+  and MUST be justified by a prioritized user story.
 
 **Rationale:** Losing idle progress is the single most damaging bug in the
 genre. Integrity is non-negotiable.
@@ -130,6 +127,35 @@ prioritized user story.
 **Rationale:** Idle games accrete systems over time; without discipline the
 simulation becomes untestable and the save model untrustworthy.
 
+### VI. Online & Multiplayer as an Additive Overlay
+
+Any online or multiplayer capability MUST be an additive layer on top of the
+deterministic, offline-capable core (Principles I and IV) — never a
+redefinition of it.
+
+- The core loop MUST remain fully playable offline with no feature loss; the
+  overlay MUST degrade gracefully to the offline core whenever the network or
+  backend is unavailable, with no loss of progress and no blocking.
+- Other players and the server MUST NOT be authoritative over a player's core
+  simulation or save. Presence and social data are a read-only overlay; a
+  network or social failure MUST NEVER block, corrupt, or wipe local progress.
+- Any online input that feeds gameplay (e.g., a presence-driven co-op bonus)
+  MUST enter the simulation only as a deterministic, timestamped, bounded input
+  to `advance` — never as live wall-clock polling — so determinism, save
+  replay, and offline computation stay intact. Offline spans MUST be computed
+  at the neutral/baseline value of such inputs.
+- Online-driven gameplay effects MUST be bounded and defined as tunable content
+  data (Principle II), and MUST NOT let one player mutate another player's
+  state.
+- Introducing or materially expanding an online capability MUST be justified by
+  a prioritized user story and recorded in the plan's Complexity Tracking table.
+
+**Rationale:** Multiplayer and social features add reach and retention, but the
+genre's integrity rules — a deterministic offline core and safe saves — are what
+make the game trustworthy. Confining online behavior to a bounded,
+non-authoritative, deterministically-integrated overlay lets the game be social
+without ever putting the core at risk.
+
 ## Additional Constraints
 
 These are fixed, technology-agnostic constraints. The concrete stack
@@ -137,8 +163,10 @@ These are fixed, technology-agnostic constraints. The concrete stack
 it MUST be decided in the first `plan.md` and is recorded there as a
 follow-up.
 
-- **Offline-capable, single-player core:** The core progression loop MUST
-  run locally and without a network connection.
+- **Offline-capable core:** The core progression loop MUST run locally and
+  without a network connection. Multiplayer/social behavior is permitted only
+  as an additive overlay per Principle VI; it MUST NOT become a requirement for
+  the core loop to run.
 - **Numeric stability:** Accumulation math MUST avoid floating-point drift
   over long play (large totals and long offline spans). Use integer /
   fixed-point / arbitrary-precision types where exactness is required.
@@ -194,4 +222,4 @@ until it is amended.
   under `.pi/prompts/`) for day-to-day workflow guidance; this document sets
   the non-negotiable rules those guides operate within.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-30 | **Last Amended**: 2026-06-30
+**Version**: 1.1.0 | **Ratified**: 2026-06-30 | **Last Amended**: 2026-07-01
