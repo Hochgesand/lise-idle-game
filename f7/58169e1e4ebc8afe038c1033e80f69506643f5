@@ -1,0 +1,23 @@
+backend/.dockerignore
+  s_af9a0ef630826b::t_cac86b4dc83aad 1-9
+backend/Dockerfile
+  s_af9a0ef630826b::t_d09cad88a3785c 1-60
+specs/001-dev-idle-game/tasks.md
+  s_af9a0ef630826b::t_471250c7122b0b 158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "f758169e1e4ebc8afe038c1033e80f69506643f5",
+  "prompts": {},
+  "sessions": {
+    "s_af9a0ef630826b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ceb-0ef6-70d5-bb22-55d5ace53325",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
