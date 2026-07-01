@@ -1,0 +1,27 @@
+frontend/src/game/prepareState.test.ts
+  s_77f522ee86ec34::t_63c6a05d7d2c25 1-95
+frontend/src/main.ts
+  s_77f522ee86ec34::t_997d254d5a4949 32-33,50-54,56,98,221-226,228-229,231,240-241,243,256-257
+frontend/src/game/prepareState.ts
+  s_77f522ee86ec34::t_7e545783658eac 1-52
+frontend/src/sim/fallbackContent.ts
+  s_77f522ee86ec34::t_95efbac780489f 1-65
+frontend/src/sim/fallbackContent.test.ts
+  s_77f522ee86ec34::t_910920eb92b53a 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "23e7a7bdf68827915ba454e0c9f9f2623c96f1e7",
+  "prompts": {},
+  "sessions": {
+    "s_77f522ee86ec34": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ea4-0157-7234-b57b-dcbc43dd6ff1",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
