@@ -31,6 +31,7 @@ import {
   purchaseUpgrade,
   activateBurner,
   purchaseTraining,
+  switchOffice,
   InsufficientResourcesError,
 } from './actions';
 import { computeRate, advance } from './advance';
@@ -975,5 +976,217 @@ describe('purchaseTraining — stacking', () => {
         multiply(baseRate, bn('6')),
       ),
     ).toBe(0);
+  });
+});
+
+// ===========================================================================
+// T013 — RED tests for the `switchOffice` mutator (002 — closes 001 FR-016's
+//         saved-commute gap). `switchOffice` does NOT exist yet (implemented
+//         by T025 in ./actions.ts); the import at the top fails to resolve =
+//         RED, the correct TDD starting state (Constitution Principle III).
+//
+// ## Contract being tested (T025 must satisfy this exactly)
+//
+// `switchOffice(state, toOffice: string): GameState` — a PURE discrete
+// player-action mutator (contracts.md §1; data-model.md "CommuteState"). It
+// starts an in-progress office switch WITHOUT advancing time or touching
+// production:
+//   result.commute = {
+//     fromOffice: state.activeOffice,              // the origin (retained)
+//     toOffice,                                     // the requested destination
+//     startedAt: Date.parse(state.lastAdvancedAt), // sim-timeline ms, NEVER wall clock
+//   }
+//
+// `activeOffice` is NOT changed here — it still holds the origin while the
+// commute is in flight (data-model: "activeOffice still holds the origin").
+// `advance` (T024) is what later resolves the commute at
+// `startedAt + content.coop.commuteSeconds` (activeOffice := toOffice,
+// commute := null) — that is T024, NOT this mutator.
+//
+// `commute.startedAt` is a sim-timeline ms NUMBER (types.ts CommuteState),
+// derived purely from the passed `lastAdvancedAt` (an ISO-8601 string) via
+// `Date.parse` — the SAME deterministic conversion `advance.ts`'s `advanceTime`
+// and contracts §1's `T0 = Date.parse(state.lastAdvancedAt)` use. It is NOT
+// `Date.now()` and carries no wall-clock time.
+//
+// Invariant (data-model CommuteState): while `commute != null` the dev is
+// present in NO office — the effective office is `null` (the heartbeat reports
+// `office: null` and the co-op bonus is suspended). `switchOffice` only sets
+// the commute; "no office" is the derived view `commute != null ? null :
+// activeOffice`.
+//
+// Purity: returns a NEW GameState, never mutates the input, no I/O, no
+// randomness, no `Date.now()`.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// switchOffice fixtures
+// ---------------------------------------------------------------------------
+
+/**
+ * A state sitting in office_1 at a known sim clock anchor. Owns one producer
+ * + upgrade + milestone so resources/ownership are non-trivial and the purity
+ * assertions are meaningful (not all-empty).
+ */
+function makeOfficeState(): GameState {
+  return {
+    resources: { loc: '42', cash: '100', aiTokens: '7' },
+    ownedProducers: new Set<string>(['manual_typing']),
+    ownedUpgrades: new Set<string>(['better_keyboard']),
+    ownedTrainings: new Set<string>(),
+    activeBurner: null,
+    earnedMilestones: new Set<string>(['first_loc']),
+    lastAdvancedAt: FIXED_ANCHOR,
+    schemaVersion: 1,
+    settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
+  };
+}
+
+/**
+ * Derive the dev's effective office from a state: `null` while a commute is
+ * in flight (present in no office), else the active office. Mirrors the
+ * heartbeat/presence rule (data-model CommuteState invariant; US3 T063).
+ */
+function effectiveOffice(state: GameState): string | null {
+  return state.commute !== null ? null : state.activeOffice;
+}
+
+// ===========================================================================
+// switchOffice — starts the commute
+// ===========================================================================
+
+describe('switchOffice — starts the commute', () => {
+  it('sets commute = { fromOffice: activeOffice, toOffice, startedAt }', () => {
+    const state = makeOfficeState(); // activeOffice 'office_1'
+
+    const result = switchOffice(state, 'office_2');
+
+    expect(result.commute).not.toBeNull();
+    expect(result.commute).toEqual({
+      fromOffice: 'office_1',
+      toOffice: 'office_2',
+      startedAt: Date.parse(FIXED_ANCHOR),
+    });
+  });
+
+  it('commute.startedAt is a sim-timeline ms number, not a wall-clock timestamp', () => {
+    const state = makeOfficeState();
+
+    const result = switchOffice(state, 'office_2');
+
+    expect(result.commute).not.toBeNull();
+    // sim-timeline timestamps are ms numbers (types.ts CommuteState), derived
+    // from lastAdvancedAt — never Date.now() and never a string.
+    expect(typeof result.commute!.startedAt).toBe('number');
+    expect(Number.isFinite(result.commute!.startedAt)).toBe(true);
+    // Derived purely from the passed lastAdvancedAt (deterministic, no wall clock).
+    expect(result.commute!.startedAt).toBe(Date.parse(state.lastAdvancedAt));
+  });
+
+  it('does not change activeOffice (the origin is retained while commuting)', () => {
+    const state = makeOfficeState(); // activeOffice 'office_1'
+
+    const result = switchOffice(state, 'office_2');
+
+    // data-model: "activeOffice still holds the origin" during a commute;
+    // `advance` (T024) is what flips it to toOffice on arrival.
+    expect(result.activeOffice).toBe('office_1');
+    expect(result.activeOffice).toBe(state.activeOffice);
+  });
+});
+
+// ===========================================================================
+// switchOffice — present in no office while commuting
+// ===========================================================================
+
+describe('switchOffice — while commuting the dev is present in no office', () => {
+  it('effective office is null after switchOffice (commute in flight)', () => {
+    const state = makeOfficeState();
+    expect(effectiveOffice(state)).toBe('office_1'); // before: present in office_1
+
+    const result = switchOffice(state, 'office_2');
+
+    // After: present in no office (commute != null ⇒ effective office null).
+    expect(result.commute).not.toBeNull();
+    expect(effectiveOffice(result)).toBeNull();
+  });
+});
+
+// ===========================================================================
+// switchOffice — purity / no mutation
+// ===========================================================================
+
+describe('switchOffice — purity / no mutation', () => {
+  it('returns a new state object (referential transparency)', () => {
+    const state = makeOfficeState();
+
+    const result = switchOffice(state, 'office_2');
+
+    expect(result).not.toBe(state);
+  });
+
+  it('does not mutate the input state', () => {
+    const state = makeOfficeState();
+    const before = normalize(state);
+
+    switchOffice(state, 'office_2');
+
+    expect(normalize(state)).toEqual(before);
+  });
+});
+
+// ===========================================================================
+// switchOffice — only commute is set, everything else unchanged
+// ===========================================================================
+
+describe('switchOffice — only commute is set, everything else unchanged', () => {
+  it('resources/ownership/burner/milestones/time/schema/settings/coopSegments/activeOffice unchanged', () => {
+    const state = makeOfficeState();
+
+    const result = switchOffice(state, 'office_2');
+
+    expect(result.resources).toEqual(state.resources);
+    expect(result.ownedProducers).toEqual(state.ownedProducers);
+    expect(result.ownedUpgrades).toEqual(state.ownedUpgrades);
+    expect(result.ownedTrainings).toEqual(state.ownedTrainings);
+    expect(result.earnedMilestones).toEqual(state.earnedMilestones);
+    expect(result.activeBurner).toEqual(state.activeBurner);
+    expect(result.lastAdvancedAt).toBe(state.lastAdvancedAt);
+    expect(result.schemaVersion).toBe(state.schemaVersion);
+    expect(result.settings).toEqual(state.settings);
+    expect(result.coopSegments).toEqual(state.coopSegments);
+    expect(result.activeOffice).toBe(state.activeOffice);
+    // only commute differs: null -> the new in-progress commute
+    expect(state.commute).toBeNull();
+    expect(result.commute).not.toBeNull();
+  });
+});
+
+// ===========================================================================
+// switchOffice — determinism
+// ===========================================================================
+
+describe('switchOffice — determinism', () => {
+  it('calling it twice on equal states yields equal commutes (same startedAt)', () => {
+    const r1 = switchOffice(makeOfficeState(), 'office_2');
+    const r2 = switchOffice(makeOfficeState(), 'office_2');
+
+    expect(r1.commute).toEqual(r2.commute);
+  });
+
+  it('startedAt tracks lastAdvancedAt: a later anchor yields a later startedAt', () => {
+    const earlier = makeOfficeState();
+    const later: GameState = {
+      ...makeOfficeState(),
+      lastAdvancedAt: '2026-07-01T00:00:00.000Z',
+    };
+
+    const r1 = switchOffice(earlier, 'office_2');
+    const r2 = switchOffice(later, 'office_2');
+
+    expect(r1.commute!.startedAt).toBeLessThan(r2.commute!.startedAt);
   });
 });
