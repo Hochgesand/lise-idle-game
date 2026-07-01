@@ -111,7 +111,7 @@ Two-project monorepo (per plan.md): `backend/` (Spring Boot 4.1 / Java 25) and `
 ### Tests for User Story 2 (write first, ensure RED)
 
 - [x] T038 [P] [US2] Write tests for `cashOut`, `purchaseUpgrade`, `activateBurner` mutators (affordability, `InsufficientResourcesError` on failure, no partial mutation) in `frontend/src/sim/actions.test.ts`
-- [ ] T039 [P] [US2] Write `advance` test: active burner multiplies rate and consumes fuel; fuel exhaustion sets `activeBurner=null` in `frontend/src/sim/advance.test.ts`
+- [x] T039 [P] [US2] Write `advance` test: active burner multiplies rate and consumes fuel; fuel exhaustion sets `activeBurner=null` in `frontend/src/sim/advance.test.ts`
 
 ### Implementation for User Story 2
 

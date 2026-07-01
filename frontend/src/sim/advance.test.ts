@@ -252,3 +252,124 @@ describe('advance — offline catch-up (large dt)', () => {
     expect(result.lastAdvancedAt).toEqual(expectedTs);
   });
 });
+
+// ---------------------------------------------------------------------------
+// advance — active burner (US2: cash & token burner)
+//
+// data-model.md "BurnerState" + "State transitions" steps 2-3:
+// When activeBurner is set, `advance` consumes fuel at the burner's burnRate
+// while applying its productionMultiplier to LOC production. When fuel runs
+// out the burner is dropped (activeBurner = null). The two-segment closed-form
+// math (R_f for fuelTime, R_b for the remainder) must be associative.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fixture content with a burner: burnRate "10" tokens/sec, productionMultiplier 2.
+ * Base producer manual_typing at 1 LOC/sec (from makeFixtureContent).
+ */
+function makeBurnerContent(): ContentCatalog {
+  return {
+    ...makeFixtureContent(),
+    burners: [
+      {
+        id: 'test_burner',
+        name: 'Test Burner',
+        fuelCostToActivate: '0',
+        burnRate: '10', // tokens/sec
+        productionMultiplier: 2,
+      },
+    ],
+  };
+}
+
+/**
+ * A fixture state with an active burner (definitionId 'test_burner', the
+ * given fuelRemaining, startedAt at the fixed anchor).
+ */
+function makeBurnerState(fuel: string): GameState {
+  return {
+    ...makeFixtureState(),
+    activeBurner: {
+      definitionId: 'test_burner',
+      startedAt: FIXED_ANCHOR,
+      fuelRemaining: fuel,
+    },
+  };
+}
+
+describe('advance — active burner', () => {
+  it('multiplies rate while fuel lasts (fuel 1000, dt 1s: +2 LOC, fuel→990)', () => {
+    const content = makeBurnerContent();
+    const state = makeBurnerState('1000');
+
+    const result = advance(state, 1000, content); // 1s
+
+    // baseRate=1, mult=2, dtSec=1 → gain = 1×2×1 = 2 (NOT base 1).
+    expect(compare(bn(result.resources.loc), bn('2'))).toBe(0);
+    // Fuel: 1000 − 10×1 = 990; burner still active.
+    expect(result.activeBurner).not.toBeNull();
+    expect(result.activeBurner!.fuelRemaining).toEqual('990');
+  });
+
+  it('fuel exhaustion mid-interval: partial at mult rate + remainder at base (fuel 5, dt 1s: +1.5 LOC, burner→null)', () => {
+    const content = makeBurnerContent();
+    const state = makeBurnerState('5');
+
+    const result = advance(state, 1000, content); // 1s
+
+    // fuelTime = 5/10 = 0.5s at mult rate (2→+1.0), remainder 0.5s at base (1→+0.5) = +1.5.
+    expect(compare(bn(result.resources.loc), bn('1.5'))).toBe(0);
+    expect(result.activeBurner).toBeNull();
+  });
+
+  it('exact boundary: fuel == burnRate×dtSec → full mult gain, fuel hits 0, burner→null', () => {
+    const content = makeBurnerContent();
+    const state = makeBurnerState('10'); // exactly burnRate(10) × dtSec(1)
+
+    const result = advance(state, 1000, content); // 1s
+
+    // Whole interval at mult rate: 2×1 = 2.
+    expect(compare(bn(result.resources.loc), bn('2'))).toBe(0);
+    expect(result.activeBurner).toBeNull();
+  });
+
+  it('monotonicity: loc never decreases and fuelRemaining never goes negative', () => {
+    const content = makeBurnerContent();
+    let state = makeBurnerState('25'); // 2.5s of fuel at burnRate 10
+
+    const steps = [1000, 1000, 1000, 1000]; // 4 × 1s
+    let prevLoc = state.resources.loc;
+    for (const dt of steps) {
+      state = advance(state, dt, content);
+      // loc never decreases.
+      expect(
+        compare(bn(state.resources.loc), bn(prevLoc)),
+      ).toBeGreaterThanOrEqual(0);
+      prevLoc = state.resources.loc;
+      // fuel never negative.
+      if (state.activeBurner !== null) {
+        expect(
+          compare(bn(state.activeBurner.fuelRemaining), bn('0')),
+        ).toBeGreaterThanOrEqual(0);
+      }
+    }
+    // After 4s the burner (2.5s fuel) is exhausted.
+    expect(state.activeBurner).toBeNull();
+  });
+
+  it('associativity with burner that exhausts: advance(advance(s,A),B) === advance(s,A+B)', () => {
+    const content = makeBurnerContent();
+    const state = makeBurnerState('5'); // fuelTime = 0.5s; total dt 1s exhausts
+
+    // Split at exactly the fuel boundary (500ms = 0.5s). Step A exhausts the
+    // fuel via the "enough fuel" branch (fuel→0, burner dropped); the combined
+    // call takes the "runs out partway" branch — different code paths, same result.
+    const a = 500; // 0.5s
+    const b = 500; // 0.5s
+
+    const split = advance(advance(state, a, content), b, content);
+    const combined = advance(state, a + b, content);
+
+    expect(normalize(split)).toEqual(normalize(combined));
+  });
+});
