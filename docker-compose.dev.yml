@@ -1,0 +1,52 @@
+# docker-compose.dev.yml — local-development override for docker-compose.yml
+#
+# Purpose: make a dev machine self-sufficient so the full stack runs locally
+# WITHOUT needing the Unraid-only appdata path (/mnt/user/appdata/lise-game)
+# and WITHOUT talking to the prod API.
+#
+# The base docker-compose.yml IS the prod stack: Unraid host, publishes host
+# ports :8086 (backend) / :8087 (frontend), file-backed H2 on the appdata
+# bind mount, frontend baked against the public https://lise-game-api.schmitz.gg
+# domains. This override only changes what must differ for local dev:
+#   * backend  -> Spring `dev` profile + in-memory H2 (no bind mount needed)
+#   * frontend -> baked against the LOCAL backend (http://localhost:8086)
+#
+# Identity is NOT stubbed: the REAL LiseIdler Keycloak realm is used in dev
+# exactly as in prod. The `dev` profile merely enables DevPresenceSeeder
+# (later phases); auth still talks to the real realm. No identity stub.
+#
+# Usage (build + run the local stack):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Validate the merged config:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q
+#   (a warning about unset KEYCLOAK_BACKEND_CLIENT_SECRET is expected/OK.)
+#
+# NOTE: changing the frontend build args below requires rebuilding the image:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml build frontend
+
+services:
+  backend:
+    environment:
+      # `dev` profile enables DevPresenceSeeder (later phases). Auth still
+      # uses the real LiseIdler Keycloak realm — not a stub.
+      - SPRING_PROFILES_ACTIVE=dev
+      # In-memory H2 so local dev needs no durable host path and the
+      # Unraid-only /mnt/user/appdata/lise-game bind mount is not required.
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:gamedb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    volumes:
+      # Override the base bind mount: keep /data as a Docker named volume so
+      # any file-backed artifacts still work locally without a host path.
+      # Volumes merge by container path, so this replaces the base /data mount.
+      - lise-dev-data:/data
+
+  frontend:
+    build:
+      args:
+        # Build args merge as a map; context is inherited from the base.
+        # Baked into the Vite bundle so a locally-built frontend on :8087
+        # talks to the LOCAL compose backend on :8086, never the prod API.
+        - VITE_API_BASE_URL=http://localhost:8086
+        - VITE_WS_BASE_URL=ws://localhost:8086/ws
+
+volumes:
+  lise-dev-data:
