@@ -1,5 +1,6 @@
 package com.lise.liseidle.state;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +31,18 @@ class PlayerStateRepositoryTest {
 
     @Autowired
     private PlayerStateRepository repository;
+
+    /**
+     * Each {@code @SpringBootTest} class shares a single application context (and
+     * thus one in-memory H2) across tests in the suite; other test classes
+     * (e.g. {@code SessionControllerTest}) also persist players. To keep the
+     * row-count assertions below deterministic and order-independent, wipe the
+     * table before every test.
+     */
+    @BeforeEach
+    void cleanTable() {
+        repository.deleteAll();
+    }
 
     @Test
     void loadState_returnsEmpty_whenNoSaveExists() {
