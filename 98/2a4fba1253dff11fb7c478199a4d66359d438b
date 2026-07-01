@@ -1,0 +1,29 @@
+frontend/src/game/economyConfig.ts
+  s_ab47464cb12741::t_30ef3e8c125cd0 1-16
+frontend/src/game/economyWiring.test.ts
+  s_ab47464cb12741::t_04b36a6704997a 1-12,14-84
+  s_ab47464cb12741::t_102e0d62f026a6 13
+specs/001-dev-idle-game/tasks.md
+  s_ab47464cb12741::t_61ba2d8348e25b 120
+frontend/src/main.ts
+  s_ab47464cb12741::t_57ed041fb13d4b 29,39
+  s_ab47464cb12741::t_d0926b09bbfe58 290
+  s_ab47464cb12741::t_694c4ef0c912d6 40
+  s_ab47464cb12741::t_2eaed93544c655 194-228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "982a4fba1253dff11fb7c478199a4d66359d438b",
+  "prompts": {},
+  "sessions": {
+    "s_ab47464cb12741": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1ecd-3aaa-7222-a4a2-5e99d17b8173",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
