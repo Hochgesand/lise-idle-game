@@ -1,0 +1,24 @@
+frontend/src/scenes/world/campusMap.test.ts
+  s_9e3cb57f61b316::t_3ae804b397e0e9 304-306,308-312,314
+scripts/gen_campus_assets.py
+  s_9e3cb57f61b316::t_e078324b911fc2 1-758,765-1003
+  s_9e3cb57f61b316::t_f00aa5fc9d4bda 759-764
+frontend/public/assets/campus.json
+  s_9e3cb57f61b316::t_8092c387c74424 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c878e7e08d4a4531f0522ea9b0e9ae020f2b3a69",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
