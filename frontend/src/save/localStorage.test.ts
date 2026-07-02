@@ -23,7 +23,14 @@
 // code path it drives is the real production code.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { saveGame, loadGame, clearGame, createInitialState } from './localStorage';
+import {
+  saveGame,
+  loadGame,
+  clearGame,
+  createInitialState,
+  deserializeState,
+  CorruptedSaveError,
+} from './localStorage';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 import type { GameState } from '../sim/types';
 
@@ -96,6 +103,7 @@ function makePopulatedState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 
@@ -185,6 +193,7 @@ describe('localStorage save → reload round-trip', () => {
       coopSegments: [],
       activeOffice: 'office_1',
       commute: null,
+      activeTraining: null,
     };
 
     saveGame(state);
@@ -212,6 +221,7 @@ describe('localStorage save → reload round-trip', () => {
       coopSegments: [],
       activeOffice: 'office_1',
       commute: null,
+      activeTraining: null,
     };
 
     saveGame(state);
@@ -249,6 +259,7 @@ describe('localStorage save → reload round-trip', () => {
       ],
       activeOffice: 'office_2',
       commute: { fromOffice: 'office_1', toOffice: 'office_2', startedAt: 5000 },
+      activeTraining: null,
     };
 
     saveGame(state);
@@ -264,5 +275,88 @@ describe('localStorage save → reload round-trip', () => {
     });
     // Already-current schemaVersion → no migration, full value equality holds.
     expect(normalize(restored!)).toEqual(normalize(state));
+  });
+
+  // ── (003) activeTraining — save schema v3 (T003 RED) ─────────────────────
+
+  it('(003) a non-null activeTraining round-trips losslessly', () => {
+    // A v3 save written mid-training MUST resume the exact in-progress record
+    // (003 spec edge case "Training in progress at save/load"; FR-022).
+    const state: GameState = {
+      ...makePopulatedState(),
+      activeTraining: { trainingId: 'agile_master', startedAt: 1782820800000 },
+    };
+
+    saveGame(state);
+    const restored = loadGame();
+
+    expect(restored).not.toBeNull();
+    expect(restored!.activeTraining).toEqual({
+      trainingId: 'agile_master',
+      startedAt: 1782820800000,
+    });
+    expect(normalize(restored!)).toEqual(normalize(state));
+  });
+
+  it('(003) createInitialState starts at schemaVersion 3 with activeTraining=null', () => {
+    const fresh = createInitialState();
+
+    expect(fresh.schemaVersion).toBe(3);
+    expect(fresh.activeTraining).toBeNull();
+  });
+
+  it('(003) absent activeTraining defaults to null BEFORE the migration chain (lenient v2 load)', () => {
+    // toGameState leniency: a v2 blob (no activeTraining key) parses into a
+    // structurally valid GameState — the default is applied pre-chain so the
+    // migration always receives a complete state (003 data-model §8).
+    const v2Blob = JSON.stringify({
+      schemaVersion: 2,
+      resources: { loc: '1', cash: '0', aiTokens: '0' },
+      ownedProducers: [],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: FIXED_ANCHOR,
+      settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
+    });
+
+    const loaded = deserializeState(v2Blob);
+
+    expect(loaded.activeTraining).toBeNull();
+    expect(loaded.schemaVersion).toBe(3);
+  });
+
+  it('(003) a present-but-malformed activeTraining is corruption, never silently wiped', () => {
+    // Leniency covers only ABSENT fields; a malformed present value must throw
+    // CorruptedSaveError (Constitution IV — never silently discard a save).
+    const base = {
+      schemaVersion: 3,
+      resources: { loc: '1', cash: '0', aiTokens: '0' },
+      ownedProducers: [],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: FIXED_ANCHOR,
+      settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
+    };
+
+    const notAnObject = JSON.stringify({ ...base, activeTraining: 'nope' });
+    const wrongFieldTypes = JSON.stringify({
+      ...base,
+      activeTraining: { trainingId: 5, startedAt: 'soon' },
+    });
+    const missingFields = JSON.stringify({ ...base, activeTraining: {} });
+
+    expect(() => deserializeState(notAnObject)).toThrow(CorruptedSaveError);
+    expect(() => deserializeState(wrongFieldTypes)).toThrow(CorruptedSaveError);
+    expect(() => deserializeState(missingFields)).toThrow(CorruptedSaveError);
   });
 });
