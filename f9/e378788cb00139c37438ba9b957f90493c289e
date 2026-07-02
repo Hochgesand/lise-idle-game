@@ -1,0 +1,21 @@
+frontend/package.json
+  s_9e3cb57f61b316::t_f47b3bbfcdce19 25
+frontend/package-lock.json
+  s_9e3cb57f61b316::t_45d8b1b9536e0e 19,963-972,3229-3235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "f9e378788cb00139c37438ba9b957f90493c289e",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
