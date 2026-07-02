@@ -149,6 +149,19 @@ export interface TokenSource {
   getToken(): AccessToken | null;
 }
 
+/**
+ * (002 T064) The player's presence settings — consent & visibility (contracts
+ * §2 `PUT /api/v1/presence/settings`, FR-003). App-side `player_presence`
+ * state, never delegated to Keycloak. Consumed by the social panel
+ * (ui/socialPanel.ts) through main.ts.
+ */
+export interface PresenceSettings {
+  /** Consent to be shown to colleagues (first-run dialog, FR-003). */
+  consentGiven: boolean;
+  /** Appear/hide toggle — changeable at any time (FR-003/FR-009). */
+  visible: boolean;
+}
+
 /** `GET /api/v1/me` response — the current signed-in identity (contracts §2). */
 export interface MeResponse {
   colleagueId: string; // the JWT `sub` claim (stable social key)
@@ -285,6 +298,27 @@ export class RestClient {
       throw await this.toRestError(res);
     }
     return (await res.json()) as MeResponse;
+  }
+
+  /**
+   * (002 T064) `PUT /api/v1/presence/settings` — store consent & visibility
+   * (contracts §2, FR-003). Authenticated (bearer attached when held); returns
+   * the STORED result the server echoes (which may differ from the request,
+   * e.g. server-side normalization). Throws a `RestError` on any non-2xx —
+   * notably 401 `not_authenticated` and 409 `consent_required` (`visible: true`
+   * without stored-or-same-request consent). The CALLER (main.ts) degrades
+   * without throwing into the game loop (FR-016).
+   */
+  async putPresenceSettings(settings: PresenceSettings): Promise<PresenceSettings> {
+    const res = await fetch(`${this.baseUrl}/api/v1/presence/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) {
+      throw await this.toRestError(res);
+    }
+    return (await res.json()) as PresenceSettings;
   }
 
   /**

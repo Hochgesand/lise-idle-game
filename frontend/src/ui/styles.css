@@ -285,3 +285,130 @@
     transform: translate(-50%, -40px);
   }
 }
+
+/* ── Social panel (T064) ───────────────────────────────────────────────────
+ * The social section lives in `.ui-panel[data-panel='social']` (bottom-left on
+ * desktop, part of the phone bottom-sheet — T047 layout). It renders the
+ * FR-002 sign-in offer, the FR-003 consent dialog / visibility toggle, and the
+ * FR-016 "social offline" badge. Everything is NON-BLOCKING: the dialog is a
+ * card in the slot (never a modal), the badge is pointer-transparent, and an
+ * idle panel renders null so the slot collapses (`.ui-panel:empty`).
+ * All buttons meet the >= 44px touch-target minimum via `.social-button`. */
+.social-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--social-color);
+  max-width: 20rem;
+}
+
+/* FR-016 badge: clear but passive — no pointer events, no action. */
+.social-offline {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--social-offline);
+  border-radius: var(--ui-radius);
+  color: var(--social-offline);
+  font-size: 0.75rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* Shared button base: >= 44px touch target (mobile accessibility). */
+.social-button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--social-color);
+  border-radius: var(--ui-radius);
+  background: rgba(226, 232, 240, 0.08);
+  color: var(--social-color);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.social-button:active {
+  transform: translateY(1px);
+}
+
+/* FR-002 sign-in offer: a compact, dismissible row — never forced. */
+.social-signin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.social-signin-prompt {
+  font-size: 0.875rem;
+}
+
+.social-signin-button {
+  border-color: var(--social-live);
+  color: var(--social-live);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.social-dismiss-button {
+  border-color: var(--economy-locked);
+  color: var(--economy-locked);
+  background: transparent;
+}
+
+/* FR-003 consent dialog: an inline card (non-modal, non-blocking). */
+.social-consent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.social-heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.social-consent-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--hud-rate-color);
+}
+
+.social-consent-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.social-accept-button {
+  border-color: var(--social-live);
+  color: var(--social-live);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.social-decline-button,
+.social-reopen-button {
+  border-color: var(--economy-locked);
+  color: var(--economy-locked);
+  background: transparent;
+}
+
+/* FR-003 visibility toggle row. */
+.social-visibility {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+}
+
+.social-visibility-state[data-visible='true'] {
+  color: var(--social-live);
+}
+
+.social-visibility-state[data-visible='false'] {
+  color: var(--economy-locked);
+}

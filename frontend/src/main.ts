@@ -35,9 +35,9 @@ import { GameLoop } from './game/gameLoop';
 import { prepareInitialState } from './game/prepareState';
 import { FALLBACK_CONTENT } from './sim/fallbackContent';
 import { loadGame, saveGame, createInitialState } from './save/localStorage';
-import { restClient } from './net/restClient';
+import { restClient, type PresenceSettings } from './net/restClient';
 import { stompClient } from './net/stompClient';
-import { initAuth, handleSigninCallback, restoreSession, isSignedIn, authTokenSource } from './net/auth';
+import { initAuth, handleSigninCallback, restoreSession, isSignedIn, login, authTokenSource } from './net/auth';
 import { deriveHeartbeat, heartbeatIntervalMs } from './net/heartbeat';
 // T051: the retired in-canvas Phaser UI scenes (OfficeScene/HudScene/
 // EconomyScene/AcademyScene) are replaced by CampusScene (the world) + a DOM
@@ -48,6 +48,7 @@ import { createOverlay, type Overlay } from './ui/overlay';
 import { hudPanel } from './ui/hudPanel';
 import { economyPanel } from './ui/economyPanel';
 import { academyPanel } from './ui/academyPanel';
+import { socialPanel } from './ui/socialPanel';
 import { CASH_RATE } from './game/economyConfig';
 
 // ── Module-level mutable state (the single source of truth for the app) ────
@@ -203,6 +204,16 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
  */
 let presenceConsentGiven = false;
 
+/**
+ * (T064) The full presence settings known to the client (`consentGiven` +
+ * `visible`), read by the social panel via its `getSettings` accessor. `null`
+ * until the `/api/v1/me` lookup resolves (the panel shows no consent dialog on
+ * unknown settings) — and reset to `null` on a failed lookup / sign-out.
+ * `presenceConsentGiven` above stays the single heartbeat gate; both are
+ * updated together.
+ */
+let presenceSettings: PresenceSettings | null = null;
+
 /** Start the heartbeat interval (idempotent; cadence from the content catalog). */
 function startHeartbeat(): void {
   if (heartbeatTimer !== null) return;
@@ -238,15 +249,37 @@ function syncHeartbeat(): void {
 async function refreshPresenceConsent(): Promise<void> {
   if (!isSignedIn()) {
     presenceConsentGiven = false;
+    presenceSettings = null;
     syncHeartbeat();
     return;
   }
   try {
     const me = await restClient.getMe();
     presenceConsentGiven = me.consentGiven;
+    presenceSettings = { consentGiven: me.consentGiven, visible: me.visible };
   } catch (err) {
     presenceConsentGiven = false;
+    presenceSettings = null; // unknown — the social panel shows no consent dialog
     console.warn('[main] Consent lookup failed — presence heartbeat stays off.', err);
+  }
+  syncHeartbeat();
+}
+
+/**
+ * (T064) Apply a consent/visibility decision from the social panel: send it
+ * via `PUT /api/v1/presence/settings` (contracts §2, FR-003) and adopt the
+ * STORED result the server echoes. Best-effort, never throwing into the game
+ * loop (FR-016): on failure the previous settings stand (the panel simply
+ * re-renders from them), and the heartbeat gate re-syncs either way — consent
+ * only opens it once the server has positively stored `consentGiven: true`.
+ */
+async function applyPresenceSettings(settings: PresenceSettings): Promise<void> {
+  try {
+    const stored = await restClient.putPresenceSettings(settings);
+    presenceConsentGiven = stored.consentGiven;
+    presenceSettings = stored;
+  } catch (err) {
+    console.warn('[main] Presence settings update failed — keeping previous settings.', err);
   }
   syncHeartbeat();
 }
@@ -339,6 +372,22 @@ class ControllerScene extends Phaser.Scene {
               } catch (err) {
                 if (!(err instanceof InsufficientResourcesError)) throw err;
               }
+            },
+          }),
+          // T064 — the social section: sign-in offer (FR-002, wired to the
+          // Keycloak login redirect), first-run consent dialog + hide/show
+          // toggle (FR-003, via PUT /api/v1/presence/settings), and the
+          // "social offline" badge (FR-016, driven by the STOMP connection
+          // state — the panel never probes the network itself).
+          socialPanel({
+            isSignedIn: () => isSignedIn(),
+            getSettings: () => presenceSettings,
+            isSocialOnline: () => stompClient.isConnected,
+            onSignIn: () => {
+              void login(); // redirect flow; failures degrade signed-out (auth.ts)
+            },
+            onSettingsChange: (settings: PresenceSettings) => {
+              void applyPresenceSettings(settings); // best-effort, never throws
             },
           }),
         ],
