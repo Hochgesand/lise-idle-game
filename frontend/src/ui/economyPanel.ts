@@ -24,12 +24,17 @@
 // the wiring layer (T051) binds to the pure mutators in `actions.ts`. No game
 // logic lives here.
 //
-// ## Interaction model (mirrors the sibling panels T048/T050 at this point)
-// Buttons opt back into pointer events via `.ui-interactive` (overlay.ts /
-// styles.css) so camera pan/zoom gestures still reach the canvas everywhere
-// else. Affordability is reflected in color (`--economy-affordable` /
-// `--economy-locked` / `--economy-owned` / `--economy-active`) and
-// `data-state`, exactly as the retired EconomyScene colored its text rows.
+// ## Action model (T048/T049/T050 unified interaction model)
+// Buttons carry STABLE `data-action` attributes (cash-out / purchase-upgrade /
+// activate-burner) plus per-entry `data-*-id`; the overlay's single
+// `pointerdown` delegation listener (on the STABLE root) dispatches to this
+// panel's `actions` map. Activation therefore survives the per-frame rebuild
+// — pointerdown fires on press, before any refresh() swaps the button node
+// (overlay.ts "Action delegation"). Affordability follows the same
+// affordable=button / locked=span rule the sibling panels use: an
+// unaffordable control renders as a non-interactive `<span>` (no
+// `data-action`, nothing to dispatch), so an unaffordable tap can never reach
+// the mutator.
 
 import type { OverlaySection } from './overlay';
 import { formatLoc } from '../sim/format';
@@ -119,21 +124,30 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
         amount.textContent = formatLoc(s.resources.cash);
         wrap.appendChild(amount);
 
-        // Cash-out: green when affordable (≥ CASH_OUT_AMOUNT LOC), else grey.
-        // Big-number-safe via the pure `canAfford` helper (no parseFloat).
+        // Cash-out: an interactive button only when affordable (≥
+        // CASH_OUT_AMOUNT LOC); otherwise a greyed non-interactive span (the
+        // affordable=button / locked=span rule, consistent with upgrades +
+        // burner — an unaffordable tap must never reach the mutator). Big-
+        // number-safe via the pure `canAfford` helper (no parseFloat).
         const canCashOut = canAfford(s, {
           resource: 'loc',
           amount: CASH_OUT_AMOUNT,
         });
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'economy-cashout ui-interactive';
-        btn.textContent = `Cash Out ${CASH_OUT_AMOUNT} LOC`;
-        btn.style.color = canCashOut
-          ? 'var(--economy-affordable)'
-          : 'var(--economy-locked)';
-        btn.addEventListener('click', () => onCashOut(CASH_OUT_AMOUNT));
-        wrap.appendChild(btn);
+        if (canCashOut) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'economy-cashout ui-interactive';
+          btn.dataset.action = 'cash-out';
+          btn.textContent = `Cash Out ${CASH_OUT_AMOUNT} LOC`;
+          btn.style.color = 'var(--economy-affordable)';
+          wrap.appendChild(btn);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'economy-cashout economy-cashout-locked';
+          span.textContent = `Cash Out ${CASH_OUT_AMOUNT} LOC`;
+          span.style.color = 'var(--economy-locked)';
+          wrap.appendChild(span);
+        }
 
         return wrap;
       }
@@ -149,13 +163,16 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
 
         if (u.affordable) {
           // The only interactive upgrade surface: an affordable, unowned
-          // upgrade. `.ui-interactive` opts back into pointer events.
+          // upgrade. `.ui-interactive` opts back into pointer events;
+          // activation is via `data-action` delegation (overlay.ts) — no
+          // per-frame click listener.
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'economy-upgrade-button ui-interactive';
+          btn.dataset.action = 'purchase-upgrade';
+          btn.dataset.upgradeId = u.id;
           btn.textContent = `${u.name} (${resLabel} ${costStr})`;
           btn.style.color = 'var(--economy-affordable)';
-          btn.addEventListener('click', () => onPurchaseUpgrade(u.id));
           li.appendChild(btn);
         } else {
           const span = document.createElement('span');
@@ -209,9 +226,10 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'economy-burner-button ui-interactive';
+          btn.dataset.action = 'activate-burner';
+          btn.dataset.burnerId = def.id;
           btn.textContent = 'Activate Burner';
           btn.style.color = 'var(--economy-affordable)';
-          btn.addEventListener('click', () => onActivateBurner(def.id));
           li.appendChild(btn);
         } else {
           const span = document.createElement('span');
@@ -223,6 +241,21 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
 
         return li;
       }
+    },
+    // Delegated actions (overlay.ts dispatches by `data-action` from a SINGLE
+    // pointerdown listener on the stable root, so these fire even when the
+    // loop rebuilds the buttons mid-interaction). Per-entry ids travel on the
+    // button's `data-*-id` attributes.
+    actions: {
+      'cash-out': () => onCashOut(CASH_OUT_AMOUNT),
+      'purchase-upgrade': (el) => {
+        const upgradeId = el.dataset.upgradeId;
+        if (upgradeId) onPurchaseUpgrade(upgradeId);
+      },
+      'activate-burner': (el) => {
+        const burnerId = el.dataset.burnerId;
+        if (burnerId) onActivateBurner(burnerId);
+      },
     },
   };
 }

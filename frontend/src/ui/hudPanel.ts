@@ -11,6 +11,15 @@
 // the overlay stays gesture-transparent for pan/zoom (overlay.ts / styles.css,
 // research "UI architecture" + Camera decision).
 //
+// ## Action model (T048/T049/T050 unified interaction model)
+// The boost button carries a STABLE `data-action="boost"` attribute; the
+// overlay's single `pointerdown` delegation listener (on the STABLE root)
+// dispatches it to this panel's `actions.boost` handler. Activation therefore
+// survives the per-frame rebuild — pointerdown fires on press, before any
+// refresh() swaps the button node, so the boost never gets lost to a
+// click-between-rebuilds (overlay.ts "Action delegation"). The handler also
+// spawns the boost float-text from the pressed button element.
+//
 // ## Testability (Constitution Principle III)
 // The PURE formatting (`formatLoc`/`formatRate`) and rate math (`computeRate`)
 // live in sim/ and are unit-tested there. This module is the thin DOM wiring —
@@ -84,19 +93,26 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
       // Manual-boost button — the DOM replacement for the retired scene-wide
       // `pointerdown` boost. `.ui-interactive` opts it back into pointer events
       // so the camera's pan/zoom gestures still reach the canvas everywhere
-      // else (the direct fix for the camera input conflict).
+      // else (the direct fix for the camera input conflict). Activation is via
+      // `data-action` delegation (overlay.ts) — no per-frame click listener.
       const boost = document.createElement('button');
       boost.type = 'button';
       boost.className = 'hud-boost ui-interactive';
+      boost.dataset.action = 'boost';
       boost.textContent = 'Boost';
-      boost.addEventListener('click', () => {
-        // Delegate the mutation to the injected callback; then the visual.
-        onBoost();
-        spawnBoostFloat(boost, getState, getContent);
-      });
       root.appendChild(boost);
 
       return root;
+    },
+    // Delegated actions (overlay.ts dispatches by `data-action` from a SINGLE
+    // pointerdown listener on the stable root, so this fires even when the
+    // loop rebuilds the button mid-interaction).
+    actions: {
+      boost: (el, accessors) => {
+        // Delegate the mutation to the injected callback; then the visual.
+        onBoost();
+        spawnBoostFloat(el, accessors.getState, accessors.getContent);
+      },
     },
   };
 }

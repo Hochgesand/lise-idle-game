@@ -18,6 +18,11 @@ import { createInitialState } from '../save/localStorage';
 import { FALLBACK_CONTENT } from '../sim/fallbackContent';
 import type { GameState } from '../sim/types';
 
+/** Dispatch a pointerdown — the production activation path under delegation. */
+function press(target: Element): void {
+  target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -131,7 +136,7 @@ describe('hudPanel — boost button', () => {
     mount.remove();
   });
 
-  it('calls onBoost exactly once when the boost button is clicked', () => {
+  it('calls onBoost exactly once when the boost button is activated (pointerdown delegation)', () => {
     const onBoost = vi.fn();
     const overlay = createOverlay({
       mount,
@@ -140,7 +145,7 @@ describe('hudPanel — boost button', () => {
     });
     overlay.refresh();
 
-    mount.querySelector<HTMLButtonElement>(BOOST_BTN)!.click();
+    press(mount.querySelector<HTMLButtonElement>(BOOST_BTN)!);
 
     expect(onBoost).toHaveBeenCalledTimes(1);
   });
@@ -155,6 +160,8 @@ describe('hudPanel — boost button', () => {
 
     const btn = mount.querySelector<HTMLButtonElement>(BOOST_BTN)!;
     expect(btn.classList.contains('ui-interactive')).toBe(true);
+    // The button carries the delegated data-action (overlay.ts dispatches it).
+    expect(btn.dataset.action).toBe('boost');
   });
 });
 
@@ -186,7 +193,9 @@ describe('hudPanel — boost float-text honors reducedMotion', () => {
     });
     overlay.refresh();
 
-    mount.querySelector<HTMLButtonElement>(BOOST_BTN)!.click();
+    mount.querySelector<HTMLButtonElement>(BOOST_BTN)!.dispatchEvent(
+      new Event('pointerdown', { bubbles: true }),
+    );
 
     // The float carries the current rate (1 LOC/sec) formatted as the "+N".
     const float = mount.querySelector<HTMLElement>('.hud-boost-float');
@@ -205,7 +214,9 @@ describe('hudPanel — boost float-text honors reducedMotion', () => {
     });
     overlay.refresh();
 
-    mount.querySelector<HTMLButtonElement>(BOOST_BTN)!.click();
+    mount.querySelector<HTMLButtonElement>(BOOST_BTN)!.dispatchEvent(
+      new Event('pointerdown', { bubbles: true }),
+    );
 
     expect(mount.querySelector('.hud-boost-float')).toBeNull();
   });

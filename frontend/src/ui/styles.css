@@ -70,7 +70,15 @@
  * Each .ui-panel is a positioned slot for one section. By default it is
  * pointer-transparent (gestures pass through to the camera); interactive
  * surfaces opt back in with .ui-interactive. Slots have a translucent
- * background + radius so a rendered panel reads as a card over the canvas. */
+ * background + radius so a rendered panel reads as a card over the canvas.
+ *
+ * T047 P2 — hidden-panel collapse: a section whose render() returns null
+ * empties its slot via replaceChildren() (ZERO child nodes), so :empty
+ * matches and the slot fully collapses: no visible empty card on desktop,
+ * and no phone-portrait gesture capture (a display:none element receives no
+ * pointer events, so an empty sheet slot no longer swallows camera gestures).
+ * overlay.ts guarantees the truly-empty state; this rule provides the visual
+ * + hit-test collapse. */
 .ui-panel {
   box-sizing: border-box;
   pointer-events: none;
@@ -80,6 +88,13 @@
   max-height: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch; /* momentum scroll on iOS sheet */
+}
+
+/* A slot with no rendered content collapses entirely (no card, no capture).
+ * :empty requires ZERO child nodes — overlay.ts uses replaceChildren() (no
+ * args) for null renders so there is no stray empty text node to defeat it. */
+.ui-panel:empty {
+  display: none;
 }
 
 /* Interactive children (buttons, links, drag handles, sheet surfaces) opt

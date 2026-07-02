@@ -13,7 +13,7 @@
 // re-renders a section from getState/getContent, and the pointer-events
 // passthrough rules are applied.
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createOverlay, type OverlaySection } from './overlay';
 import { createInitialState } from '../save/localStorage';
 import { FALLBACK_CONTENT } from '../sim/fallbackContent';
@@ -178,6 +178,11 @@ describe('refresh — per-frame re-render from accessors', () => {
 
     const social = mount.querySelector<HTMLElement>('.ui-panel[data-panel="social"]')!;
     expect(social.children).toHaveLength(0);
+    // Truly empty: ZERO child nodes (not an empty text node), so the real-browser
+    // CSS rule `.ui-panel:empty { display: none }` matches and the slot fully
+    // collapses — no visible card, no phone-portrait gesture capture (T047 P2).
+    // jsdom does not apply styles.css, so the collapse is verified structurally.
+    expect(social.childNodes).toHaveLength(0);
     // The slot is retained so a later non-null render re-shows it.
     expect(social.dataset.panel).toBe('social');
   });
@@ -292,5 +297,313 @@ describe('pointer-events passthrough', () => {
     // The root itself stays transparent (the canvas gets the gestures that
     // miss the button).
     expect(getComputedStyle(overlay.root).pointerEvents).toBe('none');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Action delegation — pointerdown on the STABLE root (T048 P1 click-loss fix)
+// ---------------------------------------------------------------------------
+//
+// refresh() re-renders sections every frame (replaceChildren). A DOM `click`
+// only fires when pointerdown + pointerup land on the SAME element; a per-
+// frame rebuild detaches the node that got pointerdown before pointerup lands,
+// so the click never synthesizes and actions silently never fire during live
+// gameplay. The fix: a SINGLE pointerdown listener on the STABLE .ui-root
+// dispatches by `data-action`; pointerdown fires on press, before any rebuild.
+
+/** Dispatch a pointerdown — the production activation path under delegation. */
+function press(target: Element): void {
+  target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+}
+
+/** A section that renders a single data-action button (+ optional inner span). */
+function actionSection(
+  id: string,
+  action: string,
+  handler: (el: HTMLElement, acc: { getState: () => GameState; getContent: () => typeof FALLBACK_CONTENT }) => void,
+  withChild = false,
+): OverlaySection {
+  return {
+    id,
+    render: () => {
+      const btn = document.createElement('button');
+      btn.dataset.action = action;
+      btn.textContent = 'Go';
+      if (withChild) {
+        const icon = document.createElement('span');
+        icon.textContent = '⚡';
+        btn.appendChild(icon);
+      }
+      return btn;
+    },
+    actions: { [action]: handler },
+  };
+}
+
+describe('action delegation — pointerdown on the stable root', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+  });
+  afterEach(() => {
+    mount.remove();
+  });
+
+  function mountOverlay(sections: OverlaySection[]): ReturnType<typeof createOverlay> {
+    return createOverlay({
+      mount,
+      sections,
+      accessors: { getState: () => makeState('0'), getContent: () => FALLBACK_CONTENT },
+    });
+  }
+
+  it('fires the matching handler on pointerdown (delegated on the stable root)', () => {
+    const handler = vi.fn();
+    const overlay = mountOverlay([actionSection('hud', 'boost', handler)]);
+    overlay.refresh();
+
+    press(mount.querySelector('[data-action="boost"]')!);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the data-action element + accessors to the handler', () => {
+    const handler = vi.fn();
+    const accessors = { getState: () => makeState('0'), getContent: () => FALLBACK_CONTENT };
+    const overlay = createOverlay({
+      mount,
+      sections: [actionSection('hud', 'boost', handler)],
+      accessors,
+    });
+    overlay.refresh();
+
+    const btn = mount.querySelector<HTMLElement>('[data-action="boost"]')!;
+    press(btn);
+
+    expect(handler).toHaveBeenCalledWith(btn, accessors);
+  });
+
+  it('resolves the handler from a child of the button via closest()', () => {
+    const handler = vi.fn();
+    const overlay = mountOverlay([actionSection('hud', 'boost', handler, true)]);
+    overlay.refresh();
+
+    const icon = mount.querySelector('[data-action="boost"] span')!;
+    press(icon);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0]![0]).toBe(
+      mount.querySelector('[data-action="boost"]'),
+    );
+  });
+
+  it('ignores pointerdown/click on elements with no data-action', () => {
+    const handler = vi.fn();
+    const overlay = createOverlay({
+      mount,
+      sections: [
+        {
+          id: 'hud',
+          render: () => {
+            const d = document.createElement('div');
+            d.textContent = 'no action';
+            return d;
+          },
+          actions: { boost: handler },
+        },
+      ],
+      accessors: { getState: () => makeState('0'), getContent: () => FALLBACK_CONTENT },
+    });
+    overlay.refresh();
+
+    const div = mount.querySelector('.ui-panel[data-panel="hud"] div')!;
+    press(div);
+    div.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('fires on a bare click with no preceding pointerdown (keyboard/screen-reader)', () => {
+    const handler = vi.fn();
+    const overlay = mountOverlay([actionSection('hud', 'boost', handler)]);
+    overlay.refresh();
+
+    mount
+      .querySelector('[data-action="boost"]')!
+      .dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-fire when a click immediately follows a pointerdown on the same action', () => {
+    const handler = vi.fn();
+    const overlay = mountOverlay([actionSection('hud', 'boost', handler)]);
+    overlay.refresh();
+
+    const btn = mount.querySelector('[data-action="boost"]')!;
+    press(btn);
+    btn.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws on a duplicate action name across sections (defensive)', () => {
+    expect(() =>
+      createOverlay({
+        mount,
+        sections: [
+          { id: 'a', render: () => document.createElement('div'), actions: { go: () => {} } },
+          { id: 'b', render: () => document.createElement('div'), actions: { go: () => {} } },
+        ],
+        accessors: { getState: () => makeState('0'), getContent: () => FALLBACK_CONTENT },
+      }),
+    ).toThrow(/duplicate action/);
+  });
+
+  // ── THE REGRESSION TEST (T048 P1) ───────────────────────────────────────
+  // Proves a data-action fires EVEN WHEN refresh() runs repeatedly between
+  // pointerdown and pointerup (simulating 60fps rebuilds). Under the old
+  // per-node `click` listener model this test FAILS (the rebuilt node detaches
+  // before the click synthesizes); under pointerdown delegation it passes.
+  it('fires a delegated action even when refresh() rebuilds the DOM between pointerdown and pointerup (60fps regression)', () => {
+    const handler = vi.fn();
+    const overlay = createOverlay({
+      mount,
+      sections: [
+        {
+          id: 'hud',
+          render: () => {
+            const btn = document.createElement('button');
+            btn.dataset.action = 'boost';
+            btn.textContent = 'Boost';
+            return btn;
+          },
+          actions: { boost: handler },
+        },
+      ],
+      accessors: { getState: () => makeState('0'), getContent: () => FALLBACK_CONTENT },
+    });
+    overlay.refresh();
+
+    // The press lands on the current button node …
+    const pressed = mount.querySelector<HTMLElement>('[data-action="boost"]')!;
+    pressed.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+    // … the loop then rebuilds the DOM many times (60 fps) before the matching
+    // pointerup/click could complete. Under the OLD per-node click-listener
+    // model this rebuild detaches the node that got pointerdown, so the click
+    // never synthesizes and the action never fires during live gameplay.
+    for (let i = 0; i < 12; i++) overlay.refresh();
+
+    // The originally-pressed node is now detached; a pointerup/click on it
+    // cannot bubble to the live root — but it does not matter: under
+    // pointerdown delegation the action already fired on press.
+    pressed.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    pressed.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Refresh throttling (refreshMinIntervalMs) — T048 P1 DOM-churn fix
+// ---------------------------------------------------------------------------
+
+describe('refresh throttling (refreshMinIntervalMs)', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    mount.remove();
+  });
+
+  const slot = (m: HTMLElement): HTMLElement =>
+    m.querySelector<HTMLElement>('.ui-panel[data-panel="hud"]')!;
+
+  it('renders the leading call immediately and coalesces rapid calls into one trailing render (latest wins)', () => {
+    let state = makeState('0');
+    const overlay = createOverlay({
+      mount,
+      sections: [locReadoutSection('hud')],
+      accessors: { getState: () => state, getContent: () => FALLBACK_CONTENT },
+      refreshMinIntervalMs: 100,
+    });
+
+    overlay.refresh(); // leading → renders immediately
+    expect(slot(mount).textContent).toContain('LOC: 0');
+
+    state = makeState('999');
+    overlay.refresh(); // within window → deferred (DOM unchanged)
+    expect(slot(mount).textContent).toContain('LOC: 0');
+
+    vi.advanceTimersByTime(100); // trailing flush → latest state lands
+    expect(slot(mount).textContent).toContain('LOC: 999');
+
+    overlay.destroy();
+  });
+
+  it('renders every call when refreshMinIntervalMs is unset (no throttle — original contract)', () => {
+    let state = makeState('0');
+    const overlay = createOverlay({
+      mount,
+      sections: [locReadoutSection('hud')],
+      accessors: { getState: () => state, getContent: () => FALLBACK_CONTENT },
+    });
+
+    overlay.refresh();
+    expect(slot(mount).textContent).toContain('LOC: 0');
+    state = makeState('2500');
+    overlay.refresh();
+    expect(slot(mount).textContent).toContain('LOC: 2500');
+  });
+
+  it('clears a pending trailing render on destroy (no late render after teardown)', () => {
+    let state = makeState('0');
+    const overlay = createOverlay({
+      mount,
+      sections: [locReadoutSection('hud')],
+      accessors: { getState: () => state, getContent: () => FALLBACK_CONTENT },
+      refreshMinIntervalMs: 100,
+    });
+    overlay.refresh(); // leading
+    state = makeState('999');
+    overlay.refresh(); // schedules a trailing render
+    overlay.destroy(); // must clear the trailing timer
+
+    expect(() => vi.advanceTimersByTime(200)).not.toThrow();
+    expect(mount.querySelector('.ui-root')).toBeNull(); // nothing re-rendered
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hidden-panel collapse (T047 P2)
+// ---------------------------------------------------------------------------
+
+describe('hidden-panel collapse (T047 P2)', () => {
+  it('a null render leaves the slot with ZERO child nodes so CSS .ui-panel:empty hides it', () => {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const overlay = createOverlay({
+      mount,
+      sections: [locReadoutSection('hud'), hiddenSection('social')],
+      accessors: { getState: () => makeState('0'), getContent: () => FALLBACK_CONTENT },
+    });
+    overlay.refresh();
+
+    const social = mount.querySelector<HTMLElement>('.ui-panel[data-panel="social"]')!;
+    // Truly empty: ZERO child nodes (not an empty text node), so the real-
+    // browser CSS rule `.ui-panel:empty { display: none }` matches → no card,
+    // no phone-portrait gesture capture. (jsdom does not apply styles.css, so
+    // the collapse is verified structurally here.)
+    expect(social.childNodes).toHaveLength(0);
+    expect(social.children).toHaveLength(0);
+    expect(social.dataset.panel).toBe('social');
   });
 });

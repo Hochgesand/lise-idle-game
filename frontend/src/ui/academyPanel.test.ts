@@ -11,8 +11,14 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { academyPanel } from './academyPanel';
+import { createOverlay } from './overlay';
 import type { OverlaySection } from './overlay';
 import type { ContentCatalog, GameState } from '../sim/types';
+
+/** Dispatch a pointerdown — the production activation path under delegation. */
+function press(target: Element): void {
+  target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -231,14 +237,29 @@ describe('academyPanel — milestones / credentials', () => {
 // ---------------------------------------------------------------------------
 
 describe('academyPanel — purchase wiring', () => {
-  it('calls onPurchaseTraining with the training id when an affordable button is clicked', () => {
-    const onPurchaseTraining = vi.fn();
-    const root = render(academyPanel({ onPurchaseTraining }));
+  /** Mount a section under a real overlay (so the delegation listener is
+   *  attached to the stable root) and refresh once. */
+  function mountAndRefresh(section: OverlaySection): HTMLElement {
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const overlay = createOverlay({
+      mount,
+      sections: [section],
+      accessors: { getState: () => makeState('1000'), getContent: () => makeAcademyContent() },
+    });
+    overlay.refresh();
+    return mount;
+  }
 
-    const btn = root.querySelector<HTMLButtonElement>(
-      '.academy-training[data-training-id="iso_9001_course"] button',
-    )!;
-    btn.click();
+  it('calls onPurchaseTraining with the training id when an affordable button is activated (pointerdown)', () => {
+    const onPurchaseTraining = vi.fn();
+    const mount = mountAndRefresh(academyPanel({ onPurchaseTraining }));
+
+    press(
+      mount.querySelector<HTMLButtonElement>(
+        '.academy-training[data-training-id="iso_9001_course"] button',
+      )!,
+    );
 
     expect(onPurchaseTraining).toHaveBeenCalledOnce();
     expect(onPurchaseTraining).toHaveBeenCalledWith('iso_9001_course');
@@ -248,7 +269,7 @@ describe('academyPanel — purchase wiring', () => {
     const onPurchaseTraining = vi.fn();
     const root = render(academyPanel({ onPurchaseTraining }));
 
-    // agile_master is prereq-locked → no button → clicking its entry does nothing.
+    // agile_master is prereq-locked → no button → activating its entry does nothing.
     const agile = root.querySelector<HTMLElement>(
       '.academy-training[data-training-id="agile_master"]',
     )!;
@@ -261,19 +282,22 @@ describe('academyPanel — purchase wiring', () => {
     const onPurchaseTraining = vi.fn();
     const section = academyPanel({ onPurchaseTraining });
 
-    // Frame 1: nothing owned; iso_9001_course is affordable.
-    let root = section.render(() => makeState('1000'), () => makeAcademyContent())!;
-    root.querySelector<HTMLButtonElement>(
-      '.academy-training[data-training-id="iso_9001_course"] button',
-    )!.click();
+    // Two frames through a real overlay; the callback closure is captured once
+    // at construction, so it still routes to the right id after a rebuild.
+    let mount = mountAndRefresh(section);
+    press(
+      mount.querySelector<HTMLButtonElement>(
+        '.academy-training[data-training-id="iso_9001_course"] button',
+      )!,
+    );
+    mount.remove();
 
-    // Frame 2: re-render with the same accessors (the loop calls render/frame)
-    // and click again — the callback closure is captured once at construction,
-    // so it still routes to the right id.
-    root = section.render(() => makeState('1000'), () => makeAcademyContent())!;
-    root.querySelector<HTMLButtonElement>(
-      '.academy-training[data-training-id="iso_9001_course"] button',
-    )!.click();
+    mount = mountAndRefresh(section);
+    press(
+      mount.querySelector<HTMLButtonElement>(
+        '.academy-training[data-training-id="iso_9001_course"] button',
+      )!,
+    );
 
     expect(onPurchaseTraining).toHaveBeenCalledTimes(2);
     expect(onPurchaseTraining).toHaveBeenNthCalledWith(1, 'iso_9001_course');
@@ -286,8 +310,7 @@ describe('academyPanel — purchase wiring', () => {
 // ---------------------------------------------------------------------------
 
 describe('academyPanel — overlay integration', () => {
-  it('mounts inside createOverlay under the "academy" slot and refreshes', async () => {
-    const { createOverlay } = await import('./overlay');
+  it('mounts inside createOverlay under the "academy" slot and refreshes', () => {
     const onPurchaseTraining = vi.fn();
     const mount = document.createElement('div');
     document.body.appendChild(mount);
@@ -305,10 +328,12 @@ describe('academyPanel — overlay integration', () => {
     expect(slot!.querySelectorAll('.academy-training')).toHaveLength(2);
     expect(slot!.querySelectorAll('.academy-milestone')).toHaveLength(2);
 
-    // A purchase clicked through the mounted overlay still routes correctly.
-    slot!.querySelector<HTMLButtonElement>(
-      '.academy-training[data-training-id="iso_9001_course"] button.ui-interactive',
-    )!.click();
+    // A purchase activated through the mounted overlay still routes correctly.
+    press(
+      slot!.querySelector<HTMLButtonElement>(
+        '.academy-training[data-training-id="iso_9001_course"] button.ui-interactive',
+      )!,
+    );
     expect(onPurchaseTraining).toHaveBeenCalledWith('iso_9001_course');
 
     overlay.destroy();

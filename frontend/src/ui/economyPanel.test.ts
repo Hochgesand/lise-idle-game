@@ -12,8 +12,14 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { economyPanel } from './economyPanel';
+import { createOverlay } from './overlay';
 import type { OverlaySection } from './overlay';
 import type { BurnerState, ContentCatalog, GameState } from '../sim/types';
+
+/** Dispatch a pointerdown — the production activation path under delegation. */
+function press(target: Element): void {
+  target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -94,6 +100,20 @@ function render(section: OverlaySection): HTMLElement {
   return node!;
 }
 
+/** Mount a section under a real overlay (so the delegation listener is attached
+ *  to the stable root) and refresh once; return the mount. */
+function mountAndRefresh(section: OverlaySection): HTMLElement {
+  const mount = document.createElement('div');
+  document.body.appendChild(mount);
+  const overlay = createOverlay({
+    mount,
+    sections: [section],
+    accessors: { getState: () => makeState(), getContent: () => makeEconomyContent() },
+  });
+  overlay.refresh();
+  return mount;
+}
+
 // ---------------------------------------------------------------------------
 // Section identity
 // ---------------------------------------------------------------------------
@@ -146,9 +166,9 @@ describe('economyPanel — cash display + cash-out', () => {
     expect(subheadings[2]!.textContent).toBe('BURNER');
   });
 
-  it('calls onCashOut with the fixed amount when the cash-out button is clicked', () => {
+  it('calls onCashOut with the fixed amount when the cash-out button is activated (pointerdown)', () => {
     const onCashOut = vi.fn();
-    const root = render(
+    const mount = mountAndRefresh(
       economyPanel({
         onCashOut,
         onPurchaseUpgrade: () => {},
@@ -156,15 +176,15 @@ describe('economyPanel — cash display + cash-out', () => {
       }),
     );
 
-    const btn = root.querySelector<HTMLButtonElement>('.economy-cashout')!;
+    const btn = mount.querySelector<HTMLButtonElement>('.economy-cashout')!;
     expect(btn.textContent).toBe('Cash Out 100 LOC');
-    btn.click();
+    press(btn);
 
     expect(onCashOut).toHaveBeenCalledOnce();
     expect(onCashOut).toHaveBeenCalledWith('100');
   });
 
-  it('renders the cash-out button as affordable (green) when LOC ≥ amount', () => {
+  it('renders the cash-out control as an affordable button (green, data-action) when LOC ≥ amount', () => {
     const root = render(
       economyPanel({
         onCashOut: () => {},
@@ -173,11 +193,13 @@ describe('economyPanel — cash display + cash-out', () => {
       }),
     );
 
-    const btn = root.querySelector<HTMLButtonElement>('.economy-cashout')!;
-    expect(btn.style.color).toBe('var(--economy-affordable)');
+    const control = root.querySelector<HTMLElement>('.economy-cashout')!;
+    expect(control.tagName).toBe('BUTTON');
+    expect((control as HTMLButtonElement).dataset.action).toBe('cash-out');
+    expect(control.style.color).toBe('var(--economy-affordable)');
   });
 
-  it('renders the cash-out button as locked (grey) when LOC < amount', () => {
+  it('renders the cash-out control as a non-interactive span (grey, no action) when LOC < amount', () => {
     const section = economyPanel({
       onCashOut: () => {},
       onPurchaseUpgrade: () => {},
@@ -188,8 +210,12 @@ describe('economyPanel — cash display + cash-out', () => {
       () => makeEconomyContent(),
     )!;
 
-    const btn = root.querySelector<HTMLButtonElement>('.economy-cashout')!;
-    expect(btn.style.color).toBe('var(--economy-locked)');
+    const control = root.querySelector<HTMLElement>('.economy-cashout')!;
+    // Unaffordable ⇒ a span (not a button), no data-action: an unaffordable
+    // tap can never reach the mutator (consistent with upgrades + burner).
+    expect(control.tagName).toBe('SPAN');
+    expect(control.style.color).toBe('var(--economy-locked)');
+    expect((control as HTMLElement).dataset.action).toBeUndefined();
   });
 });
 
@@ -270,9 +296,9 @@ describe('economyPanel — upgrade shop', () => {
     expect(ft.textContent).toContain('✓ Faster Typing');
   });
 
-  it('calls onPurchaseUpgrade with the id when an affordable button is clicked', () => {
+  it('calls onPurchaseUpgrade with the id when an affordable button is activated (pointerdown)', () => {
     const onPurchaseUpgrade = vi.fn();
-    const root = render(
+    const mount = mountAndRefresh(
       economyPanel({
         onCashOut: () => {},
         onPurchaseUpgrade,
@@ -280,9 +306,11 @@ describe('economyPanel — upgrade shop', () => {
       }),
     );
 
-    root.querySelector<HTMLButtonElement>(
-      '.economy-upgrade[data-upgrade-id="faster_typing"] button',
-    )!.click();
+    press(
+      mount.querySelector<HTMLButtonElement>(
+        '.economy-upgrade[data-upgrade-id="faster_typing"] button',
+      )!,
+    );
 
     expect(onPurchaseUpgrade).toHaveBeenCalledOnce();
     expect(onPurchaseUpgrade).toHaveBeenCalledWith('faster_typing');
@@ -298,12 +326,12 @@ describe('economyPanel — upgrade shop', () => {
       }),
     );
 
-    // ai_assist is prereq-locked → no button → clicking its entry does nothing.
+    // ai_assist is prereq-locked → no button → activating its entry does nothing.
     const ai = root.querySelector<HTMLElement>(
       '.economy-upgrade[data-upgrade-id="ai_assist"]',
     )!;
     expect(ai.querySelector('button')).toBeNull();
-    ai.click();
+    ai.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(onPurchaseUpgrade).not.toHaveBeenCalled();
   });
 });
@@ -346,19 +374,25 @@ describe('economyPanel — burner', () => {
     expect(burner.querySelector('button')).toBeNull();
   });
 
-  it('calls onActivateBurner with the burner id when the activate button is clicked', () => {
+  it('calls onActivateBurner with the burner id when the activate button is activated (pointerdown)', () => {
     const onActivateBurner = vi.fn();
     const section = economyPanel({
       onCashOut: () => {},
       onPurchaseUpgrade: () => {},
       onActivateBurner,
     });
-    const root = section.render(
-      () => makeState({ aiTokens: '20' }),
-      () => makeEconomyContent(),
-    )!;
+    // Mount under a real overlay so the delegated pointerdown reaches the
+    // handler (the burner needs ≥ 10 AI tokens to be activatable).
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const overlay = createOverlay({
+      mount,
+      sections: [section],
+      accessors: { getState: () => makeState({ aiTokens: '20' }), getContent: () => makeEconomyContent() },
+    });
+    overlay.refresh();
 
-    root.querySelector<HTMLButtonElement>('.economy-burner-button')!.click();
+    press(mount.querySelector<HTMLButtonElement>('.economy-burner-button')!);
 
     expect(onActivateBurner).toHaveBeenCalledOnce();
     expect(onActivateBurner).toHaveBeenCalledWith('gpu_burner');
@@ -415,8 +449,8 @@ describe('economyPanel — overlay integration', () => {
     expect(slot!.querySelectorAll('.economy-upgrade')).toHaveLength(2);
     expect(slot!.querySelector('.economy-burner-item')).not.toBeNull();
 
-    // A cash-out clicked through the mounted overlay still routes correctly.
-    slot!.querySelector<HTMLButtonElement>('.economy-cashout')!.click();
+    // A cash-out activated through the mounted overlay still routes correctly.
+    press(slot!.querySelector<HTMLButtonElement>('.economy-cashout')!);
     expect(onCashOut).toHaveBeenCalledWith('100');
 
     overlay.destroy();

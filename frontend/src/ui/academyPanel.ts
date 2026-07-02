@@ -18,13 +18,16 @@
 // injected `onPurchaseTraining` callback that the wiring layer (T051) binds to
 // the pure mutator in `actions.ts`. No game logic lives here.
 //
-// ## Pointer-events passthrough (research: "UI architecture" + Camera decision)
-// The overlay root is `pointer-events: none` (T047), so only interactive
-// children that opt back in via `.ui-interactive` receive taps. Purchasable
-// (affordable) trainings render as `<button class="ui-interactive">`; locked
-// and owned trainings render as non-interactive `<span>`s (nothing to click).
-// This keeps the canvas's camera pan/zoom gestures working everywhere a tap
-// isn't meaningful — the direct resolution of the retired scene's input split.
+// ## Action model (T048/T049/T050 unified interaction model)
+// Purchasable (affordable) trainings render as `<button data-action=
+// "purchase-training" data-training-id="…">` and the overlay's single
+// `pointerdown` delegation listener (on the STABLE root) dispatches to this
+// panel's `actions['purchase-training']` handler. Activation therefore
+// survives the per-frame rebuild — pointerdown fires on press, before any
+// refresh() swaps the button node (overlay.ts "Action delegation"). Locked
+// and owned trainings render as non-interactive `<span>`s (no `data-action`,
+// nothing to dispatch). This keeps the canvas's camera pan/zoom gestures
+// working everywhere a tap isn't meaningful.
 
 import type { OverlaySection } from './overlay';
 import { formatLoc } from '../sim/format';
@@ -88,13 +91,15 @@ export function academyPanel(opts: AcademyPanelOptions): OverlaySection {
 
         if (t.affordable) {
           // The only interactive surface in this panel: a purchasable training.
-          // `.ui-interactive` opts back into pointer events (overlay.ts/styles).
+          // `.ui-interactive` opts back into pointer events; activation is via
+          // `data-action` delegation (overlay.ts) — no per-frame click listener.
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'academy-training-button ui-interactive';
+          btn.dataset.action = 'purchase-training';
+          btn.dataset.trainingId = t.id;
           btn.textContent = trainingLabel(t);
           btn.style.color = 'var(--economy-affordable)';
-          btn.addEventListener('click', () => onPurchaseTraining(t.id));
           li.appendChild(btn);
         } else {
           const span = document.createElement('span');
@@ -118,6 +123,15 @@ export function academyPanel(opts: AcademyPanelOptions): OverlaySection {
         li.style.color = milestoneColor(m);
         return li;
       }
+    },
+    // Delegated actions (overlay.ts dispatches by `data-action` from a SINGLE
+    // pointerdown listener on the stable root, so this fires even when the
+    // loop rebuilds the button mid-interaction).
+    actions: {
+      'purchase-training': (el) => {
+        const trainingId = el.dataset.trainingId;
+        if (trainingId) onPurchaseTraining(trainingId);
+      },
     },
   };
 }
