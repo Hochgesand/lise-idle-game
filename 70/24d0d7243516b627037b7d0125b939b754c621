@@ -1,0 +1,23 @@
+frontend/src/net/stompClient.ts
+  s_f3fecaf6fbaf39::t_9207c263660bd5 249-252
+  s_f3fecaf6fbaf39::t_0a45b2c90925d7 21-22
+  s_f3fecaf6fbaf39::t_01f8b20eb6b0fd 98-108
+frontend/src/main.ts
+  s_f3fecaf6fbaf39::t_6cbc2bd6bcde7c 199-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "7024d0d7243516b627037b7d0125b939b754c621",
+  "prompts": {},
+  "sessions": {
+    "s_f3fecaf6fbaf39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "18a51d1d-0e83-42c9-8daa-0ca733cb4943",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
