@@ -2,6 +2,16 @@ spring:
   application:
     name: lise-idle-backend
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The backend is a stateless OAuth2 resource server validating
+          # LiseIdler-issued JWTs (contracts §2). The JWK set is resolved
+          # lazily from this issuer's OIDC metadata on the first real JWT;
+          # contract tests use spring-security-test MOCK JWTs (no network).
+          issuer-uri: https://keycloak.novitasoft.de/realms/LiseIdler
+
   datasource:
     # Dev default: in-memory H2 in PostgreSQL compatibility mode. Prod is
     # driven by SPRING_DATASOURCE_* env vars (see docker-compose.yml).
