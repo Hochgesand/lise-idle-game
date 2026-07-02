@@ -1,0 +1,19 @@
+specs/003-living-campus/plan.md
+  s_9e3cb57f61b316::t_76a70cc5e72450 1-286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "9a8d9233453c82314fed5e6f6cd691ef3586f7b3",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
