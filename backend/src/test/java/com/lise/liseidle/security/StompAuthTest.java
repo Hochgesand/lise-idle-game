@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.messaging.converter.StringMessageConverter;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
@@ -136,6 +137,14 @@ class StompAuthTest {
             }
         });
         sessions.clear();
+        // Shut down the per-test client's task scheduler so its executor
+        // threads do not accumulate across the suite (a fresh WebSocketStompClient
+        // is built in setUp()).
+        try {
+            stompClient.stop();
+        } catch (RuntimeException ignored) {
+            // best-effort teardown between tests
+        }
     }
 
     /**
@@ -149,11 +158,27 @@ class StompAuthTest {
      * @throws Exception if the connect fails or times out
      */
     private StompSession connect(StompHeaders connectHeaders) throws Exception {
+        return connect(connectHeaders, new StompSessionHandlerAdapter() {});
+    }
+
+    /**
+     * Opens a STOMP session to {@code /ws} carrying the given CONNECT headers
+     * and using the given handler, then blocks for {@link #TIMEOUT_SECONDS}. If
+     * the server replies with an ERROR frame the future fails &mdash; so a clean
+     * return proves CONNECTED was received (no ERROR frame).
+     *
+     * @param connectHeaders the STOMP CONNECT-frame native headers
+     * @param handler        the session handler to receive callbacks
+     * @return the established {@link StompSession}
+     * @throws Exception if the connect fails or times out
+     */
+    private StompSession connect(StompHeaders connectHeaders, StompSessionHandlerAdapter handler)
+            throws Exception {
         StompSession session = stompClient.connectAsync(
                         "ws://localhost:" + port + "/ws",
                         new WebSocketHttpHeaders(),
                         connectHeaders,
-                        new StompSessionHandlerAdapter() {})
+                        handler)
                 .get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         sessions.add(session);
         return session;
@@ -197,6 +222,47 @@ class StompAuthTest {
         return received;
     }
 
+    /**
+     * Settles the (async) SUBSCRIBE frame so the broker has registered the
+     * destination before the test pushes. Without this, the push races the
+     * registration and is dropped on fast machines &mdash; which would let the
+     * negative tests pass for the WRONG reason (a wrongly-installed Principal
+     * would still see no delivery while the SUBSCRIBE is unregistered).
+     */
+    private static void awaitSubscribeSettled() throws InterruptedException {
+        Thread.sleep(SUBSCRIBE_SETTLE_MILLIS);
+    }
+
+    /**
+     * Session handler that captures transport errors and message-handling
+     * exceptions so a guard can assert NONE occurred (e.g. that a tokenless
+     * heartbeat did not trigger an ERROR frame / socket closure).
+     */
+    static final class RecordingHandler extends StompSessionHandlerAdapter {
+
+        private volatile Throwable transportError;
+        private volatile Throwable messageException;
+
+        @Override
+        public void handleTransportError(StompSession session, Throwable exception) {
+            this.transportError = exception;
+        }
+
+        @Override
+        public void handleException(StompSession session, StompCommand command, StompHeaders headers,
+                                    byte[] payload, Throwable exception) {
+            this.messageException = exception;
+        }
+
+        Throwable transportError() {
+            return transportError;
+        }
+
+        Throwable messageException() {
+            return messageException;
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     //  Bullet 1 + 4: CONNECT bearer installs Principal(sub); push delivered
     // ─────────────────────────────────────────────────────────────────────
@@ -216,7 +282,7 @@ class StompAuthTest {
         // Let the server register the SUBSCRIBE destination before the push
         // (the SUBSCRIBE frame is async; without settling, the push races the
         // registration and is dropped on fast machines).
-        Thread.sleep(SUBSCRIBE_SETTLE_MILLIS);
+        awaitSubscribeSettled();
 
         messagingTemplate.convertAndSendToUser(ALICE_SUB, "/queue/state", "HELLO-STATE");
 
@@ -243,6 +309,7 @@ class StompAuthTest {
                 .isTrue();
 
         CompletableFuture<String> received = subscribeForUserQueueState(session);
+        awaitSubscribeSettled();
         messagingTemplate.convertAndSendToUser(ALICE_SUB, "/queue/state", "SHOULD-NOT-ARRIVE");
 
         assertThatThrownBy(() -> received.get(NEGATIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS))
@@ -261,6 +328,7 @@ class StompAuthTest {
                 .isTrue();
 
         CompletableFuture<String> received = subscribeForUserQueueState(session);
+        awaitSubscribeSettled();
         messagingTemplate.convertAndSendToUser(ALICE_SUB, "/queue/state", "SHOULD-NOT-ARRIVE");
 
         assertThatThrownBy(() -> received.get(NEGATIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS))
@@ -279,6 +347,7 @@ class StompAuthTest {
                 .isTrue();
 
         CompletableFuture<String> received = subscribeForUserQueueState(session);
+        awaitSubscribeSettled();
         messagingTemplate.convertAndSendToUser(ALICE_SUB, "/queue/state", "SHOULD-NOT-ARRIVE");
 
         assertThatThrownBy(() -> received.get(NEGATIVE_TIMEOUT_SECONDS, TimeUnit.SECONDS))
@@ -298,15 +367,28 @@ class StompAuthTest {
      */
     @Test
     void heartbeatFromTokenlessSession_isIgnored_sessionStaysConnected() throws Exception {
-        StompSession session = connect(anonymousConnectHeaders());
+        RecordingHandler handler = new RecordingHandler();
+        StompSession session = connect(anonymousConnectHeaders(), handler);
 
         StompHeaders send = new StompHeaders();
         send.setDestination("/app/presence.heartbeat");
         session.send(send, "{\"office\":\"office_1\",\"activity\":\"coding\",\"commute\":null}");
 
+        // The SEND is async; an ERROR frame (which would close the socket and
+        // fire handleTransportError) arrives milliseconds later, so settle
+        // before asserting &mdash; otherwise isConnected() would read true
+        // regardless and the guard could false-green.
+        Thread.sleep(SUBSCRIBE_SETTLE_MILLIS);
+
         assertThat(session.isConnected())
                 .as("tokenless heartbeat must be ignored (no ERROR frame, session stays open)")
                 .isTrue();
+        assertThat(handler.transportError())
+                .as("tokenless heartbeat must not trigger a transport error / ERROR frame")
+                .isNull();
+        assertThat(handler.messageException())
+                .as("tokenless heartbeat must not trigger a server-side exception")
+                .isNull();
     }
 
     /**
