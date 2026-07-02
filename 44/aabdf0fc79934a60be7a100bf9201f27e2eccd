@@ -1,0 +1,22 @@
+frontend/vite.config.ts
+  s_9e3cb57f61b316::t_a70a2055dd1d09 29-31
+  s_9e3cb57f61b316::t_ee57c84d5d3f63 14-19,22-23,27-28
+  s_9e3cb57f61b316::t_4cd45887c92ac4 20-21,24-26
+  s_9e3cb57f61b316::t_96604da93007f6 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "44aabdf0fc79934a60be7a100bf9201f27e2eccd",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
