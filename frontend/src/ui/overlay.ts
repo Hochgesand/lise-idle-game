@@ -38,10 +38,12 @@
 // any rebuild — so the action lands regardless of what the loop does between
 // press and release. A `click` listener is kept as an accessibility fallback
 // (keyboard / screen-reader activation raises a `click` with no preceding
-// `pointerdown`) and deduped against a recent `pointerdown` on the same
-// action so a mouse press never double-fires. Panels expose their actions via
-// `data-action` attributes + a per-section `actions` map; no per-frame
-// listener is ever attached to a rebuilt node.
+// `pointerdown` on the same action) and the press's own click tail is
+// suppressed via a press-relative flag consumed by the next matching `click`
+// (one per press), so a press never double-fires — including a long press held
+// past any fixed time window. Panels expose their actions via `data-action`
+// attributes + a per-section `actions` map; no per-frame listener is ever
+// attached to a rebuilt node.
 //
 // ## Throttled refresh (T048 P1 — DOM churn at 60 fps)
 // Optionally (`refreshMinIntervalMs`) refresh is throttled to a sane cadence
@@ -173,8 +175,8 @@ export interface Overlay {
 const UI_ROOT_CLASS = 'ui-root';
 const UI_PANEL_CLASS = 'ui-panel';
 
-/** A `click` within this window of a `pointerdown` on the same action is the press tail (deduped). */
-const CLICK_DEDUP_MS = 400;
+/** A `click` following a `pointerdown` on the same action is that press's tail
+ * and is suppressed (one per press) so a mouse/touch press never double-fires. */
 
 /**
  * Build and mount the overlay.
@@ -236,8 +238,15 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
     }
   }
 
-  let lastPointerAction = '';
-  let lastPointerAt = 0;
+  // The press's own synthesized `click` (the browser fires click at pointerup)
+  // must be suppressed so a mouse/touch press doesn't double-fire — the action
+  // already ran on pointerdown. We use a press-relative FLAG (set on
+  // pointerdown, consumed by the next matching `click`) rather than a fixed
+  // time window: a time window would fail on a long press held longer than the
+  // window before release, re-firing the action (a double spend). The flag is
+  // duration-independent. A genuine keyboard/screen-reader `click` with no
+  // preceding pointerdown on the same action still fires (accessibility).
+  let suppressClickAction: string | null = null;
 
   function closestAction(target: EventTarget | null): HTMLElement | null {
     if (!(target instanceof HTMLElement)) return null;
@@ -251,26 +260,38 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
     if (handler) handler(btn, accessors);
   }
 
-  // SINGLE listener on the STABLE root — survives every per-frame rebuild.
+  // SINGLE pointerdown listener on the STABLE root — survives every per-frame
+  // rebuild. Fires the action on PRESS (before any rebuild can swap the node).
   root.addEventListener('pointerdown', (e: Event) => {
     const btn = closestAction(e.target);
-    if (!btn) return;
+    if (!btn) {
+      // A press off any action ends the previous press's click-suppression
+      // window (bounds the rare stale-flag case where a press's click was
+      // swallowed by a rebuild).
+      suppressClickAction = null;
+      return;
+    }
     const action = btn.dataset.action;
     if (!action) return;
-    lastPointerAction = action;
-    lastPointerAt = Date.now();
+    // Mark this action's press so the browser-synthesized click (at pointerup,
+    // possibly after a long hold) is swallowed — no double activation. A new
+    // press supersedes any prior window.
+    suppressClickAction = action;
     fire(btn);
   });
 
   // Accessibility fallback: keyboard / screen-reader activation raises a
-  // `click` with no preceding `pointerdown`. Deduped against a recent
-  // pointerdown on the same action so a mouse press never double-fires.
+  // `click` with no preceding pointerdown on the same action. The press's own
+  // click tail is consumed (one suppression per press) so a mouse/touch press
+  // never double-fires, regardless of how long it is held.
   root.addEventListener('click', (e: Event) => {
     const btn = closestAction(e.target);
     if (!btn) return;
     const action = btn.dataset.action;
     if (!action) return;
-    if (action === lastPointerAction && Date.now() - lastPointerAt < CLICK_DEDUP_MS) {
+    if (action === suppressClickAction) {
+      // This click is the tail of the press we already handled on pointerdown.
+      suppressClickAction = null; // consume — one suppression per press
       return;
     }
     fire(btn);

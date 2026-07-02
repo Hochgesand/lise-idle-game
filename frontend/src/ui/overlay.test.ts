@@ -449,6 +449,39 @@ describe('action delegation — pointerdown on the stable root', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  // Regression for the cubic P2: a press held longer than any fixed time
+  // window before release must still NOT double-fire. The dedup is a press-
+  // relative flag (set on pointerdown, consumed by the next matching click),
+  // NOT a time window, so a long hold is safe (the old time-window code would
+  // re-fire here once the hold exceeded the window).
+  it('does not double-fire on a long press (click well after pointerdown) — dedup is duration-independent', () => {
+    const handler = vi.fn();
+    const overlay = mountOverlay([actionSection('hud', 'boost', handler)]);
+    overlay.refresh();
+
+    const btn = mount.querySelector('[data-action="boost"]')!;
+    press(btn);
+    // Simulate a long hold: the click arrives only at release. No time
+    // advance is needed because the dedup ignores elapsed time entirely.
+    btn.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires once per distinct press (two presses ⇒ two activations)', () => {
+    const handler = vi.fn();
+    const overlay = mountOverlay([actionSection('hud', 'boost', handler)]);
+    overlay.refresh();
+
+    const btn = () => mount.querySelector('[data-action="boost"]')!;
+    press(btn());
+    btn().dispatchEvent(new Event('click', { bubbles: true })); // tail of press 1
+    press(btn()); // press 2 (re-arms suppression)
+    btn().dispatchEvent(new Event('click', { bubbles: true })); // tail of press 2
+
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
   it('throws on a duplicate action name across sections (defensive)', () => {
     expect(() =>
       createOverlay({
