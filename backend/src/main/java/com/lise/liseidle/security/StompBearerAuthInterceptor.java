@@ -8,7 +8,6 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
@@ -127,8 +126,15 @@ public class StompBearerAuthInterceptor implements ChannelInterceptor {
             }
             final String name = sub;
             return () -> name;
-        } catch (JwtException | IllegalArgumentException e) {
-            // Invalid / expired / malformed → anonymous, accepted (never an ERROR frame).
+        } catch (Exception e) {
+            // Any decode failure &mdash; invalid signature / wrong issuer /
+            // expired (JwtException), a blank/malformed token
+            // (IllegalArgumentException), or a stray RuntimeException (e.g.
+            // an unexpected JWKS-fetch error that Nimbus did not wrap) &mdash;
+            // maps to the accepted anonymous case. The class's binding
+            // invariant is "never throws": a bad token must degrade to an
+            // anonymous CONNECT, never surface as an ERROR frame that would
+            // break the 001 anonymous-reconnect guarantee (contracts &sect;3).
             return null;
         }
     }
