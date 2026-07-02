@@ -108,7 +108,10 @@ class StompAuthTest {
 
     private static final long TIMEOUT_SECONDS = 5;
     private static final long NEGATIVE_TIMEOUT_SECONDS = 1;
+    /** Settle for the (async) SUBSCRIBE frame to register on the broker. */
     private static final long SUBSCRIBE_SETTLE_MILLIS = 500;
+    /** Settle for a potential async server ERROR frame / socket closure. */
+    private static final long ERROR_FRAME_SETTLE_MILLIS = 500;
 
     @LocalServerPort
     private int port;
@@ -378,7 +381,7 @@ class StompAuthTest {
         // fire handleTransportError) arrives milliseconds later, so settle
         // before asserting &mdash; otherwise isConnected() would read true
         // regardless and the guard could false-green.
-        Thread.sleep(SUBSCRIBE_SETTLE_MILLIS);
+        Thread.sleep(ERROR_FRAME_SETTLE_MILLIS);
 
         assertThat(session.isConnected())
                 .as("tokenless heartbeat must be ignored (no ERROR frame, session stays open)")
