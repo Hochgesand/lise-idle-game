@@ -1,0 +1,19 @@
+frontend/src/net/stompClient.test.ts
+  s_f3fecaf6fbaf39::t_bd127479823246 624-689
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "29508a8bc389e53b86d273ad320e6f05703e04e5",
+  "prompts": {},
+  "sessions": {
+    "s_f3fecaf6fbaf39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "18a51d1d-0e83-42c9-8daa-0ca733cb4943",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
