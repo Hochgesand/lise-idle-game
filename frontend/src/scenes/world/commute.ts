@@ -35,6 +35,102 @@ export interface PolylinePoint {
 }
 
 /**
+ * A parsed CommutePaths route: the world-space polyline plus the buildings it
+ * connects, as authored in the Tiled object's `from`/`to` custom properties
+ * (campus-layout.md; campusMap.test.ts pins exactly one such polyline running
+ * `office_2` → `office_1`). `orientPath` derives the per-commute traversal
+ * direction from a commute's `fromOffice`.
+ */
+export interface CommutePath {
+  /** World-space vertices, in the AUTHORED direction (`from` → `to`). */
+  points: PolylinePoint[];
+  /** Building id the authored polyline starts at (Tiled `from` property). */
+  from: string;
+  /** Building id the authored polyline ends at (Tiled `to` property). */
+  to: string;
+}
+
+/**
+ * A raw CommutePaths object as read from the Tiled object layer via
+ * `map.getObjectLayer('CommutePaths').objects` — mirrors `RawSeatAnchor`
+ * (seats.ts). Only `x`/`y`, `polyline`, and the `from`/`to` string properties
+ * are consumed. Tiled exports custom properties as an array of
+ * `{ name, type, value }` (the campus.json form); the object form is accepted
+ * too for robustness.
+ */
+export interface RawCommutePathObject {
+  x?: number;
+  y?: number;
+  polyline?: ReadonlyArray<PolylinePoint>;
+  properties?:
+    | ReadonlyArray<{ name: string; value: unknown; type?: string }>
+    | Readonly<Record<string, unknown>>;
+}
+
+/** Read a string custom property from either Tiled property form. */
+function readStringProperty(
+  properties: RawCommutePathObject['properties'],
+  name: string,
+): string | null {
+  if (properties === undefined) {
+    return null;
+  }
+  const value = Array.isArray(properties)
+    ? properties.find((p) => p.name === name)?.value
+    : (properties as Record<string, unknown>)[name];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * Parse the `CommutePaths` object layer into a {@link CommutePath}: the FIRST
+ * object carrying a ≥ 2-vertex polyline plus `from`/`to` string properties
+ * wins (the campus map authors exactly one). Vertices are offset by the
+ * object's own `x`/`y` origin into world space (the Tiled polyline
+ * convention).
+ *
+ * Defensive, never throws: an empty layer, a non-polyline object, a
+ * degenerate (< 2 vertex) polyline, or missing `from`/`to` tags yield `null`
+ * — the renderer simply skips commuters (presence is advisory, FR-016).
+ */
+export function extractCommutePath(
+  objects: ReadonlyArray<RawCommutePathObject>,
+): CommutePath | null {
+  for (const o of objects) {
+    const polyline = o.polyline;
+    if (polyline === undefined || polyline.length < 2) continue;
+    const from = readStringProperty(o.properties, 'from');
+    const to = readStringProperty(o.properties, 'to');
+    if (from === null || to === null) continue;
+    const ox = o.x ?? 0;
+    const oy = o.y ?? 0;
+    return {
+      from,
+      to,
+      points: polyline.map((p) => ({ x: ox + p.x, y: oy + p.y })),
+    };
+  }
+  return null;
+}
+
+/**
+ * The traversal direction of `path` for a commute leaving `fromOffice`:
+ * as-authored when the commute starts at the path's own origin, REVERSED when
+ * it starts at the path's end (so an `office_1` → `office_2` commute walks
+ * the office_2-authored route backwards), and as-authored as the defensive
+ * fallback for an unknown origin (a malformed record still renders on the
+ * route rather than crashing — the channel is advisory).
+ *
+ * Pure: always returns a fresh array; the authored `path.points` is never
+ * mutated (`Array.prototype.reverse` would).
+ */
+export function orientPath(path: CommutePath, fromOffice: string): PolylinePoint[] {
+  if (fromOffice === path.to) {
+    return [...path.points].reverse();
+  }
+  return [...path.points];
+}
+
+/**
  * Tunable knobs for the perpendicular lane offset. All optional; sensible
  * defaults keep a ~30-commauteer rush legible against 16 px tiles.
  */

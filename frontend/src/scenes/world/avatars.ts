@@ -98,6 +98,13 @@ export interface AvatarRender {
   x: number;
   y: number;
   presence: AvatarPresence;
+  /**
+   * (T080) True while this colleague is rendered ON the commute route.
+   * Drives the FR-022 in-transit label decluttering: labels are tap/hover
+   * only while commuting, even at label-persistent zoom (`labelVisible`,
+   * presenceView.ts). Optional: absent means seated (`false`).
+   */
+  inTransit?: boolean;
 }
 
 /** {@link AvatarLayer} construction options. */
