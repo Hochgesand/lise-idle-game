@@ -1,0 +1,20 @@
+backend/src/main/java/com/lise/liseidle/state/PlayerStateService.java
+  s_450233d18131f8::t_f34a233910cf25 85,88-91,94,105,108-109
+  s_450233d18131f8::t_3f626be9ec4323 110-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "eeb9b9c2ddbb2d4ba29dcb045cfa026cd36b38eb",
+  "prompts": {},
+  "sessions": {
+    "s_450233d18131f8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f19c8-c0e7-7f70-839a-de1413dda4f9",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
