@@ -1,7 +1,8 @@
-// T036 — End-to-end US1 wiring: the shippable MVP entry point.
+// T036 — End-to-end game wiring: the shippable entry point (002: campus +
+// DOM overlay; 001 loop preserved).
 //
 // Boots the full game per quickstart.md Scenario 1:
-//   new player starts at zero → fetch content → start loop → render office →
+//   new player starts at zero → fetch content → start loop → render campus →
 //   save on close/periodically → restore on reload.
 //
 // On load, offline progress is caught up via `advance(state, elapsedDt)`.
@@ -18,10 +19,12 @@
 // - Big numbers stay strings end-to-end (never double).
 //
 // ## Loop-driver choice
-// A thin `ControllerScene` (defined below) drives the game-loop tick via its
-// `update(time)` — this avoids modifying OfficeScene (T034) or HudScene (T035)
-// while ensuring the tick runs every frame. The controller launches both
-// scenes as parallel overlays.
+// A thin `ControllerScene` (defined below) drives the game-loop tick AND the
+// DOM overlay refresh via its `update(time)`. T051 retires the three in-canvas
+// Phaser UI scenes (OfficeScene/HudScene/EconomyScene/AcademyScene): the
+// controller now launches the campus world (`CampusScene`) and mounts the DOM
+// overlay (HUD/Economy/Academy panels) — the canvas renders the world only
+// (research: UI architecture — DOM overlay).
 
 import Phaser from 'phaser';
 import type { ContentCatalog, ContentEnvelope, GameState } from './sim/types';
@@ -34,10 +37,15 @@ import { FALLBACK_CONTENT } from './sim/fallbackContent';
 import { loadGame, saveGame, createInitialState } from './save/localStorage';
 import { restClient } from './net/restClient';
 import { stompClient } from './net/stompClient';
-import { OfficeScene } from './scenes/OfficeScene';
-import { HudScene } from './scenes/HudScene';
-import { EconomyScene } from './scenes/EconomyScene';
-import { AcademyScene } from './scenes/AcademyScene';
+// T051: the retired in-canvas Phaser UI scenes (OfficeScene/HudScene/
+// EconomyScene/AcademyScene) are replaced by CampusScene (the world) + a DOM
+// overlay (the three UI panels). The world renders campus tiles + avatars; the
+// DOM overlay renders HUD/Economy/Academy from the existing pure view models.
+import { CampusScene } from './scenes/world/CampusScene';
+import { createOverlay, type Overlay } from './ui/overlay';
+import { hudPanel } from './ui/hudPanel';
+import { economyPanel } from './ui/economyPanel';
+import { academyPanel } from './ui/academyPanel';
 import { CASH_RATE } from './game/economyConfig';
 
 // ── Module-level mutable state (the single source of truth for the app) ────
@@ -169,93 +177,110 @@ function connectStomp(): void {
 // ── Controller scene (drives the game-loop tick each frame) ────────────────
 
 /**
- * A thin controller Phaser scene. It does NOT render anything itself — it
- * launches OfficeScene (the office) and HudScene (the overlay) as parallel
- * scenes, and its `update(time)` drives the game-loop tick.
+ * DOM-overlay refresh cadence (ms). The loop drives `overlay.refresh()` every
+ * frame, but the DOM only repaints at most this often, applying the latest
+ * state (overlay.ts leading + trailing throttle). 10 fps is plenty for an
+ * idle-game HUD and keeps per-frame DOM churn off the 60 fps budget.
+ */
+const OVERLAY_REFRESH_MS = 100;
+
+/**
+ * A thin controller Phaser scene. It renders nothing itself — it launches the
+ * campus world (`CampusScene`) as a parallel scene and mounts the DOM overlay
+ * (HUD/Economy/Academy), and its `update(time)` drives both the game-loop tick
+ * and `overlay.refresh()` each frame.
  *
- * This is the cleanest integration point: it avoids modifying OfficeScene
- * (T034) or HudScene (T035) while ensuring the loop tick runs every frame.
+ * The campus renders tiles + avatars; the DOM overlay renders the three UI
+ * panels from the existing pure view models (research: UI architecture — DOM
+ * overlay). This retires the three in-canvas Phaser UI scenes (OfficeScene /
+ * HudScene / EconomyScene / AcademyScene, deleted in T051).
  */
 class ControllerScene extends Phaser.Scene {
+  /** The mounted DOM overlay, refreshed each frame in `update`. */
+  private overlay: Overlay | null = null;
+
   constructor() {
     super('ControllerScene');
   }
 
   create(): void {
-    // Launch the office scene (renders the tilemap + dev sprite).
-    this.scene.launch('OfficeScene');
-    // Launch the HUD overlay with injected accessors for live state + boost.
-    this.scene.launch('HudScene', {
-      getState: (): GameState => state,
-      getContent: (): ContentCatalog => content,
-      onBoost: () => {
-        state = manualBoost(state, content);
-      },
-    });
-    // Launch the economy overlay (cash-out, upgrade shop, burner activation).
-    // Callbacks bind to the pure mutators + state update. Each wraps in
-    // try/catch — an InsufficientResourcesError (e.g. clicking an unaffordable
-    // item) must NOT crash the game. The UI greys out unaffordable items, so
-    // this is a defensive guard. After a successful mutation, save immediately
-    // (idempotent; the periodic save also persists the new state).
-    this.scene.launch('EconomyScene', {
-      getState: (): GameState => state,
-      getContent: (): ContentCatalog => content,
-      cashRate: CASH_RATE,
-      onCashOut: (locAmount: string) => {
-        try {
-          state = cashOut(state, locAmount, CASH_RATE);
-          saveGame(state);
-        } catch (err) {
-          if (!(err instanceof InsufficientResourcesError)) throw err;
-        }
-      },
-      onPurchaseUpgrade: (upgradeId: string) => {
-        try {
-          state = purchaseUpgrade(state, content, upgradeId);
-          saveGame(state);
-        } catch (err) {
-          if (!(err instanceof InsufficientResourcesError)) throw err;
-        }
-      },
-      onActivateBurner: (burnerId: string) => {
-        try {
-          state = activateBurner(state, content, burnerId);
-          saveGame(state);
-        } catch (err) {
-          if (!(err instanceof InsufficientResourcesError)) throw err;
-        }
-      },
-    });
-    // Launch the Academy overlay (trainings + credentials/milestones).
-    // Callback binds to purchaseTraining + state update + save, wrapped in
-    // try/catch — an InsufficientResourcesError (clicking an unaffordable
-    // training) must NOT crash the game. computeRate already multiplies by
-    // owned trainings' permanentMultipliers (advance.ts rateWithoutBurner),
-    // so once ownedTrainings changes the HUD rate display updates
-    // automatically each frame. Milestones evaluate each tick via
-    // advance's applyMilestones (T015/T016) — no extra wiring needed.
-    this.scene.launch('AcademyScene', {
-      getState: (): GameState => state,
-      getContent: (): ContentCatalog => content,
-      onPurchaseTraining: (trainingId: string) => {
-        try {
-          state = purchaseTraining(state, content, trainingId);
-          saveGame(state);
-        } catch (err) {
-          if (!(err instanceof InsufficientResourcesError)) throw err;
-        }
-      },
-    });
+    // Launch the campus world scene (renders the tilemap + camera/avatars).
+    this.scene.launch('CampusScene');
+
+    // Mount the DOM overlay (FR-019). Action callbacks bind to the pure
+    // mutators + state update — the same closures the retired scenes received
+    // via their `*SceneInit`. Each economy/academy callback wraps in
+    // try/catch — an InsufficientResourcesError (e.g. an unaffordable tap that
+    // slipped past the affordance greying) must NOT crash the game. After a
+    // successful mutation, save immediately (idempotent; the periodic save
+    // also persists the new state).
+    const ui = document.getElementById('ui');
+    if (ui !== null) {
+      this.overlay = createOverlay({
+        mount: ui,
+        accessors: {
+          getState: (): GameState => state,
+          getContent: (): ContentCatalog => content,
+        },
+        sections: [
+          hudPanel({
+            onBoost: () => {
+              state = manualBoost(state, content);
+            },
+          }),
+          economyPanel({
+            onCashOut: (locAmount: string) => {
+              try {
+                state = cashOut(state, locAmount, CASH_RATE);
+                saveGame(state);
+              } catch (err) {
+                if (!(err instanceof InsufficientResourcesError)) throw err;
+              }
+            },
+            onPurchaseUpgrade: (upgradeId: string) => {
+              try {
+                state = purchaseUpgrade(state, content, upgradeId);
+                saveGame(state);
+              } catch (err) {
+                if (!(err instanceof InsufficientResourcesError)) throw err;
+              }
+            },
+            onActivateBurner: (burnerId: string) => {
+              try {
+                state = activateBurner(state, content, burnerId);
+                saveGame(state);
+              } catch (err) {
+                if (!(err instanceof InsufficientResourcesError)) throw err;
+              }
+            },
+          }),
+          academyPanel({
+            onPurchaseTraining: (trainingId: string) => {
+              try {
+                state = purchaseTraining(state, content, trainingId);
+                saveGame(state);
+              } catch (err) {
+                if (!(err instanceof InsufficientResourcesError)) throw err;
+              }
+            },
+          }),
+        ],
+        refreshMinIntervalMs: OVERLAY_REFRESH_MS,
+      });
+    }
   }
 
   /**
    * Called by Phaser every frame (~60fps). Drives the game-loop tick with the
-   * real elapsed dt. This is the wall-clock boundary — Phaser's time feeds the
-   * loop, which computes dt internally and delegates to the pure `advance`.
+   * real elapsed dt (the wall-clock boundary — Phaser's time feeds the loop,
+   * which computes dt internally and delegates to the pure `advance`), then
+   * refreshes the DOM overlay (throttled internally so the DOM repaints at
+   * most every `OVERLAY_REFRESH_MS`). The overlay handle is null only if the
+   * `<div id="ui">` mount was missing; the loop still runs.
    */
   update(time: number): void {
     loop.update(time);
+    this.overlay?.refresh();
   }
 }
 
@@ -267,7 +292,7 @@ class ControllerScene extends Phaser.Scene {
  * Order:
  *  1. Load local save (null → fresh state) + grant starter producer.
  *  2. Construct the game loop (content is the empty fallback for now).
- *  3. Start Phaser immediately (office renders, HUD shows "LOC: 0").
+ *  3. Start Phaser immediately (campus renders, DOM overlay shows "LOC: 0").
  *  4. Fetch content (async, best-effort). Once loaded, catch up offline progress
  *     with the real content (so a returning player's LOC rate is correct).
  *  5. Best-effort: backend session load, STOMP connect, periodic sync.
@@ -298,12 +323,13 @@ async function boot(): Promise<void> {
   // Anchor the loop's tick to now (state is already caught up above).
   loop.load(state, now);
 
-  // 3. Start Phaser immediately (renders office + HUD).
+  // 3. Start Phaser immediately (renders the campus world + DOM overlay).
   // T046: pixelArt: true keeps the Phase 3 16px campus tiles crisp at every
   // zoom (nearest-neighbor filtering + roundPixels) instead of bilinear
   // smoothing — the campus renders as intended from minZoom to maxZoom
-  // (research: Art direction; FR-024). CampusScene is registered in T051; the
-  // 001 scenes remain here until then.
+  // (research: Art direction; FR-024). ControllerScene (first in the array) is
+  // auto-started and launches CampusScene; the three retired in-canvas Phaser
+  // UI scenes are gone (T051) — the DOM overlay replaces them.
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -314,7 +340,7 @@ async function boot(): Promise<void> {
       width: '100%',
       height: '100%',
     },
-    scene: [ControllerScene, OfficeScene, HudScene, EconomyScene, AcademyScene],
+    scene: [ControllerScene, CampusScene],
   });
 
   // 4. Fetch content (best-effort). On failure the bundled FALLBACK_CONTENT

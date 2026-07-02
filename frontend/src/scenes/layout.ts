@@ -1,7 +1,7 @@
 // T034 — Pure tile-layout math for the office scene.
 //
 // Extracted into a Phaser-free module so it can be unit-tested in Vitest
-// without spinning up a WebGL context (the OfficeScene class itself is
+// without spinning up a WebGL context (the scene classes themselves are
 // integration-level, verified via `tsc -b` + `vite build`).
 
 /**
@@ -16,7 +16,7 @@ export const TILE_SIZE = 16;
  * Convert tile coordinates to the PIXEL CENTRE of that tile (where a sprite's
  * origin should be placed so it sits centered inside the tile).
  *
- * Pure: no Phaser, no I/O. Tested in OfficeScene.test.ts.
+ * Pure: no Phaser, no I/O. Tested in layout.test.ts.
  *
  * @param tileX    zero-based column index
  * @param tileY    zero-based row index
