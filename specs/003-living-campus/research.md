@@ -242,8 +242,9 @@ Two data surfaces, matching where each datum lives naturally:
   extraction with lenient fallbacks) are proven by 002's tests — copying the
   shape means copying the test discipline too.
 - Graceful degradation on a station-less map keeps 003's frontend deployable
-  independently of map regeneration (the 002 T040 real-map task is still
-  open; spec assumption "may still be placeholder art").
+  independently of map regeneration (002's T040/T041 real map landed during
+  003 planning; the tolerance still protects older cached maps and partial
+  regenerations).
 
 ### Alternatives considered
 

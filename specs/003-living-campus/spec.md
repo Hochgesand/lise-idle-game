@@ -179,8 +179,9 @@ walking.
 4. **Given** reduced motion is enabled, **When** the player taps a station,
    **Then** the panel opens promptly without the walk animation.
 5. **Given** any device (phone portrait through desktop), **When** the player
-   opens the fallback list menu, **Then** every activity panel can be opened
-   directly, without walking, with keyboard and screen-reader access.
+   opens the fallback list menu, **Then** every activity can be triggered
+   directly (panels open; the panel-less boost action fires), without
+   walking, with keyboard and screen-reader access.
 6. **Given** a panel was opened via a station, **When** the player closes it
    (or taps elsewhere), **Then** the panel closes and the overlay returns to
    the unobtrusive HUD-only state — panels are on-demand, not an always-on
@@ -331,7 +332,9 @@ training completed during the offline span with deterministic results.
 - **FR-009**: Tapping a station in the player's active office MUST walk the
   player avatar to the station over a short, deterministic, data-driven
   duration (seconds), then open the corresponding existing DOM panel
-  (Academy, economy/burner, economy/cash-out, boost) contextually on arrival.
+  (Academy, economy/burner, economy/cash-out) contextually on arrival. The
+  manual-boost station has no panel: arriving at the player's own desk fires
+  the boost action directly, with unchanged Spec 001 semantics.
 - **FR-010**: Walking MUST be presentation-only: the core `advance` step is
   not modified by walking, no resource or state change occurs from the walk
   itself, and the sim action taken in the opened panel keeps its exact
@@ -341,10 +344,11 @@ training completed during the offline span with deterministic results.
   office switch cancels any in-progress walk and pending panel-open.
 - **FR-012**: With reduced motion enabled, the walk animation MUST be skipped
   or minimized while preserving the outcome (panel opens promptly).
-- **FR-013**: A fallback list menu MUST allow opening every activity panel
-  directly without walking, usable with keyboard and assistive technology,
-  on phone and desktop alike (covers accessibility and activities whose
-  station is in the other building).
+- **FR-013**: A fallback list menu MUST allow triggering every activity
+  directly without walking — each activity panel opens directly, and the
+  panel-less boost action fires directly — usable with keyboard and assistive
+  technology, on phone and desktop alike (covers accessibility and activities
+  whose station is in the other building).
 - **FR-014**: Panels MUST become on-demand: opened contextually (via station
   or menu), closable, and closed by default — replacing the always-on panel
   stack while keeping the persistent HUD (LOC counter, rate, find-me).
@@ -446,10 +450,11 @@ training completed during the offline span with deterministic results.
   assignment, the commute polyline math, and the DOM overlay are prerequisites
   and are extended, not replaced. Station data joins the map as a new object
   layer following the same conventions.
-- **The 002 map may still be placeholder art**: 002's T040/T041 real-map
-  authoring may land before or alongside this feature; this spec depends only
-  on the object-layer contracts (rooms/anchors/paths + the new stations), not
-  on final art.
+- **The 002 real map has landed**: 002's T040/T041 real-map authoring
+  (`scripts/gen_campus_assets.py`, per
+  `specs/002-shared-office-coop/campus-layout.md`) is on `main`; this spec
+  still depends only on the object-layer contracts (rooms/anchors/paths + the
+  new stations), not on final art.
 - **Player identity is optional garnish**: the display-name label uses the 002
   identity when present; "Du" otherwise. No new identity capability is added.
 - **One in-progress training at a time** is a deliberate design bound (one

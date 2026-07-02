@@ -107,9 +107,9 @@ on either side (the whole feature is buildable with what 002 installed).
   `session/SessionController.java` `CURRENT_SCHEMA_VERSION` `2 → 3`;
   `content/trainings.json` gains `durationSeconds` values.
 - Assets: `frontend/public/assets/campus.json` gains the `Stations` object
-  layer (added in the generator `scripts/gen_placeholder_assets.py` — or its
-  successor `scripts/gen_campus_assets.py` once 002's real-map task T040
-  lands; the layer contract is identical either way).
+  layer, added in the real-map generator `scripts/gen_campus_assets.py`
+  (002 T040/T041, landed on `main`; `gen_placeholder_assets.py` is retired —
+  the object-layer contract is unchanged).
 
 **Storage**: Client localStorage save (`schemaVersion` **2 → 3**, additive
 migration defaulting `activeTraining: null`) + the unchanged JPA layer
@@ -117,8 +117,8 @@ migration defaulting `activeTraining: null`) + the unchanged JPA layer
 change.
 
 **Testing**: Vitest (frontend, co-located `*.test.ts` — repo convention;
-baseline **501 tests green**, the suite MUST stay green at every GREEN
-commit): v2→v3 migration; `startTraining` (cost-at-start, one-at-a-time,
+baseline **549 tests / 29 files green** (verified 2026-07-02), the suite MUST
+stay green at every GREEN commit): v2→v3 migration; `startTraining` (cost-at-start, one-at-a-time,
 zero-duration instant path, supersedes-`purchaseTraining` call-site tests);
 piecewise `advance` with a training boundary incl. large-`dt` offline spans
 and the associativity property; content validation (`world` block,
@@ -182,7 +182,7 @@ deps, no new endpoints.
 |---|-----------|--------|----------|
 | I | Deterministic, Pure Game Simulation | ✅ PASS | The only sim additions are `activeTraining` (state) + `durationSeconds` (content), resolved by piecewise `advance` at `startedAt + duration` — a pure state+elapsed-time boundary identical in kind to 002's commute resolution; offline completion uses the same path as online (no divergent branch), and the associativity property is retained as a test (FR-018; data-model §1, §9). Walking, find-me, and indicators are presentation-layer views that never feed `advance` — `WalkIntent` is structurally outside `GameState` (research Decisions 3, 8). The wall-clock walk timer is recorded as a borderline note in **Complexity Tracking**. |
 | II | Data-Driven Content & Balance | ✅ PASS | Training durations live in `trainings.json` entries; the walk duration lives in the new additive `world.json` content block (fallback-mirrored); station placement is map data (the `Stations` Tiled object layer). Retuning any of them is a data-only change; no balance number lands in logic (FR-007/016/021; data-model §§2–4). |
-| III | Test-First (NON-NEGOTIABLE) | ✅ PASS | Every behavior lands RED-first per tasks.md: migration, `startTraining`, the `advance` training boundary (incl. large-`dt` offline and associativity property tests — the Principle III "offline-progress and large-delta" requirement), seat reservation, projection precedence, walk/retarget math, stations extraction, indicator derivations, panel manager, and the backend merge/normalization/envelope tests. Suite baseline 501 stays green at every GREEN commit. |
+| III | Test-First (NON-NEGOTIABLE) | ✅ PASS | Every behavior lands RED-first per tasks.md: migration, `startTraining`, the `advance` training boundary (incl. large-`dt` offline and associativity property tests — the Principle III "offline-progress and large-delta" requirement), seat reservation, projection precedence, walk/retarget math, stations extraction, indicator derivations, panel manager, and the backend merge/normalization/envelope tests. Suite baseline 549 (29 files) stays green at every GREEN commit. |
 | IV | Player State Integrity & Persistence | ✅ PASS | Additive v2→v3 migration defaulting `activeTraining: null`; lenient pre-migration defaults keep every v1/v2 save loadable; lossless round-trip retained; backend normalization prevents `null` leaks on pre-existing rows; unknown `trainingId` at resolution degrades safely without corrupting the save (FR-022; data-model §8; SC-007). Offline progress is honored *more* visibly, never capped or faked. |
 | V | Simplicity & YAGNI | ✅ PASS | Every story is prioritized and independently deliverable; the design maximally reuses 002 machinery (commute math, seat assignment, camera math, overlay collapse/delegation, piecewise `advance`, migration pattern) and adds **zero dependencies**. Deliberately rejected complexity: sim-modeled walking, pathfinding, generic job queues, presence-echoed self, routing libraries (research, every "Alternatives considered"). `startTraining` replaces `purchaseTraining` rather than coexisting with it. One-training-at-a-time bounds the new state to a single nullable field. |
 | VI | Online & Multiplayer as an Additive Overlay | ✅ PASS (no online capability added) | This feature introduces **no** online input, endpoint, or social behavior; the player avatar is a local save projection that renders identically offline and signed-out (FR-001/006/023), and the 002 overlay's degradation story is unchanged (quickstart Scenario 11). The principle's justification duty is not triggered; the check documents non-applicability. |
@@ -262,8 +262,10 @@ frontend/
 │   │   ├── academyPanel.ts               # (002→) timed-training start flow, FR-020 gate
 │   │   └── styles.css                    # (002→) menu/on-demand panel styles
 │   └── main.ts                           # (002→) startTraining wiring; panel-manager hookup
-├── public/assets/campus.json             # (002→) + Stations object layer
-└── scripts/gen_placeholder_assets.py     # (002→) emit the Stations layer (or gen_campus_assets.py once 002 T040 lands)
+└── public/assets/campus.json             # (002→) + Stations object layer
+
+scripts/
+└── gen_campus_assets.py                  # (002→) real-map generator (002 T040/T041) — emits the Stations layer
 ```
 
 **Structure Decision**: purely additive on the 002 layout — new pure modules
