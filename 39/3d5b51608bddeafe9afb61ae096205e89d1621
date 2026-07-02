@@ -1,0 +1,22 @@
+frontend/src/sim/content.test.ts
+  s_9e3cb57f61b316::t_36426f214fe3e6 121-131,143
+  s_9e3cb57f61b316::t_cfce5cf1709165 401-551
+frontend/src/sim/fallbackContent.test.ts
+  s_9e3cb57f61b316::t_08ffa3f15737cb 48-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "393d5b51608bddeafe9afb61ae096205e89d1621",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
