@@ -16,7 +16,9 @@ import { createOverlay } from './overlay';
 import { hudPanel } from './hudPanel';
 import { createInitialState } from '../save/localStorage';
 import { FALLBACK_CONTENT } from '../sim/fallbackContent';
-import type { ContentCatalog, CoopSegment, GameState } from '../sim/types';
+import { switchOffice } from '../sim/actions';
+import { deriveHeartbeat } from '../net/heartbeat';
+import type { CommuteState, ContentCatalog, CoopSegment, GameState } from '../sim/types';
 
 /** Dispatch a pointerdown — the production activation path under delegation. */
 function press(target: Element): void {
@@ -33,12 +35,18 @@ function makeState(overrides: {
   ownedProducers?: string[];
   reducedMotion?: boolean;
   coopSegments?: CoopSegment[];
+  earnedMilestones?: string[];
+  activeOffice?: string;
+  commute?: CommuteState;
 } = {}): GameState {
   const s = createInitialState();
   if (overrides.loc !== undefined) s.resources.loc = overrides.loc;
   if (overrides.ownedProducers) s.ownedProducers = new Set(overrides.ownedProducers);
   if (overrides.reducedMotion !== undefined) s.settings.reducedMotion = overrides.reducedMotion;
   if (overrides.coopSegments) s.coopSegments = overrides.coopSegments;
+  if (overrides.earnedMilestones) s.earnedMilestones = new Set(overrides.earnedMilestones);
+  if (overrides.activeOffice !== undefined) s.activeOffice = overrides.activeOffice;
+  if (overrides.commute !== undefined) s.commute = overrides.commute;
   return s;
 }
 
@@ -47,12 +55,13 @@ function mountHud(
   state: GameState,
   onBoost: () => void = () => {},
   content: ContentCatalog = FALLBACK_CONTENT,
+  onSwitchOffice: (toOffice: string) => void = () => {},
 ): HTMLElement {
   const mount = document.createElement('div');
   document.body.appendChild(mount);
   const overlay = createOverlay({
     mount,
-    sections: [hudPanel({ onBoost })],
+    sections: [hudPanel({ onBoost, onSwitchOffice })],
     accessors: { getState: () => state, getContent: () => content },
   });
   overlay.refresh();
@@ -107,7 +116,7 @@ describe('hudPanel — rendering', () => {
     let state = makeState({ loc: '0' });
     const overlay = createOverlay({
       mount,
-      sections: [hudPanel({ onBoost: () => {} })],
+      sections: [hudPanel({ onBoost: () => {}, onSwitchOffice: () => {} })],
       accessors: { getState: () => state, getContent: () => FALLBACK_CONTENT },
     });
 
@@ -146,7 +155,7 @@ describe('hudPanel — boost button', () => {
     const onBoost = vi.fn();
     const overlay = createOverlay({
       mount,
-      sections: [hudPanel({ onBoost })],
+      sections: [hudPanel({ onBoost, onSwitchOffice: () => {} })],
       accessors: { getState: () => makeState({ loc: '10' }), getContent: () => FALLBACK_CONTENT },
     });
     overlay.refresh();
@@ -159,7 +168,7 @@ describe('hudPanel — boost button', () => {
   it('opts the boost button into pointer events via .ui-interactive (camera gestures pass through elsewhere)', () => {
     const overlay = createOverlay({
       mount,
-      sections: [hudPanel({ onBoost: () => {} })],
+      sections: [hudPanel({ onBoost: () => {}, onSwitchOffice: () => {} })],
       accessors: { getState: () => makeState(), getContent: () => FALLBACK_CONTENT },
     });
     overlay.refresh();
@@ -191,7 +200,7 @@ describe('hudPanel — boost float-text honors reducedMotion', () => {
   it('spawns a boost float-text on click when reducedMotion is off', () => {
     const overlay = createOverlay({
       mount,
-      sections: [hudPanel({ onBoost: () => {} })],
+      sections: [hudPanel({ onBoost: () => {}, onSwitchOffice: () => {} })],
       accessors: {
         getState: () => makeState({ ownedProducers: ['manual_typing'], reducedMotion: false }),
         getContent: () => FALLBACK_CONTENT,
@@ -212,7 +221,7 @@ describe('hudPanel — boost float-text honors reducedMotion', () => {
   it('does NOT spawn a boost float-text when reducedMotion is on', () => {
     const overlay = createOverlay({
       mount,
-      sections: [hudPanel({ onBoost: () => {} })],
+      sections: [hudPanel({ onBoost: () => {}, onSwitchOffice: () => {} })],
       accessors: {
         getState: () => makeState({ ownedProducers: ['manual_typing'], reducedMotion: true }),
         getContent: () => FALLBACK_CONTENT,
@@ -315,5 +324,140 @@ describe('hudPanel — co-op bonus badge (T074)', () => {
       content,
     );
     expect(mount.querySelector<HTMLElement>(COOP_BADGE)?.textContent).toBe('×2 co-op');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T082 — Switch-office affordance (US3): gated on the Office #2 unlock
+// milestone (001 FR-014 — a long-term milestone earns it into
+// state.earnedMilestones); before the unlock NOTHING renders (hidden, the
+// affordability-rule convention's non-interactive branch); unlocked + idle
+// renders an interactive button; while a commute is in flight the control is
+// a non-interactive in-progress span (no data-action — nothing to dispatch).
+// End-to-end: activating the control runs the switchOffice mutator, so the
+// NEXT heartbeat (deriveHeartbeat — the exact function main.ts publishes
+// through) reports { office: null, commute } to observers.
+// ---------------------------------------------------------------------------
+
+/** The milestone id gating the office switch (001 FR-014 — Office #2 unlock). */
+const OFFICE_2_UNLOCK = 'office_2_unlock';
+
+/** Selector for the HUD slot's switch-office control (button or span). */
+const SWITCH_CTRL = '.ui-panel[data-panel="hud"] .hud-switch-office';
+
+describe('hudPanel — switch-office affordance (T082)', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+  });
+
+  afterEach(() => {
+    document.querySelectorAll('.hud-boost-float').forEach((el) => el.remove());
+    mount.remove();
+  });
+
+  it('renders NO switch-office control before the Office #2 unlock', () => {
+    // Fresh state: earnedMilestones is empty — the unlock milestone is not
+    // earned, so the control is hidden entirely (no locked teaser element).
+    mount = mountHud(makeState());
+    expect(mount.querySelector(SWITCH_CTRL)).toBeNull();
+  });
+
+  it('renders an interactive switch button once the unlock milestone is earned', () => {
+    mount = mountHud(makeState({ earnedMilestones: [OFFICE_2_UNLOCK] }));
+
+    const btn = mount.querySelector<HTMLElement>(SWITCH_CTRL);
+    expect(btn).not.toBeNull();
+    expect(btn!.tagName).toBe('BUTTON');
+    // Interactive per the overlay conventions: opted into pointer events and
+    // dispatched via the delegated data-action bus.
+    expect(btn!.classList.contains('ui-interactive')).toBe(true);
+    expect(btn!.dataset.action).toBe('switch-office');
+    // Based in office_1 (the default) → the destination is office_2.
+    expect(btn!.dataset.toOffice).toBe('office_2');
+    expect(btn!.textContent).toBe('Switch to Office #2');
+  });
+
+  it('targets Office #1 when the dev is based in Office #2', () => {
+    mount = mountHud(
+      makeState({ earnedMilestones: [OFFICE_2_UNLOCK], activeOffice: 'office_2' }),
+    );
+
+    const btn = mount.querySelector<HTMLElement>(SWITCH_CTRL);
+    expect(btn!.dataset.toOffice).toBe('office_1');
+    expect(btn!.textContent).toBe('Switch to Office #1');
+  });
+
+  it('calls onSwitchOffice with the destination office on activation', () => {
+    const onSwitchOffice = vi.fn();
+    mount = mountHud(
+      makeState({ earnedMilestones: [OFFICE_2_UNLOCK] }),
+      () => {},
+      FALLBACK_CONTENT,
+      onSwitchOffice,
+    );
+
+    press(mount.querySelector<HTMLElement>(SWITCH_CTRL)!);
+
+    expect(onSwitchOffice).toHaveBeenCalledTimes(1);
+    expect(onSwitchOffice).toHaveBeenCalledWith('office_2');
+  });
+
+  it('shows a non-interactive in-progress control while commuting (span, no data-action)', () => {
+    mount = mountHud(
+      makeState({
+        earnedMilestones: [OFFICE_2_UNLOCK],
+        commute: { fromOffice: 'office_1', toOffice: 'office_2', startedAt: 0 },
+      }),
+    );
+
+    const ctrl = mount.querySelector<HTMLElement>(SWITCH_CTRL);
+    expect(ctrl).not.toBeNull();
+    // The affordability-rule convention: non-interactive = span, NO
+    // data-action — an in-flight tap can never reach the mutator.
+    expect(ctrl!.tagName).toBe('SPAN');
+    expect(ctrl!.dataset.action).toBeUndefined();
+    expect(ctrl!.textContent).toBe('Commuting to Office #2…');
+  });
+
+  it('end-to-end: activation runs switchOffice; the NEXT heartbeat reports { office: null, commute }', () => {
+    // The exact main.ts wiring shape: the callback replaces the authoritative
+    // state with the mutator's result (loop.load + saveGame are main.ts side
+    // effects outside the panel's seam).
+    let state = makeState({ earnedMilestones: [OFFICE_2_UNLOCK] });
+    const overlay = createOverlay({
+      mount,
+      sections: [
+        hudPanel({
+          onBoost: () => {},
+          onSwitchOffice: (toOffice: string) => {
+            state = switchOffice(state, toOffice);
+          },
+        }),
+      ],
+      accessors: { getState: () => state, getContent: () => FALLBACK_CONTENT },
+    });
+    overlay.refresh();
+
+    press(mount.querySelector<HTMLElement>(SWITCH_CTRL)!);
+
+    // The save now carries the commute, and deriveHeartbeat — the function the
+    // main.ts heartbeat interval publishes through — automatically reports the
+    // transition on the NEXT beat: present in NO office, commute mirrored
+    // WITHOUT startedAt (the server stamps it, contracts §3).
+    expect(deriveHeartbeat(state)).toEqual({
+      office: null,
+      activity: 'commuting',
+      commute: { fromOffice: 'office_1', toOffice: 'office_2' },
+    });
+
+    // And the next frame renders the in-progress state (span, no data-action).
+    overlay.refresh();
+    const ctrl = mount.querySelector<HTMLElement>(SWITCH_CTRL)!;
+    expect(ctrl.tagName).toBe('SPAN');
+    expect(ctrl.dataset.action).toBeUndefined();
+    expect(ctrl.textContent).toBe('Commuting to Office #2…');
   });
 });
