@@ -1,0 +1,40 @@
+frontend/src/ui/styles.css
+  s_9e3cb57f61b316::t_6a7eafdac60670 211-214
+  s_9e3cb57f61b316::t_38332428aa0376 112-131
+frontend/src/ui/academyPanel.ts
+  s_9e3cb57f61b316::t_497bdb00518db5 64-65
+  s_9e3cb57f61b316::t_dfbad3d0a1f7ab 72,151,160-166
+frontend/src/ui/hudPanel.ts
+  s_9e3cb57f61b316::t_412434ef7d0c53 96-97
+  s_9e3cb57f61b316::t_fee2cd77fc28cb 275-277
+frontend/src/ui/overlay.ts
+  s_9e3cb57f61b316::t_e7eaf9d53d538e 116-121
+  s_9e3cb57f61b316::t_62d0128bf06818 224-230
+  s_9e3cb57f61b316::t_4543fd757ed7d3 378-385
+  s_9e3cb57f61b316::t_fa6a59565bc5c2 320-336,352-364,371-377,386
+  s_9e3cb57f61b316::t_bb272f9a673e80 115
+frontend/src/ui/economyPanel.ts
+  s_9e3cb57f61b316::t_dfbad3d0a1f7ab 99,121,275,284-290
+  s_9e3cb57f61b316::t_497bdb00518db5 89-90
+frontend/src/ui/socialPanel.ts
+  s_9e3cb57f61b316::t_46c73eda82ac5c 104-105
+  s_9e3cb57f61b316::t_ba3f0896907345 214-222,226,232
+frontend/src/main.ts
+  s_9e3cb57f61b316::t_68319f184a7281 543-549
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "b3374c1ca21a63bb61cfcf8fea8e736c15c56d79",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
