@@ -13,6 +13,25 @@ placeholder pipeline (`office_tileset.png` / `office.json` / `dev.png`).
 
 ---
 
+## Placeholder assets (temporary — pending T040/T041)
+
+The following three files are **PLACEHOLDERS** generated programmatically
+(`scripts/gen_placeholder_assets.py`) solely to unblock the Phase 3
+CampusScene. They are valid and loadable but carry **no real art**. They are
+superseded by the manual T040/T041 work below:
+
+| File | Placeholder content |
+|------|---------------------|
+| `campus_tileset.png` | 128×128 atlas (8×8 tiles of 16px, 64 tiles) of distinct solid colors |
+| `avatars.png` | 128×16 horizontal strip, 8 frames: green-tinted live + red/desaturated last-seen |
+| `campus.json` | Valid Tiled orthogonal map (50×40, 16px tiles): `Ground` tilelayer, `Rooms` polygons (both buildings, `building` property), `SeatAnchors` points, `CommutePaths` polyline, embedded tileset |
+
+These satisfy the load contract (no thrown errors) but **must be replaced**
+by the real Kenney CC0 art and the real Tiled-authored campus map described
+below.
+
+---
+
 ## Required CC0 asset packs
 
 All base art is **CC0 (Creative Commons Zero)** — free to use commercially,
