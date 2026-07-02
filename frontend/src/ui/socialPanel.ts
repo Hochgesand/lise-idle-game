@@ -39,8 +39,8 @@
 // ## Action model (unified interaction model, see overlay.ts)
 // Buttons carry STABLE `data-action` attributes dispatched by the overlay's
 // single `pointerdown` delegation listener on the stable root, so activation
-// survives the per-frame rebuild. All touch targets are >= 44px via
-// `.social-button` (styles.css).
+// survives the per-frame rebuild. All touch targets are >= 44px via the
+// shared `.ui-panel button` rule (styles.css, T087).
 //
 // ## Testability (Constitution Principle III)
 // Framework-free TS exercised in jsdom (socialPanel.test.ts) through the real
@@ -281,9 +281,9 @@ function renderVisibilityToggle(settings: PresenceSettings): HTMLElement {
 
 /**
  * A panel button: `.ui-interactive` opts back into pointer events (the overlay
- * root is gesture-transparent); `.social-button` provides the >= 44px touch
- * target (styles.css); activation is via `data-action` delegation — no
- * per-frame listener.
+ * root is gesture-transparent); the >= 44px touch target comes from the shared
+ * `.ui-panel button` rule (styles.css, T087); activation is via `data-action`
+ * delegation — no per-frame listener.
  */
 function button(action: string, label: string, className: string): HTMLButtonElement {
   const btn = document.createElement('button');

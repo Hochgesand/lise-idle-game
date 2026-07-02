@@ -224,15 +224,33 @@ describe('overlay — a null render hides the slot from AT (T087)', () => {
 // ---------------------------------------------------------------------------
 
 describe('overlay — focus preservation across refresh (T087)', () => {
-  it('re-focuses the matching [data-action] element after a rebuild', () => {
-    const overlay = mountOverlay([buttonSection('hud', 'boost')]);
+  /** A section whose rendered content CHANGES each refresh (ticking label),
+   *  like the HUD's live LOC counter — forces a real rebuild every render. */
+  function tickingSection(id: string, action: string): OverlaySection {
+    let tick = 0;
+    return {
+      id,
+      render: () => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.action = action;
+        btn.textContent = `Go ${tick++}`;
+        return btn;
+      },
+      actions: { [action]: () => {} },
+    };
+  }
+
+  it('re-focuses the matching [data-action] element after a content-changing rebuild', () => {
+    const overlay = mountOverlay([tickingSection('hud', 'boost')]);
     overlay.refresh();
 
     const before = mount.querySelector<HTMLButtonElement>('[data-action="boost"]')!;
     before.focus();
     expect(document.activeElement).toBe(before);
 
-    // The production loop refreshes at 10 Hz — the button node is replaced.
+    // The production loop refreshes at 10 Hz — the changed content replaces
+    // the button node.
     overlay.refresh();
 
     const after = mount.querySelector<HTMLButtonElement>('[data-action="boost"]')!;
@@ -240,10 +258,30 @@ describe('overlay — focus preservation across refresh (T087)', () => {
     expect(document.activeElement).toBe(after); // … and focus followed it
   });
 
+  it('keeps the SAME node (no rebuild, no re-focus event) when the content is unchanged', () => {
+    // (cubic P2) Rebuilding identical DOM would destroy + re-focus the
+    // focused button every refresh — each programmatic focus is a
+    // focus-change event screen readers announce, i.e. announcement spam at
+    // 10 Hz. Unchanged content must leave the existing subtree untouched.
+    const overlay = mountOverlay([buttonSection('hud', 'boost')]);
+    overlay.refresh();
+
+    const before = mount.querySelector<HTMLButtonElement>('[data-action="boost"]')!;
+    before.focus();
+    const focusSpy = vi.fn();
+    before.addEventListener('focus', focusSpy);
+
+    overlay.refresh();
+
+    expect(mount.querySelector('[data-action="boost"]')).toBe(before); // same node
+    expect(document.activeElement).toBe(before); // focus never moved
+    expect(focusSpy).not.toHaveBeenCalled(); // no re-focus event → no AT re-announce
+  });
+
   it('does not steal focus from elements outside the overlay', () => {
     const outside = document.createElement('button');
     document.body.appendChild(outside);
-    const overlay = mountOverlay([buttonSection('hud', 'boost')]);
+    const overlay = mountOverlay([tickingSection('hud', 'boost')]);
     overlay.refresh();
 
     outside.focus();

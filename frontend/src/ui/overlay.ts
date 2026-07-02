@@ -349,6 +349,25 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
         continue;
       }
 
+      // (T087) `hidden` is the a11y-tree counterpart of the CSS `:empty`
+      // collapse: an empty labelled region must not be announced (and, like
+      // the inline pointer-events, it holds even if styles.css never loads).
+      // Kept in sync BEFORE the unchanged-content skip below so the very
+      // first null render (empty slot → empty slot) still hides the region.
+      slot.hidden = node === null;
+
+      // (T087, cubic P2) Unchanged-content skip: swapping identical DOM in
+      // every refresh destroys + re-creates the focused element ~10×/second,
+      // and each programmatic re-focus is a focus-change event screen readers
+      // announce — the exact announcement spam this pass avoids elsewhere by
+      // omitting aria-live. Both serializations come from the same DOM
+      // serializer (after replaceChildren(node), slot.innerHTML ===
+      // node.outerHTML), so string equality is exact. Safe to keep the old
+      // subtree: sections render listener-free DOM by contract (activation is
+      // data-action delegation on the root, never per-node listeners).
+      const nextHtml = node === null ? '' : node.outerHTML;
+      if (nextHtml === slot.innerHTML) continue;
+
       // (T087) Focus preservation: replaceChildren detaches the focused
       // element, silently dropping focus to <body> — at the production 10 Hz
       // refresh a keyboard user could never keep a button focused long enough
@@ -369,17 +388,15 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
       if (node) slot.replaceChildren(node);
       else slot.replaceChildren();
 
-      // (T087) `hidden` is the a11y-tree counterpart of the CSS `:empty`
-      // collapse: an empty labelled region must not be announced (and, like
-      // the inline pointer-events, it holds even if styles.css never loads).
-      slot.hidden = node === null;
-
       if (refocusAction !== null) {
         // Match via dataset (not a selector interpolation) — no escaping
         // pitfalls, and `CSS.escape` is unavailable in some DOM environments.
+        // preventScroll: the panels are already positioned on screen — the
+        // default scroll-into-view would jank a scrollable panel every
+        // rebuild while a control is focused (cubic P3).
         for (const el of slot.querySelectorAll<HTMLElement>('[data-action]')) {
           if (el.dataset.action === refocusAction) {
-            el.focus();
+            el.focus({ preventScroll: true });
             break;
           }
         }

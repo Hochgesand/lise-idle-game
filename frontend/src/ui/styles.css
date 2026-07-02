@@ -342,7 +342,8 @@ button.hud-switch-office:active {
  * FR-016 "social offline" badge. Everything is NON-BLOCKING: the dialog is a
  * card in the slot (never a modal), the badge is pointer-transparent, and an
  * idle panel renders null so the slot collapses (`.ui-panel:empty`).
- * All buttons meet the >= 44px touch-target minimum via `.social-button`. */
+ * The >= 44px touch-target minimum comes from the shared `.ui-panel button`
+ * rule (T087) — no per-panel copy. */
 .social-panel {
   display: flex;
   flex-direction: column;
@@ -363,10 +364,9 @@ button.hud-switch-office:active {
   pointer-events: none;
 }
 
-/* Shared button base: >= 44px touch target (mobile accessibility). */
+/* Shared button base. (The 44px touch-target minimum lives in the shared
+ * `.ui-panel button` rule — T087 — so it cannot be forgotten per panel.) */
 .social-button {
-  min-height: 44px;
-  min-width: 44px;
   padding: 6px 12px;
   border: 1px solid var(--social-color);
   border-radius: var(--ui-radius);
