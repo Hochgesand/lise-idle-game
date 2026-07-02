@@ -175,9 +175,6 @@ export interface Overlay {
 const UI_ROOT_CLASS = 'ui-root';
 const UI_PANEL_CLASS = 'ui-panel';
 
-/** A `click` following a `pointerdown` on the same action is that press's tail
- * and is suppressed (one per press) so a mouse/touch press never double-fires. */
-
 /**
  * Build and mount the overlay.
  *
