@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -274,14 +275,73 @@ public class PresenceService {
         }
     }
 
+    // ── Daily retention sweep (offboarding; T085) ───────────────────────
+
+    /**
+     * Offboard colleagues whose durable last-seen row has aged out of the
+     * {@code coop.lastSeenRetentionDays} window (data-model PresenceRecord
+     * "Retention &amp; offboarding"). Runs daily (3&nbsp;AM); tests invoke it
+     * directly for determinism. For each row strictly older than the cutoff:
+     * drop the live registry record (so the colleague disappears from
+     * snapshots), delete the durable row, and &mdash; if the colleague was being
+     * rendered (viewable and had a registry record) &mdash; broadcast a
+     * {@code presence.remove} so observers drop the avatar (the
+     * &quot;filtered from broadcasts&quot; half of the retention contract). This is the
+     * offboarding path: a disabled/removed Keycloak account simply stops
+     * heartbeating and ages out within the window, with no IdP integration.
+     *
+     * <p><b>LIVE colleagues are never retained out.</b> A live colleague's
+     * durable {@code lastSeenAt} is stamped only on lease expiry (not on every
+     * heartbeat), so a colleague who re-heartbeats after a long last-seen spell
+     * carries a stale row whose {@code lastSeenAt} predates the window. They are
+     * actively heartbeating, so they are skipped here &mdash; only LAST_SEEN (or
+     * registry-absent) colleagues with an aged-out row are offboarded. Each row
+     * is handled in its own try/catch so one failure never aborts the pass
+     * (advisory, contracts &sect;4).
+     */
+    @Scheduled(cron = "0 0 3 * * *")
+    public void sweepRetainedOut() {
+        Instant cutoff = Instant.now().minus(Duration.ofDays(coop.lastSeenRetentionDays()));
+        List<PlayerPresenceEntity> agedOut;
+        try {
+            agedOut = repository.findByLastSeenAtLessThan(cutoff.toString());
+        } catch (RuntimeException e) {
+            // advisory: a query failure must not abort the scheduler
+            log.warn("retention sweep query failed", e);
+            return;
+        }
+        for (PlayerPresenceEntity row : agedOut) {
+            try {
+                String colleagueId = row.getColleagueId();
+                Optional<PresenceRecord> record = registry.get(colleagueId);
+                if (record.isPresent() && record.get().status() == PresenceRecord.Status.LIVE) {
+                    // actively heartbeating with a stale row — never offboard
+                    continue;
+                }
+                boolean hadRecord = record.isPresent(); // a LAST_SEEN record being rendered
+                boolean viewable = isViewable(row);
+                registry.remove(colleagueId);
+                repository.delete(row);
+                if (viewable && hadRecord) {
+                    pushService.broadcastPresenceRemove(colleagueId);
+                }
+            } catch (RuntimeException e) {
+                // advisory: one colleague's failure must not abort the sweep
+                log.warn("retention delete failed for {}", row.getColleagueId(), e);
+            }
+        }
+    }
+
     // ── Snapshot (GET /api/v1/presence) ─────────────────────────────────
 
     /**
      * Build the presence snapshot for a viewer (contracts &sect;2):
      * {@code {serverTime, self, colleagues}}. {@code self} is always echoed
      * (even while hidden); {@code colleagues} lists visible colleagues only,
-     * self excluded. Hidden/un-consented players are filtered server-side
-     * (FR-009).
+     * self excluded, and excludes any colleague whose {@code lastSeenAt} has
+     * aged out of the {@code lastSeenRetentionDays} window (data-model
+     * PresenceRecord "Retention &amp; offboarding"; T085). Hidden/un-consented
+     * players are filtered server-side (FR-009).
      *
      * @param viewerId the viewer (JWT {@code sub})
      * @return the snapshot
@@ -295,6 +355,9 @@ public class PresenceService {
         for (PresenceRecord record : registry.snapshot()) {
             if (record.colleagueId().equals(viewerId)) {
                 continue; // self excluded
+            }
+            if (isRetainedOut(record.lastSeenAt())) {
+                continue; // aged out of the lastSeenRetentionDays window (T085)
             }
             PlayerPresenceEntity row = repository.findById(record.colleagueId()).orElse(null);
             if (!isViewable(row)) {
@@ -420,6 +483,27 @@ public class PresenceService {
     /** A colleague is viewable to others iff their durable row is consented AND visible (FR-009). */
     private static boolean isViewable(PlayerPresenceEntity row) {
         return row != null && row.isConsentGiven() && row.isVisible();
+    }
+
+    /**
+     * True iff {@code lastSeenAt} is older than the {@code lastSeenRetentionDays}
+     * window (a last-seen colleague who has aged out and must no longer render,
+     * data-model PresenceRecord). A {@code null} or unparseable timestamp is
+     * treated as within window (never filter a live/never-seen colleague on a
+     * bad stamp &mdash; advisory, contracts &sect;4). A LIVE colleague carries a
+     * fresh {@code lastSeenAt} (every heartbeat stamps it), so this never filters
+     * an active colleague.
+     */
+    private boolean isRetainedOut(String lastSeenAt) {
+        if (lastSeenAt == null) {
+            return false;
+        }
+        try {
+            return Instant.parse(lastSeenAt)
+                    .isBefore(Instant.now().minus(Duration.ofDays(coop.lastSeenRetentionDays())));
+        } catch (RuntimeException parseFailure) {
+            return false;
+        }
     }
 
     private static String displayName(String colleagueId, PlayerPresenceEntity row) {

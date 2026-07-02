@@ -156,6 +156,34 @@ class RetentionSweepTest {
         verify(pushService, never()).broadcastPresenceRemove(anyString()); // nothing rendered → nothing to drop
     }
 
+    /**
+     * A <b>LIVE</b> colleague is never offboarded, even if their durable
+     * {@code lastSeenAt} predates the window. A live colleague's row
+     * {@code lastSeenAt} is stamped only on lease expiry (not on every
+     * heartbeat), so a colleague who re-heartbeats after a long last-seen spell
+     * carries a stale row that the retention query returns &mdash; but they are
+     * actively heartbeating, so the sweep must skip them (their registry record
+     * is {@code LIVE}). Deleting such a row would wipe their consent/visibility
+     * and drop a live avatar &mdash; a correctness bug this test guards.
+     */
+    @Test
+    void dailySweep_doesNotOffboardLiveColleague_evenWithStaleRowLastSeenAt() {
+        PlayerPresenceEntity staleRow = row("live-again", true, true);
+        staleRow.setLastSeenAt(Instant.now().minus(Duration.ofDays(COOP.lastSeenRetentionDays() + 5)).toString());
+        // the colleague re-heartbeated: the registry record is LIVE with a fresh stamp.
+        registry.upsert(live("live-again"));
+
+        when(repository.findByLastSeenAtLessThan(anyString())).thenReturn(List.of(staleRow));
+
+        service.sweepRetainedOut();
+
+        verify(repository, never()).delete(staleRow); // live → never offboarded
+        assertThat(registry.get("live-again"))
+                .as("a live colleague's record is kept")
+                .isPresent();
+        verify(pushService, never()).broadcastPresenceRemove(anyString());
+    }
+
     // ── 2. snapshot filters out colleagues beyond the window ────────────────
 
     /**
@@ -168,7 +196,7 @@ class RetentionSweepTest {
     @Test
     void snapshot_filtersOutColleaguesBeyondRetentionWindow_butKeepsWithinAndLive() {
         when(repository.findById("viewer")).thenReturn(Optional.of(row("viewer", true, true)));
-        when(repository.findById("stale")).thenReturn(Optional.of(row("stale", true, true)));
+        // "stale" is filtered by retention BEFORE its row is loaded, so it needs no stub.
         when(repository.findById("recent")).thenReturn(Optional.of(row("recent", true, true)));
         when(repository.findById("live-c")).thenReturn(Optional.of(row("live-c", true, true)));
 
