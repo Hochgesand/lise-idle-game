@@ -1,0 +1,30 @@
+frontend/src/scenes/world/avatars.ts
+  s_9e3cb57f61b316::t_134d0500c909ca 55-57
+frontend/src/main.ts
+  s_9e3cb57f61b316::t_88c92257be8137 327-333,338-339
+frontend/src/scenes/world/CampusScene.ts
+  s_9e3cb57f61b316::t_326e47f1ae1c9a 22
+  s_9e3cb57f61b316::t_64b29e81efd45f 254
+  s_9e3cb57f61b316::t_51b507179fc5e3 4-7
+  s_9e3cb57f61b316::t_1201921ad60dd6 341
+  s_9e3cb57f61b316::t_b5b82c1e78b934 157-160
+  s_9e3cb57f61b316::t_5c9e81c2e1dedf 196-198
+frontend/src/scenes/world/camera.ts
+  s_9e3cb57f61b316::t_7f519ac1125fd1 1-2,8,10-18,28,31-35,38,91-108,119-129,137-138,140-143,145,148,164,168-172,177-178,189-190,207,211-216,223-226,252,254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "dba247534096f2387bbcb19bca0a22a1c4296e02",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
