@@ -1,0 +1,19 @@
+frontend/src/scenes/world/camera.test.ts
+  s_9e3cb57f61b316::t_20027b59e68049 1-2,10-19,32,44-46,48,51,56,62,84-91,94-98,101-137,141-142,147-148,157,167-170,172-173,179,187-190,192-201,206,213,221,265-268,277-278,280-297,343-358,374,392-394,396-413,443,445-447,452,454-455,461,471-473,478
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "35dc8950a591bba2f241bb33cecb440faa270a2c",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
