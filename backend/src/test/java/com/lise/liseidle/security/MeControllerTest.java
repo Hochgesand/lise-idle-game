@@ -148,8 +148,13 @@ class MeControllerTest {
      * A fresh identity receives a <b>deterministic, stable</b> {@code avatarId}
      * &mdash; a stable hash of {@code colleagueId} onto the avatar frame set,
      * persisted on first sight (data-model PlayerIdentity {@code avatarId}).
-     * Repeated calls for the same identity return the same value, and the id is
-     * a 0-based frame index (a non-negative integer string).
+     * Repeated calls for the same identity return the same value. This test
+     * pins the <i>wire</i> contract (the avatar is assigned, non-blank, and
+     * stable for one identity); it deliberately does <b>not</b> constrain the
+     * id's format (contracts &sect;2 allows any sprite id / url), so a later
+     * named-sprite or URL form still satisfies the contract. The bounded-hash
+     * &ldquo;onto the frame set&rdquo; property is an implementation concern
+     * of T034, not this contract assertion.
      */
     @Test
     void getMe_assignsDeterministicStableAvatar_forFreshIdentity() throws Exception {
@@ -169,14 +174,11 @@ class MeControllerTest {
         String avatarSecond = JsonPath.read(secondBody, "$.avatar");
 
         assertThat(avatarFirst)
-                .as("avatar must be assigned (non-blank frame id)")
+                .as("avatar must be assigned (non-blank sprite id)")
                 .isNotBlank();
         assertThat(avatarSecond)
                 .as("avatar must be stable across repeated calls for one identity")
                 .isEqualTo(avatarFirst);
-        assertThat(Integer.parseInt(avatarFirst))
-                .as("avatar frame id is a 0-based index (non-negative integer)")
-                .isNotNegative();
     }
 
     // ── 401 without a token (security-level regression guard) ────────────
