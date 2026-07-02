@@ -1,0 +1,31 @@
+frontend/src/ui/styles.css
+  s_9e3cb57f61b316::t_afecc083f2c8db 262-289
+frontend/src/main.ts
+  s_9e3cb57f61b316::t_e33459ed1e5cf9 454-467
+  s_9e3cb57f61b316::t_0ca435bf8e3667 32
+specs/002-shared-office-coop/tasks.md
+  s_9e3cb57f61b316::t_640dbf95497197 207
+frontend/src/ui/hudPanel.ts
+  s_9e3cb57f61b316::t_433ea49637e121 90-92
+  s_9e3cb57f61b316::t_2cba52260b9446 146-171
+  s_9e3cb57f61b316::t_b30dcd1fe0e598 66-75
+  s_9e3cb57f61b316::t_98634d38fa6d4d 42-54
+  s_9e3cb57f61b316::t_f66730ac5a5504 183-189,194-213
+  s_9e3cb57f61b316::t_f84c6f9b4f9169 214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "255ef7f65f678e55c81f2db65fe762e220ca468e",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
