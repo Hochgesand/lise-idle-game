@@ -1,0 +1,19 @@
+specs/002-shared-office-coop/tasks.md
+  s_9e3cb57f61b316::t_975e17ae94793b 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "04a2d64f23e10257b4746675e10064ab613ccc12",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "unknown"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
