@@ -1,0 +1,34 @@
+frontend/src/save/localStorage.test.ts
+  s_9e3cb57f61b316::t_ba5aa0ff4a0595 196
+  s_9e3cb57f61b316::t_7c361b0a06c87e 106
+  s_9e3cb57f61b316::t_36dd9794390406 26-33
+  s_9e3cb57f61b316::t_ee63a86ca36fc7 224
+  s_9e3cb57f61b316::t_ab1754e984e07f 262,279-361
+frontend/src/save/migrations.test.ts
+  s_9e3cb57f61b316::t_ed886d07d4d64a 289-421
+  s_9e3cb57f61b316::t_a8c9260a78e4ae 246,250
+  s_9e3cb57f61b316::t_34f21f65c226e9 183,185,188,194
+  s_9e3cb57f61b316::t_a88cb6410514f5 269,273
+  s_9e3cb57f61b316::t_a58a92a858e6e5 156-157,160,164,171
+  s_9e3cb57f61b316::t_df7fa531464cec 60
+  s_9e3cb57f61b316::t_c072072dde66f4 1-2,4,6-10,13-16,18-22,26
+  s_9e3cb57f61b316::t_dfb81f15233f4a 83,87-116
+  s_9e3cb57f61b316::t_579049723cbe24 214,221,223,227
+  s_9e3cb57f61b316::t_3c4b987386beec 117-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "33f71e49ded087cced33672c7164236454f53bcd",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
