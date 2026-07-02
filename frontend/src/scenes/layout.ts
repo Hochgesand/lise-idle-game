@@ -4,8 +4,13 @@
 // without spinning up a WebGL context (the OfficeScene class itself is
 // integration-level, verified via `tsc -b` + `vite build`).
 
-/** The tile size (px) of the office map — matches office.json tilewidth/height. */
-export const TILE_SIZE = 32;
+/**
+ * The base tile size (px). Phase 3 (spec 002) switched the campus world to a
+ * 16 px base tile (campus.json tilewidth/height = 16, Kenney CC0 16×16 packs —
+ * research: Art direction). The retired 001 office map used 32 px; `tileToPixel`
+ * stays pure and still accepts a custom `tileSize` for the legacy value.
+ */
+export const TILE_SIZE = 16;
 
 /**
  * Convert tile coordinates to the PIXEL CENTRE of that tile (where a sprite's
@@ -15,7 +20,7 @@ export const TILE_SIZE = 32;
  *
  * @param tileX    zero-based column index
  * @param tileY    zero-based row index
- * @param tileSize px per tile (default 32, matching office.json)
+ * @param tileSize px per tile (default 16, matching campus.json)
  * @returns `{ x, y }` pixel coordinates of the tile centre
  */
 export function tileToPixel(

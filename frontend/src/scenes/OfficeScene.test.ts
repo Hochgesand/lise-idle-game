@@ -9,17 +9,20 @@ import { tileToPixel, TILE_SIZE } from './layout';
 
 describe('tileToPixel', () => {
   it('returns the pixel centre of tile (0,0)', () => {
-    expect(tileToPixel(0, 0)).toEqual({ x: 16, y: 16 });
+    expect(tileToPixel(0, 0)).toEqual({ x: 8, y: 8 });
   });
 
-  it('returns the pixel centre of tile (2,5) — the dev desk workstation', () => {
-    // The dev sprite is placed here in OfficeScene.create().
-    expect(tileToPixel(2, 5)).toEqual({ x: 80, y: 176 });
+  it('returns the pixel centre of tile (2,5) at the 16px default', () => {
+    // tileToPixel uses the shared TILE_SIZE default (16px, the Phase 3 campus
+    // base). The retired 001 OfficeScene now passes an EXPLICIT 32 to keep its
+    // dev sprite on the legacy office.json desk until it is deleted in T051;
+    // this assertion just pins the function's default behaviour.
+    expect(tileToPixel(2, 5)).toEqual({ x: 40, y: 88 });
   });
 
-  it('uses the default TILE_SIZE of 32', () => {
-    expect(TILE_SIZE).toBe(32);
-    expect(tileToPixel(10, 10)).toEqual({ x: 336, y: 336 });
+  it('uses the default TILE_SIZE of 16 (Phase 3 base tile)', () => {
+    expect(TILE_SIZE).toBe(16);
+    expect(tileToPixel(10, 10)).toEqual({ x: 168, y: 168 });
   });
 
   it('accepts a custom tile size', () => {

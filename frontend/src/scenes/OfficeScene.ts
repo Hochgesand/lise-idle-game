@@ -73,7 +73,12 @@ export class OfficeScene extends Phaser.Scene {
     // ── Dev sprite at a desk workstation ─────────────────────────────────
     // Desks (wood-brown tile) cluster at tile cols 2–3, rows 4–5 in the
     // Furniture layer. Place the dev seated at the first desk: tile (2, 5).
-    const { x, y } = tileToPixel(2, 5);
+    // NOTE: this retired 001 scene still renders the legacy 32px office.json,
+    // so pass the EXPLICIT 32px tile size even though the shared TILE_SIZE
+    // default is now 16px (Phase 3 campus base). Without it the dev sprite
+    // would drift off the desk for the T046→T051 interim. OfficeScene (and
+    // office.json) is deleted in T051.
+    const { x, y } = tileToPixel(2, 5, 32);
     const dev = this.physics.add.sprite(x, y, 'dev');
     dev.setDepth(1); // render above the floor/furniture tiles
 

@@ -104,7 +104,7 @@ export interface SeatAssignment {
 const STANDING_SPACING = 24;
 
 /** Read the `building` tag from either Tiled property form, or `null` if absent. */
-function readBuildingProperty(properties: RawSeatAnchor['properties']): string | null {
+export function readBuildingProperty(properties: RawSeatAnchor['properties']): string | null {
   if (properties === undefined) {
     return null;
   }
