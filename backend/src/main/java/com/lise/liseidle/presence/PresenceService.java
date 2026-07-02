@@ -168,42 +168,41 @@ public class PresenceService {
      * {@code LAST_SEEN}: stamp {@code lastSeenAt}, persist office/activity/
      * lastSeenAt to the {@code player_presence} row, and broadcast the delta to
      * visible viewers (contracts &sect;3 "Lease &amp; expiry contract"). Runs on
-     * the scheduler (10&nbsp;s); tests invoke it directly for determinism. A
-     * record already last-seen, or a live record with a future lease, is left
-     * untouched.
+     * the scheduler (10&nbsp;s); tests invoke it directly for determinism. The
+     * expiry decision is atomic per colleague via
+     * {@link PresenceRegistry#expireLiveIfPast(String, Instant)} so a concurrent
+     * fresh heartbeat is never clobbered by a stale sweep. Each record is handled
+     * in its own try/catch so one failure never aborts the whole pass (advisory,
+     * contracts &sect;4).
      */
     @Scheduled(fixedDelay = 10_000, initialDelay = 10_000)
     public void sweepExpiredPresence() {
         Instant now = Instant.now();
         for (PresenceRecord record : registry.snapshot()) {
-            if (record.status() != PresenceRecord.Status.LIVE || record.leaseExpiresAt() == null) {
+            if (record.status() != PresenceRecord.Status.LIVE) {
                 continue;
             }
-            if (!Instant.parse(record.leaseExpiresAt()).isBefore(now)) {
-                continue; // lease still in the future
-            }
-            PresenceRecord expired = new PresenceRecord(
-                    record.colleagueId(),
-                    record.displayName(),
-                    record.avatar(),
-                    record.office(),
-                    record.activity(),
-                    record.commute(),
-                    PresenceRecord.Status.LAST_SEEN,
-                    now.toString(),
-                    null);
-            registry.upsert(expired);
+            try {
+                Optional<PresenceRecord> expired = registry.expireLiveIfPast(record.colleagueId(), now);
+                if (expired.isEmpty()) {
+                    continue;
+                }
+                PresenceRecord stamped = expired.get();
 
-            PlayerPresenceEntity row = repository.findById(record.colleagueId()).orElse(null);
-            if (row != null) {
-                row.setOffice(record.office());
-                row.setActivity(record.activity());
-                row.setLastSeenAt(now.toString());
-                repository.save(row);
-            }
+                PlayerPresenceEntity row = repository.findById(record.colleagueId()).orElse(null);
+                if (row != null) {
+                    row.setOffice(stamped.office());
+                    row.setActivity(stamped.activity());
+                    row.setLastSeenAt(now.toString());
+                    repository.save(row);
+                }
 
-            if (isViewable(row)) {
-                pushService.broadcastPresenceUpdate(expired, now.toString());
+                if (isViewable(row)) {
+                    pushService.broadcastPresenceUpdate(stamped, now.toString());
+                }
+            } catch (RuntimeException e) {
+                // advisory: one colleague's failure must not abort the sweep
+                log.warn("presence sweep failed for {}", record.colleagueId(), e);
             }
         }
     }

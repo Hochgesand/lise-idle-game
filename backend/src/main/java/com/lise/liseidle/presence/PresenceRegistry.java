@@ -2,11 +2,13 @@ package com.lise.liseidle.presence;
 
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * In-memory live presence tier (T033; RED tests in T019). Holds the ephemeral
@@ -86,5 +88,57 @@ public class PresenceRegistry {
      */
     public void clear() {
         recordsByColleagueId.clear();
+    }
+
+    /**
+     * <b>Atomically</b> expire a {@code LIVE} record whose lease is in the past,
+     * returning the new {@code LAST_SEEN} record iff the expiry was applied.
+     *
+     * <p>The {@link ConcurrentHashMap#compute} closes the read-modify-write
+     * window that {@link #snapshot()} + {@link #upsert(PresenceRecord)} would
+     * otherwise open against a concurrent fresh heartbeat: a heartbeat that
+     * refreshed the lease between a sweep's snapshot read and this call is
+     * observed <i>inside</i> {@code compute}, so a freshly-live colleague is
+     * NOT stamped last-seen by a stale sweep decision (last-write-wins clobber
+     * avoided). A record that is absent, already last-seen, still within its
+     * lease, or carries an unparseable lease is left untouched (returns empty),
+     * so one bad record never aborts a sweep pass.
+     *
+     * @param colleagueId the social key
+     * @param now         the sweep's server instant
+     * @return the newly-stamped {@code LAST_SEEN} record, or empty if not expired
+     */
+    public Optional<PresenceRecord> expireLiveIfPast(String colleagueId, Instant now) {
+        AtomicReference<PresenceRecord> expired = new AtomicReference<>();
+        recordsByColleagueId.compute(colleagueId, (key, current) -> {
+            if (current == null
+                    || current.status() != PresenceRecord.Status.LIVE
+                    || current.leaseExpiresAt() == null) {
+                return current;
+            }
+            Instant leaseEnd;
+            try {
+                leaseEnd = Instant.parse(current.leaseExpiresAt());
+            } catch (RuntimeException parseFailure) {
+                // malformed lease (impossible when server-stamped) — leave it alone
+                return current;
+            }
+            if (!leaseEnd.isBefore(now)) {
+                return current; // lease still in the future
+            }
+            PresenceRecord stamped = new PresenceRecord(
+                    current.colleagueId(),
+                    current.displayName(),
+                    current.avatar(),
+                    current.office(),
+                    current.activity(),
+                    current.commute(),
+                    PresenceRecord.Status.LAST_SEEN,
+                    now.toString(),
+                    null);
+            expired.set(stamped);
+            return stamped;
+        });
+        return Optional.ofNullable(expired.get());
     }
 }
