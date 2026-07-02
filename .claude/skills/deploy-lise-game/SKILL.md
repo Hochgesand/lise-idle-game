@@ -90,7 +90,11 @@ normal deploys (faster, no Maven/Node on the host).
 > `ghcr.io/hochgesand/lise-game-frontend` → (package page) **Package
 > settings → Change visibility → Public**. If they stay private, every pull
 > fails until either (a) they are made public, or (b) the host runs, **once**,
-> `docker login ghcr.io -u Hochgesand -p <PAT>` (a PAT with `read:packages`).
+> an authenticated GHCR login. Do NOT pass the PAT on the command line
+> (`-p <PAT>` leaks it into shell history + the process list); pipe it via
+> stdin instead:
+> `printf '%s' "<PAT>" | docker login ghcr.io -u Hochgesand --password-stdin`
+> (a PAT with `read:packages`).
 >
 > **NOTE — first deploy after enabling this requires a green CI run.** The
 > images do not exist in GHCR until `.github/workflows/docker-publish.yml`

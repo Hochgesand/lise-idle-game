@@ -21,8 +21,9 @@
 #
 # HOST PULL PREREQUISITE: for the host to pull these images without auth, both
 # packages must be set to PUBLIC in GitHub (Profile -> Packages ->
-# Settings -> "Change visibility"). Otherwise the host must run
-# `docker login ghcr.io -u Hochgesand -p <PAT>` once.
+# Settings -> "Change visibility"). Otherwise the host must authenticate once
+# via: printf '%s' "<PAT>" | docker login ghcr.io -u Hochgesand --password-stdin
+# (do NOT use `-p <PAT>` — it leaks into shell history + the process list).
 
 name: Build and publish Docker images
 
@@ -31,6 +32,13 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+
+# Only one publish run per ref at a time: a new push cancels the in-flight run
+# so the mutable `:latest` tag can't be won by an older, slower build. Tag
+# refs (v*) are distinct groups, so releases never cancel each other.
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-push:
@@ -43,7 +51,8 @@ jobs:
       # scopes default to `none`, so `actions: write` must be granted here.
       actions: write
     strategy:
-      fail-fast: false
+      # fail-fast defaults to true: if one component fails, the sibling is
+      # cancelled so we never advance only half of a matched image pair.
       matrix:
         include:
           - component: backend
