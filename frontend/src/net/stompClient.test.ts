@@ -621,6 +621,72 @@ describe('StompClient — /user/queue/coop subscription + onCoopSegment (T073)',
   });
 });
 
+// ---------------------------------------------------------------------------
+// (002) onConnected — reconnect notification (cubic P3 follow-up on 906588e)
+// ---------------------------------------------------------------------------
+//
+// presenceClient.ts documents the snapshot as "re-fetched after every
+// (re)connect", but StompHandlers exposed no reconnect signal, so main.ts
+// could only fetch once at boot — presence deltas missed during a disconnect
+// window were permanently lost (a colleague removed while offline stayed
+// rendered as a ghost until page reload). `onConnected` fires from the
+// library's onConnect on EVERY (re)connect, AFTER the subscriptions above are
+// (re)created, so the caller can re-fetch the snapshot with the delta stream
+// already flowing (no subscribe/fetch race window).
+
+describe('StompClient — onConnected fires on every (re)connect', () => {
+  beforeEach(() => {
+    instances.length = 0;
+  });
+
+  it('invokes onConnected once on the initial connect', () => {
+    const onConnected = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onConnected });
+
+    expect(onConnected).toHaveBeenCalledOnce();
+  });
+
+  it('re-invokes onConnected on every library-driven reconnect', () => {
+    const onConnected = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onConnected });
+    expect(onConnected).toHaveBeenCalledOnce();
+
+    // The library re-fires onConnect on each reconnect — the same path the
+    // subscription self-heal rides (contracts §3 "Reconnect").
+    instances[0]!.onConnect?.({});
+    instances[0]!.onConnect?.({});
+
+    expect(onConnected).toHaveBeenCalledTimes(3);
+  });
+
+  it('fires AFTER the subscriptions are (re)created (snapshot re-fetch cannot race the delta stream)', () => {
+    // If onConnected fired before the subscribes, a delta arriving between
+    // the snapshot fetch and the (re)subscription would be silently missed —
+    // the exact class of loss this handler exists to close.
+    const destsAtCall: string[][] = [];
+    const stomp = new StompClient(BROKER);
+    stomp.connect({
+      onConnected: () => {
+        destsAtCall.push(instances[0]!.subscriptions.map((s) => s.destination));
+      },
+    });
+
+    expect(destsAtCall).toHaveLength(1);
+    expect(destsAtCall[0]).toContain('/user/queue/state');
+    expect(destsAtCall[0]).toContain('/topic/presence');
+    expect(destsAtCall[0]).toContain('/user/queue/coop');
+  });
+
+  it('does not throw when onConnected is omitted', () => {
+    const stomp = new StompClient(BROKER);
+    expect(() => stomp.connect({})).not.toThrow();
+    // And a reconnect without the handler stays silent too.
+    expect(() => instances[0]!.onConnect?.({})).not.toThrow();
+  });
+});
+
 describe('StompClient — coop.segment application path via applyCoopPresence (T073)', () => {
   // These tests drive the REAL transport conversion into the REAL pure merge
   // (sim/coop.ts) with the REAL bundled content — the exact wiring main.ts
