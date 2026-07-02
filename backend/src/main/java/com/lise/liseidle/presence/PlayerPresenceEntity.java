@@ -4,7 +4,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
 
 /**
  * Durable {@code player_presence} row &mdash; one per colleague identity (002;
@@ -12,17 +11,15 @@ import jakarta.persistence.Transient;
  * identity (displayName, avatar, consent/visibility) and their durable
  * last-seen projection (office, activity, lastSeenAt).
  *
- * <p><b>STUB (T019 RED).</b> T031 created this entity with only the natural key
- * {@code colleagueId} so {@code SessionController} could enforce the contracts
- * &sect;2 identity-bound ownership rule via
- * {@code presenceRepository.existsById(playerId)}. For T019 the identity /
- * last-seen columns exist only as {@link Transient} fields &mdash; they let the
- * round-trip test <i>compile</i> while keeping it genuinely RED (a
- * non-persistent field does not survive a save&rarr;find, so the round-trip
- * assertions fail). T033 replaces each {@link Transient} with a real
- * {@code @Column} ({@code ddl-auto: update} then creates the columns and the
- * round-trip goes GREEN); the {@code colleague_id} key is persisted here and
- * unchanged, so the T031 identity-bound lookup keeps working.
+ * <p><b>Bootstrap history (T031 &rarr; T019 &rarr; T033).</b> T031 created this
+ * entity with only the natural key {@code colleagueId} so
+ * {@code SessionController} could enforce the contracts &sect;2 identity-bound
+ * ownership rule via {@code presenceRepository.existsById(playerId)}. T019
+ * added the identity / last-seen fields as non-persistent stubs so the
+ * round-trip test compiled and stayed RED; T033 (this revision) wires them as
+ * real {@code @Column}s ({@code ddl-auto: update} applies the schema delta on
+ * the next boot). The {@code colleague_id} key is unchanged throughout, so the
+ * T031 identity-bound lookup keeps working.
  *
  * <p>The key is named {@code colleagueId} (column {@code colleague_id}): it is
  * the Keycloak {@code sub} = the social key everywhere = the session
@@ -43,34 +40,32 @@ public class PlayerPresenceEntity {
     @Column(name = "colleague_id")
     private String colleagueId;
 
-    // ---- STUB fields (T019): @Transient so the round-trip test stays RED until T033 wires @Column. ----
-
-    /** STUB (T019) &rarr; T033: display name from the access-token claims (data-model PlayerIdentity). */
-    @Transient
+    /** Display name from the access-token claims, refreshed on each authenticated request (data-model PlayerIdentity). */
+    @Column(name = "display_name")
     private String displayName;
 
-    /** STUB (T019) &rarr; T033: assigned avatar sprite id (stable hash of colleagueId). */
-    @Transient
+    /** Assigned avatar sprite id &mdash; deterministic stable hash of colleagueId (data-model PlayerIdentity avatarId). */
+    @Column(name = "avatar")
     private String avatar;
 
-    /** STUB (T019) &rarr; T033: last-known office id ({@code null} while commuting). */
-    @Transient
+    /** Last-known office id the colleague was present in ({@code null} while commuting). */
+    @Column(name = "office")
     private String office;
 
-    /** STUB (T019) &rarr; T033: last-known client-derived activity label. */
-    @Transient
+    /** Last-known client-derived activity label (e.g. {@code "coding"}). */
+    @Column(name = "activity")
     private String activity;
 
-    /** STUB (T019) &rarr; T033: ISO-8601 server timestamp of the last heartbeat / expiry (FR-006). */
-    @Transient
+    /** ISO-8601 server timestamp of the last accepted heartbeat / expiry (FR-006). */
+    @Column(name = "last_seen_at")
     private String lastSeenAt;
 
-    /** STUB (T019) &rarr; T033: app-side first-run consent (FR-003). */
-    @Transient
+    /** App-side first-run consent (FR-003); never delegated to Keycloak ({@code GET /api/v1/me} reads this). */
+    @Column(name = "consent_given", nullable = false)
     private boolean consentGiven;
 
-    /** STUB (T019) &rarr; T033: appear/hide toggle (FR-003). */
-    @Transient
+    /** Appear/hide toggle (FR-003); a hidden or un-consented colleague is filtered server-side (FR-009). */
+    @Column(name = "visible", nullable = false)
     private boolean visible;
 
     /** No-arg constructor required by JPA. */
