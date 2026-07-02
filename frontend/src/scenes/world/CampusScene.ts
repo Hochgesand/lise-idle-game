@@ -11,11 +11,12 @@
 //     touches `this.cameras.main` is derived by the pure functions first, so
 //     the FR-024 math stays unit-tested (camera.test.ts).
 //   - seats.ts — read the Tiled `SeatAnchors` object layer and run the pure
-//     `extractSeatAnchors` (assignment itself is per-frame from the presence
-//     model in US1/T065; for now the anchors are just parsed and stored).
-//   - avatars.ts — drive an `AvatarLayer` from the presence model. Presence
-//     arrives with US1 (T065); until then the layer renders nothing. The hook
-//     `updateAvatars(renders)` is the seam the loop pushes presence through.
+//     `extractSeatAnchors`; the anchors are exposed via `getSeatAnchors()` and
+//     the seat ASSIGNMENT happens outside the scene (US1/T065: main.ts maps
+//     presence → seats → renders via scenes/world/presenceView.ts).
+//   - avatars.ts — drive an `AvatarLayer` from the presence model. main.ts
+//     (T065) pushes `AvatarRender[]` through the `updateAvatars(renders)` hook
+//     after the presence snapshot fetch and on every `/topic/presence` delta.
 //
 // ## Asset keys / tileset-name contract (mirrors retired OfficeScene by design)
 // `campus.json` embeds one tileset named `campus_tileset` (image
@@ -171,11 +172,11 @@ export class CampusScene extends Phaser.Scene {
     this.bootCameraOnActiveOffice();
 
     // ── Seats: parse the SeatAnchors object layer via the pure module ─────
-    // Presence assignment per frame lands with US1 (T065); for now the anchors
-    // are parsed and stored so the renderer is ready.
+    // Exposed via getSeatAnchors(); the deterministic assignment runs in the
+    // pure presenceView mapping (US1/T065) driven from main.ts.
     this.seatAnchors = this.parseSeatAnchors();
 
-    // ── Avatars: empty until the loop pushes presence (US1/T065) ──────────
+    // ── Avatars: empty until main.ts pushes presence renders (US1/T065) ───
     this.avatarLayer = new AvatarLayer(this);
     this.avatarLayer.update([]);
 

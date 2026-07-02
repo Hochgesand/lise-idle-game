@@ -37,6 +37,7 @@ import { FALLBACK_CONTENT } from './sim/fallbackContent';
 import { loadGame, saveGame, createInitialState } from './save/localStorage';
 import { restClient, type PresenceSettings } from './net/restClient';
 import { stompClient } from './net/stompClient';
+import { presenceClient } from './net/presenceClient';
 import { initAuth, handleSigninCallback, restoreSession, isSignedIn, login, authTokenSource } from './net/auth';
 import { deriveHeartbeat, heartbeatIntervalMs } from './net/heartbeat';
 // T051: the retired in-canvas Phaser UI scenes (OfficeScene/HudScene/
@@ -44,6 +45,7 @@ import { deriveHeartbeat, heartbeatIntervalMs } from './net/heartbeat';
 // overlay (the three UI panels). The world renders campus tiles + avatars; the
 // DOM overlay renders HUD/Economy/Academy from the existing pure view models.
 import { CampusScene } from './scenes/world/CampusScene';
+import { buildAvatarRenders } from './scenes/world/presenceView';
 import { createOverlay, type Overlay } from './ui/overlay';
 import { hudPanel } from './ui/hudPanel';
 import { economyPanel } from './ui/economyPanel';
@@ -171,10 +173,64 @@ function connectStomp(): void {
       onContentUpdate: async (_version) => {
         await fetchContent();
       },
+      // (T065) Route every `/topic/presence` delta into the presence model
+      // (which defends against malformed payloads) and re-project the world's
+      // avatars. Display-only + advisory — never throws into the game loop.
+      onPresence: (message) => {
+        presenceClient.model.applyDelta(message);
+        pushPresenceToWorld();
+      },
     });
   } catch (err) {
     console.warn('[main] STOMP connection failed — push channel disabled.', err);
   }
+}
+
+// ── Presence → world rendering (002 T065, best-effort) ────────────────────
+//
+// The presence model (net/presenceClient.ts) is fed two ways — the boot
+// snapshot fetch below and the `/topic/presence` deltas routed in connectStomp
+// — and projected into the campus world via the PURE mapping in
+// scenes/world/presenceView.ts: present colleagues are seated at distinct
+// anchors in their building (seats.ts), live/last-seen tiers select the
+// green/red frame, and commuters are skipped (T080 renders them on the path).
+// Display-only and advisory (FR-016): every failure degrades to an empty or
+// stale world, never into the game loop.
+
+/**
+ * The running CampusScene, captured by ControllerScene.create (which launches
+ * it). `null` until Phaser boots — presence pushes before then are dropped
+ * (the next delta or snapshot re-push catches up).
+ */
+let campusScene: CampusScene | null = null;
+
+/**
+ * Project the current presence model into the world: seat every visible
+ * colleague (presenceView.buildAvatarRenders) and hand the renders to
+ * `CampusScene.updateAvatars`. Cheap and idempotent — called after the
+ * snapshot fetch and on every presence delta. Skipped while the scene is not
+ * up yet (its anchors are parsed in create()).
+ */
+function pushPresenceToWorld(): void {
+  if (campusScene === null) return;
+  const renders = buildAvatarRenders(campusScene.getSeatAnchors(), presenceClient.model.colleagues());
+  campusScene.updateAvatars(renders);
+}
+
+/**
+ * (T065) Fetch the presence snapshot (signed-in only — the endpoint is
+ * authenticated) and project it into the world. Best-effort: on failure the
+ * model keeps its previous content and the world simply shows what it knew
+ * (FR-016 — social is advisory, the game plays on solo).
+ */
+async function refreshPresenceSnapshot(): Promise<void> {
+  if (!isSignedIn()) return;
+  try {
+    await presenceClient.fetchSnapshot();
+  } catch (err) {
+    console.warn('[main] Presence snapshot fetch failed — world presence stays empty/stale.', err);
+  }
+  pushPresenceToWorld();
 }
 
 // ── Presence heartbeat (002 T063, best-effort) ─────────────────────────────
@@ -314,8 +370,12 @@ class ControllerScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Launch the campus world scene (renders the tilemap + camera/avatars).
+    // Launch the campus world scene (renders the tilemap + camera/avatars)
+    // and capture it for the presence→world push (T065). `scene.get` returns
+    // the registered instance immediately; its seat anchors are parsed in its
+    // create(), which runs before any (network-bound) presence arrives.
     this.scene.launch('CampusScene');
+    campusScene = this.scene.get('CampusScene') as CampusScene;
 
     // Mount the DOM overlay (FR-019). Action callbacks bind to the pure
     // mutators + state update — the same closures the retired scenes received
@@ -484,6 +544,7 @@ async function boot(): Promise<void> {
   initAuth();
   restClient.setTokenSource(authTokenSource);
   stompClient.setTokenSource(authTokenSource);
+  presenceClient.setTokenSource(authTokenSource);
   if ((await handleSigninCallback()) === null) {
     await restoreSession();
   }
@@ -496,6 +557,11 @@ async function boot(): Promise<void> {
   //     start the heartbeat interval when signed in AND consent is granted —
   //     signed-out or no-consent players never publish presence (FR-003).
   void refreshPresenceConsent();
+
+  // 6c. Presence snapshot (T065, signed-in only): fetch the authoritative
+  //     colleague list and render it in the world; `/topic/presence` deltas
+  //     (routed in connectStomp above) keep it live from here on.
+  void refreshPresenceSnapshot();
 
   // 7. Periodic save + sync. Local save every 30s; backend sync every 60s.
   setInterval(() => {
