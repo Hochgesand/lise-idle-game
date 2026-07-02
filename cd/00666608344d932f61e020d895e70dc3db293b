@@ -1,0 +1,19 @@
+frontend/src/net/presenceClient.test.ts
+  s_d20cc340e934de::t_da84563e7e3bd2 96-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "cd00666608344d932f61e020d895e70dc3db293b",
+  "prompts": {},
+  "sessions": {
+    "s_d20cc340e934de": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b4edef4e-5ea6-4302-96dd-ed0e87854e20",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
