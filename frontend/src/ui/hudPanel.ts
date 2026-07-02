@@ -98,7 +98,9 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
       // effective ×1) append NOTHING — no empty badge element. The
       // covering-segment rule is `effectiveMultiplier` (sim/coop.ts), the
       // exact helper computeRate applies — never reimplemented here.
-      const coopMult = coopMultiplierNow(state, content);
+      // Rounded to the DISPLAYED one-decimal precision before the >1 gate so
+      // a multiplier in (1, 1.05) never renders a misleading "×1.0 co-op".
+      const coopMult = Math.round(coopMultiplierNow(state, content) * 10) / 10;
       if (coopMult > 1) {
         const coop = document.createElement('div');
         coop.className = 'hud-coop';

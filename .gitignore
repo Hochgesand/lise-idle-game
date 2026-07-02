@@ -49,3 +49,4 @@ yarn-error.log*
 
 # NOTE: .specify/, .pi/, specs/, AGENTS.md are intentionally
 # tracked — they are part of this project's spec/agent setup.
+__pycache__/

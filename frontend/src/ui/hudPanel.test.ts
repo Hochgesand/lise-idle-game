@@ -286,6 +286,15 @@ describe('hudPanel — co-op bonus badge (T074)', () => {
     expect(mount.querySelector(COOP_BADGE)).toBeNull();
   });
 
+  it('renders NO badge element when the multiplier would display as ×1.0 (rounds to baseline)', () => {
+    // 1.04 passes a naive >1 check but formats to "1.0" at the badge's
+    // one-decimal precision — the panel must not show a baseline-looking badge.
+    mount = mountHud(
+      makeState({ coopSegments: [{ from: -1000, until: 60_000, multiplier: 1.04 }] }),
+    );
+    expect(mount.querySelector(COOP_BADGE)).toBeNull();
+  });
+
   it('caps the displayed multiplier at content.coop.maxMultiplier', () => {
     // FALLBACK_CONTENT.coop.maxMultiplier is 1.5 → a raw ×3 segment clamps.
     mount = mountHud(
