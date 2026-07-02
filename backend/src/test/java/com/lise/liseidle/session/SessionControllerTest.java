@@ -417,4 +417,19 @@ class SessionControllerTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error.code").value("bad_request"));
     }
+
+    /**
+     * 15. (002 T031, cubic P3) The {@code isBlank()} arm of the null/blank
+     * guard (a present-but-whitespace {@code playerId}, e.g.
+     * {@code {"playerId":"   "}}) also yields 400 {@code bad_request} — covering
+     * the branch not implied by the absent-key case 14.
+     */
+    @Test
+    void postSession_returns400BadRequest_whenBodyPlayerIdIsBlank() throws Exception {
+        mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("playerId", "   "))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("bad_request"));
+    }
 }
