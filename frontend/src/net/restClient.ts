@@ -130,18 +130,86 @@ function fromWire(wire: WireGameState): GameState {
   };
 }
 
+// ── Auth token source (002 T058) ─────────────────────────────────────
+//
+// The RestClient consumes a `TokenSource` (provided by auth.ts) and attaches
+// `Authorization: Bearer <access_token>` to authenticated calls whenever a
+// token is held. When no token source is configured (signed-out / 001 anonymous
+// play) the header is omitted and the anonymous-UUID path works as before
+// (contracts §2 bearer-token contract). The same interface is consumed by the
+// STOMP client for its CONNECT-frame token (T061).
+
+/** A bearer access token held by the auth layer. */
+export interface AccessToken {
+  readonly token: string;
+}
+
+/** Provides the current access token for authenticated calls, or null when signed out. */
+export interface TokenSource {
+  getToken(): AccessToken | null;
+}
+
+/** `GET /api/v1/me` response — the current signed-in identity (contracts §2). */
+export interface MeResponse {
+  colleagueId: string; // the JWT `sub` claim (stable social key)
+  displayName: string; // from access-token name/preferred_username claims
+  avatar: string; // assigned avatar id
+  consentGiven: boolean; // app-side, read from player_presence
+  visible: boolean;
+}
+
+/**
+ * Outcome of identity adoption (contracts §2, binding).
+ *  - `ok: true`  — adopted `colleagueId`; the anonymous-UUID row is orphaned
+ *    (never wiped), local save content is untouched, and the pushed state was
+ *    merged server-side.
+ *  - `ok: false` — adoption degraded without throwing into the game loop.
+ *    `reason: 'signed_out'` = the token is missing/invalid/expired (a 401);
+ *    `reason: 'network'`   = a transient failure (network drop / 5xx / other).
+ *    The caller can distinguish a lost token (drop the session) from a
+ *    retryable push failure (retry the adoption).
+ */
+export type IdentityAdoption =
+  | { ok: true; colleagueId: string; serverState: GameState | null; mergedState: GameState }
+  | { ok: false; reason: 'signed_out' | 'network' | 'schema_too_new' };
+
 // ── Client ───────────────────────────────────────────────────────────────
 
 /**
  * Thin REST client over `fetch`. Construct with an explicit `baseUrl` for
  * tests; use the exported `restClient` (or `createRestClient()`) for the app,
  * which is wired to the build-time `VITE_API_BASE_URL`.
+ *
+ * (002 T058) Pass an optional `TokenSource` (from auth.ts) to attach
+ * `Authorization: Bearer` on authenticated calls; omit it for signed-out /
+ * anonymous play. `setTokenSource` allows late binding once auth initializes.
  */
 export class RestClient {
-  constructor(private readonly baseUrl: string) {}
+  private tokenSource: TokenSource | null;
+
+  constructor(
+    private readonly baseUrl: string,
+    tokenSource: TokenSource | null = null,
+  ) {
+    this.tokenSource = tokenSource;
+  }
+
+  /** Late-bind the auth token source (e.g. once auth.ts has initialized). */
+  setTokenSource(tokenSource: TokenSource | null): void {
+    this.tokenSource = tokenSource;
+  }
+
+  /** `Authorization: Bearer ...` when a token is held, else empty (signed out). */
+  private authHeaders(): Record<string, string> {
+    const token = this.tokenSource?.getToken();
+    return token !== null && token !== undefined
+      ? { Authorization: `Bearer ${token.token}` }
+      : {};
+  }
 
   /** GET /api/v1/content — returns the raw envelope (caller runs `loadContent`). */
   async getContent(): Promise<ContentEnvelope> {
+    // Public/anonymous endpoint (contracts §2) — no bearer attached.
     const res = await fetch(`${this.baseUrl}/api/v1/content`, { method: 'GET' });
     if (!res.ok) {
       throw await this.toRestError(res);
@@ -153,11 +221,15 @@ export class RestClient {
    * POST /api/v1/session — register/load a player.
    * Returns the saved state, or `null` on 404 (no save → fresh player).
    * Throws `RestError` on any other non-2xx status.
+   *
+   * (002 T058) attaches the bearer when held so an identity-bound id resolves
+   * under the signed-in principal; signed-out (no token) keeps the 001
+   * anonymous-UUID path.
    */
   async loadSession(playerId: string): Promise<GameState | null> {
     const res = await fetch(`${this.baseUrl}/api/v1/session`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
       body: JSON.stringify({ playerId }),
     });
     if (res.status === 404) {
@@ -184,7 +256,7 @@ export class RestClient {
       `${this.baseUrl}/api/v1/session/${encodeURIComponent(playerId)}/state`,
       {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
         body: JSON.stringify({ state: toWire(state), clientTime }),
       },
     );
@@ -197,6 +269,59 @@ export class RestClient {
     }
     const body = (await res.json()) as { state: WireGameState };
     return fromWire(body.state);
+  }
+
+  /**
+   * GET /api/v1/me — the current signed-in identity (contracts §2). Requires a
+   * bearer token; the server returns 401 `not_authenticated` without one (parsed
+   * into a `RestError` with status 401).
+   */
+  async getMe(): Promise<MeResponse> {
+    const res = await fetch(`${this.baseUrl}/api/v1/me`, {
+      method: 'GET',
+      headers: this.authHeaders(),
+    });
+    if (!res.ok) {
+      throw await this.toRestError(res);
+    }
+    return (await res.json()) as MeResponse;
+  }
+
+  /**
+   * Identity adoption (contracts §2, binding). After sign-in the client stops
+   * using its anonymous localStorage UUID and adopts `colleagueId` — the JWT
+   * `sub` echoed by `/api/v1/me` — as its `playerId`: re-bootstrap
+   * `POST /api/v1/session` under that id, then push local state via
+   * `PUT /api/v1/session/{colleagueId}/state`. The monotonic max-merge preserves
+   * all anonymous progress server-side; the anonymous-UUID row is **orphaned**
+   * (never wiped, never auto-merged); the local save content is unchanged.
+   *
+   * Never throws into the game loop (FR-016): a 401 (token missing/invalid)
+   * degrades to `signed_out`; a 409 (`schema_too_new` — the client's schema is
+   * newer than the server supports) degrades to `schema_too_new` (permanent —
+   * the caller should prompt a reload, NOT retry); any other failure (network
+   * drop, 5xx) degrades to `network` — the caller can retry without dropping
+   * the session.
+   */
+  async adoptIdentity(localState: GameState, clientTime: string): Promise<IdentityAdoption> {
+    try {
+      const me = await this.getMe();
+      const serverState = await this.loadSession(me.colleagueId);
+      const mergedState = await this.saveState(me.colleagueId, localState, clientTime);
+      return { ok: true, colleagueId: me.colleagueId, serverState, mergedState };
+    } catch (err) {
+      if (err instanceof RestError) {
+        // Classify by HTTP status (robust regardless of which call threw):
+        // 401 = token missing/invalid → signed_out; 409 = client schema too
+        // new → permanent schema_too_new (prompt reload, do NOT retry).
+        if (err.status === 401) return { ok: false, reason: 'signed_out' };
+        if (err.status === 409) return { ok: false, reason: 'schema_too_new' };
+      }
+      // Transient/network failure (or any unexpected error): never throw into
+      // the game loop. The caller may retry adoption without dropping the session.
+      console.warn('[restClient] Identity adoption failed — staying on the current identity.', err);
+      return { ok: false, reason: 'network' };
+    }
   }
 
   /**
@@ -231,9 +356,12 @@ export const API_BASE_URL: string =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
 /** Factory: build a client for a custom base URL (defaults to the configured one). */
-export function createRestClient(baseUrl: string = API_BASE_URL): RestClient {
-  return new RestClient(baseUrl);
+export function createRestClient(
+  baseUrl: string = API_BASE_URL,
+  tokenSource: TokenSource | null = null,
+): RestClient {
+  return new RestClient(baseUrl, tokenSource);
 }
 
 /** Default app-wide client, wired to the build-time `VITE_API_BASE_URL`. */
-export const restClient = new RestClient(API_BASE_URL);
+export const restClient = new RestClient(API_BASE_URL, null);

@@ -581,4 +581,23 @@ describe('RestClient.adoptIdentity — identity adoption (T058, contracts §2)',
     if (result.ok) throw new Error('expected degradation');
     expect(result.reason).toBe('network');
   });
+
+  it('reports a permanent schema_too_new (not retryable network) when the push 409s', async () => {
+    // The PUT push returns 409 schema_too_new (the client's schemaVersion is
+    // newer than the server supports). This is permanent — retrying the push
+    // will never succeed — so it is classified distinctly from a transient
+    // network failure (the caller should prompt a reload, not retry).
+    const client = new RestClient(BASE, tokenSource('tok-1'));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, meBody({ colleagueId: 'ada-sub' })));
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, { error: { code: 'no_save', message: 'fresh' } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(409, { error: { code: 'schema_too_new', message: 'update required' } }),
+    );
+
+    const result = await client.adoptIdentity(makeState('500'), '2026-07-01T09:00:00.000Z');
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.reason).toBe('schema_too_new');
+  });
 });
