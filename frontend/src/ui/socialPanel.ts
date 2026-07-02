@@ -101,6 +101,8 @@ export function socialPanel(opts: SocialPanelOptions): OverlaySection {
 
   return {
     id: 'social',
+    // (T087) Landmark label for the slot (overlay.ts sets role="region").
+    ariaLabel: 'Kolleg:innen & Sichtbarkeit',
     render: () => {
       const parts: HTMLElement[] = [];
 
@@ -209,14 +211,25 @@ function renderSignInOffer(): HTMLElement {
 function renderConsentDialog(): HTMLElement {
   const dialog = document.createElement('div');
   dialog.className = 'social-consent';
+  // (T087) Dialog semantics: role="dialog" names the pattern for AT;
+  // aria-modal="false" states EXPLICITLY that it is non-modal — it lives in
+  // the panel slot and never blocks the game (FR-003). Only one consent
+  // dialog can exist at a time (single social slot), so the label/description
+  // ids are safely unique.
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'false');
+  dialog.setAttribute('aria-labelledby', 'social-consent-heading');
+  dialog.setAttribute('aria-describedby', 'social-consent-text');
 
   const heading = document.createElement('h2');
   heading.className = 'social-heading';
+  heading.id = 'social-consent-heading';
   heading.textContent = 'Für Kolleg:innen sichtbar sein?';
   dialog.appendChild(heading);
 
   const text = document.createElement('p');
   text.className = 'social-consent-text';
+  text.id = 'social-consent-text';
   text.textContent =
     'Geteilt werden nur: Anzeigename, Avatar, Büro, Aktivität und ' +
     'Live-/„zuletzt gesehen“-Status. Keine E-Mail, kein Spielstand. ' +

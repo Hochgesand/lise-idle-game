@@ -86,6 +86,8 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
 
   return {
     id: 'economy',
+    // (T087) Landmark label for the slot (overlay.ts sets role="region").
+    ariaLabel: 'Economy',
     render: (getState, getContent) => {
       const state = getState();
       const content = getContent();
@@ -94,7 +96,7 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
       const root = document.createElement('div');
       root.className = 'economy-panel';
 
-      root.appendChild(heading('ECONOMY', 'economy-heading'));
+      root.appendChild(heading('ECONOMY', 'economy-heading', 'h2'));
 
       // ── Cash display + cash-out control ───────────────────────────────
       root.appendChild(cashSection(state));
@@ -116,7 +118,7 @@ export function economyPanel(opts: EconomyPanelOptions): OverlaySection {
       function cashSection(s: GameState): HTMLElement {
         const wrap = document.createElement('div');
         wrap.className = 'economy-section economy-cash';
-        wrap.appendChild(heading('CASH', 'economy-subheading'));
+        wrap.appendChild(heading('CASH', 'economy-subheading', 'h3'));
 
         // Cash balance (the spendable currency produced by cashing out LOC).
         const amount = document.createElement('div');
@@ -270,7 +272,7 @@ function section(
 ): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'economy-section';
-  wrap.appendChild(heading(subheading, 'economy-subheading'));
+  wrap.appendChild(heading(subheading, 'economy-subheading', 'h3'));
 
   const ul = document.createElement('ul');
   ul.className = listClass;
@@ -279,9 +281,13 @@ function section(
   return wrap;
 }
 
-/** A heading element at the given class level. */
-function heading(text: string, className: string): HTMLElement {
-  const h = document.createElement('h2');
+/**
+ * A heading element. `level` sets the real heading tag (T087): the panel
+ * title is an <h2>, section subheadings are <h3> — a flat all-<h2> outline
+ * misrepresents the panel structure to screen readers.
+ */
+function heading(text: string, className: string, level: 'h2' | 'h3'): HTMLElement {
+  const h = document.createElement(level);
   h.className = className;
   h.textContent = text;
   return h;

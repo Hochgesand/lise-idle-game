@@ -109,6 +109,26 @@
   pointer-events: auto;
 }
 
+/* ── Touch targets & keyboard focus (T087, FR-019) ────────────────────────
+ * Every interactive control in a panel meets the 44 px platform minimum —
+ * one shared rule (like the pointer-events opt-in above) instead of
+ * per-panel copies, so a future panel can't forget it. The world-side
+ * counterpart is the avatars' 44 px padded hit-area (avatars.ts
+ * HIT_TARGET_PX). Non-interactive state spans (locked entries, the
+ * commuting indicator) are deliberately NOT padded — they are not targets. */
+.ui-panel button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Visible keyboard focus over the dark canvas: the UA default outline is
+ * easily lost against the translucent slate panels. :focus-visible keeps
+ * pointer taps outline-free. */
+.ui-panel button:focus-visible {
+  outline: 2px solid var(--hud-color);
+  outline-offset: 2px;
+}
+
 /* ── Desktop layout (default, > 600px): corner / side panels ───────────────
  * HUD top-left, economy on the right, academy below economy, social
  * bottom-left. Panels are anchored via the grid so the overlay never hangs off
@@ -188,9 +208,10 @@
 }
 
 /* ── Reduced motion ───────────────────────────────────────────────────────
- * Honors prefers-reduced-motion AND state.settings.reducedMotion (T051 applies
- * the .ui-reduced-motion class to .ui-root from the save setting). Disables all
- * transitions/animations — e.g. the boost float-text CSS animation (T048). */
+ * Honors prefers-reduced-motion AND state.settings.reducedMotion (T087: the
+ * overlay's renderAll toggles the .ui-reduced-motion class on .ui-root from
+ * the save setting on every render). Disables all transitions/animations —
+ * e.g. the boost float-text CSS animation (T048). */
 @media (prefers-reduced-motion: reduce) {
   .ui-root,
   .ui-root * {

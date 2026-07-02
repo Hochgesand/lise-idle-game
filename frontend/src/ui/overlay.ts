@@ -113,6 +113,13 @@ export interface OverlaySection {
   /** Stable unique id. Keys the section's container slot (`data-panel`). */
   id: string;
   /**
+   * (T087) Accessible name for the section's slot. When set, the slot becomes
+   * a labelled landmark (`role="region"` + `aria-label`) so screen-reader
+   * users can jump between the panels. Every production panel provides one;
+   * optional so bare test sections stay minimal.
+   */
+  ariaLabel?: string;
+  /**
    * (Re)build the section's DOM from the current state/content. Called on each
    * refresh (throttled or per-frame). Return `null` to hide the section this
    * frame — its slot is emptied but retained, so a later non-null render
@@ -214,6 +221,13 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
     const slot = document.createElement('section');
     slot.className = UI_PANEL_CLASS;
     slot.dataset.panel = section.id;
+    // (T087) A labelled slot is a navigable landmark. Set ONCE at creation —
+    // the label is stable for the section's lifetime (the per-frame rebuild
+    // only touches the slot's children, never the slot itself).
+    if (section.ariaLabel !== undefined) {
+      slot.setAttribute('role', 'region');
+      slot.setAttribute('aria-label', section.ariaLabel);
+    }
     root.appendChild(slot);
     slots.set(section.id, slot);
   }
@@ -303,6 +317,23 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
   function renderAll(): void {
     lastRenderAt = Date.now();
     pendingTrailing = false;
+
+    // (T087) Reduced motion from the SAVE SETTING: styles.css's
+    // `.ui-root.ui-reduced-motion` rule kills every overlay CSS animation/
+    // transition, mirroring `prefers-reduced-motion` for players who set the
+    // in-game toggle instead of the OS one. Toggled per render (the same
+    // cadence every panel reads the state), so a mid-session change applies
+    // on the next repaint. Guarded like a section render — a throwing state
+    // accessor must never crash the loop.
+    try {
+      root.classList.toggle(
+        'ui-reduced-motion',
+        accessors.getState().settings.reducedMotion === true,
+      );
+    } catch (err) {
+      console.error('[overlay] reduced-motion state read failed', err);
+    }
+
     for (const section of sections) {
       const slot = slots.get(section.id);
       if (!slot) continue;
@@ -318,12 +349,41 @@ export function createOverlay(opts: CreateOverlayOptions): Overlay {
         continue;
       }
 
+      // (T087) Focus preservation: replaceChildren detaches the focused
+      // element, silently dropping focus to <body> — at the production 10 Hz
+      // refresh a keyboard user could never keep a button focused long enough
+      // to activate it. Remember the focused element's data-action before the
+      // swap and re-focus its replacement after. (data-action is the stable
+      // identity across rebuilds — the same key the delegation bus uses.)
+      const active = document.activeElement;
+      let refocusAction: string | null = null;
+      if (active instanceof HTMLElement && slot.contains(active)) {
+        refocusAction =
+          active.closest<HTMLElement>('[data-action]')?.dataset.action ?? null;
+      }
+
       // replaceChildren swaps the slot's content wholesale — cheap and
       // exception-safe. null ⇒ replaceChildren() with NO args removes every
       // child node (not an empty text node), so CSS `.ui-panel:empty` matches
       // and the slot fully collapses (T047 P2).
       if (node) slot.replaceChildren(node);
       else slot.replaceChildren();
+
+      // (T087) `hidden` is the a11y-tree counterpart of the CSS `:empty`
+      // collapse: an empty labelled region must not be announced (and, like
+      // the inline pointer-events, it holds even if styles.css never loads).
+      slot.hidden = node === null;
+
+      if (refocusAction !== null) {
+        // Match via dataset (not a selector interpolation) — no escaping
+        // pitfalls, and `CSS.escape` is unavailable in some DOM environments.
+        for (const el of slot.querySelectorAll<HTMLElement>('[data-action]')) {
+          if (el.dataset.action === refocusAction) {
+            el.focus();
+            break;
+          }
+        }
+      }
     }
   }
 

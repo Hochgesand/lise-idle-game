@@ -93,6 +93,8 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
 
   return {
     id: 'hud',
+    // (T087) Landmark label for the slot (overlay.ts sets role="region").
+    ariaLabel: 'Game status',
     render: (getState, getContent) => {
       const state = getState();
       const content = getContent();
@@ -270,6 +272,9 @@ function spawnBoostFloat(
   const rect = anchor.getBoundingClientRect();
   const float = document.createElement('div');
   float.className = 'hud-boost-float';
+  // (T087) Decorative: the float duplicates the LOC counter's information —
+  // announcing a transient "+N" on every boost would spam a screen reader.
+  float.setAttribute('aria-hidden', 'true');
   float.textContent = `+${amount}`;
   // Position the float at the button's horizontal center / top edge; the CSS
   // animation handles the rise + fade (translateX(-50%) centers it on that x).

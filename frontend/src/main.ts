@@ -540,7 +540,13 @@ class ControllerScene extends Phaser.Scene {
     // commuters travel the street smoothly (never teleport, FR-022). With no
     // commuters this is skipped entirely; seated worlds re-render on presence
     // deltas alone.
-    if (presenceHasCommuters) {
+    //
+    // (T087) Under state.settings.reducedMotion the per-frame re-projection is
+    // suppressed: commuters advance in discrete steps on presence deltas
+    // (heartbeat cadence) instead of gliding at 60 fps — position information
+    // is preserved, continuous motion is not. This is the commute counterpart
+    // of the instant avatar fade (T081) and the disabled overlay animations.
+    if (presenceHasCommuters && !state.settings.reducedMotion) {
       pushPresenceToWorld();
     }
   }

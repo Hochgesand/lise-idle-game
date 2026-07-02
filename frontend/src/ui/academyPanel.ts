@@ -61,13 +61,15 @@ export function academyPanel(opts: AcademyPanelOptions): OverlaySection {
 
   return {
     id: 'academy',
+    // (T087) Landmark label for the slot (overlay.ts sets role="region").
+    ariaLabel: 'lise Academy',
     render: (getState, getContent) => {
       const view = getAcademyView(getState(), getContent());
 
       const root = document.createElement('div');
       root.className = 'academy-panel';
 
-      root.appendChild(heading('LISE ACADEMY', 'academy-heading'));
+      root.appendChild(heading('LISE ACADEMY', 'academy-heading', 'h2'));
 
       // ── Trainings ─────────────────────────────────────────────────────
       root.appendChild(
@@ -146,7 +148,7 @@ function section(
 ): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'academy-section';
-  wrap.appendChild(heading(subheading, 'academy-subheading'));
+  wrap.appendChild(heading(subheading, 'academy-subheading', 'h3'));
 
   const ul = document.createElement('ul');
   ul.className = listClass;
@@ -155,9 +157,13 @@ function section(
   return wrap;
 }
 
-/** A heading element at the given class level. */
-function heading(text: string, className: string): HTMLElement {
-  const h = document.createElement('h2');
+/**
+ * A heading element. `level` sets the real heading tag (T087): the panel
+ * title is an <h2>, section subheadings are <h3> — a flat all-<h2> outline
+ * misrepresents the panel structure to screen readers.
+ */
+function heading(text: string, className: string, level: 'h2' | 'h3'): HTMLElement {
+  const h = document.createElement(level);
   h.className = className;
   h.textContent = text;
   return h;
