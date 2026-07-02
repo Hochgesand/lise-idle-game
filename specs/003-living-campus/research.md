@@ -166,6 +166,11 @@ Mirror the 002 commute-resolution pattern exactly:
   deducts the cost immediately (unchanged affordability semantics), then
   sets `activeTraining` for nonzero durations or grants ownership instantly
   for zero durations. Throws if a training is already in progress.
+  **`startTraining` supersedes the existing `purchaseTraining`** — the
+  zero-duration branch *is* the old behavior, so `purchaseTraining` is
+  replaced (removed, with its call sites in `frontend/src/main.ts` and the
+  `onPurchaseTraining` wiring behind `frontend/src/ui/academyPanel.ts`
+  repointed at `startTraining`); two overlapping mutators must not coexist.
 - **`advance`** (`frontend/src/sim/advance.ts`) resolves completion at
   `startedAt + durationSeconds * 1000`: the interval is split at the
   completion boundary (the same piecewise machinery 002 added for coop
