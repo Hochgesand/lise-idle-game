@@ -214,6 +214,16 @@ public class SessionController {
      * @return the rejection response, or empty to proceed
      */
     private Optional<ResponseEntity<?>> enforceIdentity(String playerId, Jwt jwt) {
+        // A null/blank playerId (malformed body, e.g. POST /session `{}`) is a
+        // 400 bad_request rather than a crash-to-500: both branches below would
+        // otherwise throw (null.equals(sub) / existsById(null)). PUT's
+        // @PathVariable is never blank, so this only materializes on POST.
+        if (playerId == null || playerId.isBlank()) {
+            return Optional.of(ResponseEntity.status(400)
+                    .body(new ErrorResponse(new ErrorBody(
+                            "bad_request",
+                            "A non-empty playerId is required."))));
+        }
         if (jwt != null) {
             String sub = jwt.getSubject();
             if (!playerId.equals(sub)) {

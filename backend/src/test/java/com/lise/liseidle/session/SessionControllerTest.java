@@ -401,4 +401,20 @@ class SessionControllerTest {
                 .content(sessionBody(anonId)))
             .andExpect(status().isNotFound());
     }
+
+    /**
+     * 14. (002 T031, cubic P2) A malformed body with NO {@code playerId}
+     * (anonymous {@code POST /session} `{}`) yields a clean 400
+     * {@code bad_request} rather than a crash-to-500 — the null/blank guard in
+     * {@code enforceIdentity} runs before the {@code existsById} lookup (which
+     * throws on a null id).
+     */
+    @Test
+    void postSession_returns400BadRequest_whenBodyPlayerIdIsAbsent() throws Exception {
+        mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("bad_request"));
+    }
 }
