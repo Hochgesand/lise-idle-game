@@ -535,6 +535,11 @@ class ControllerScene extends Phaser.Scene {
   update(time: number): void {
     loop.update(time);
     this.overlay?.refresh();
+    // Keep the world camera framed on the save's active office — on boot
+    // (a returning office_2 save must not open on office_1's frame) and when
+    // `advance` resolves a commute arrival. `setActiveOffice` no-ops while
+    // the office is unchanged, so this is a string compare per frame.
+    campusScene?.setActiveOffice(state.activeOffice);
     // (T080) While colleagues are commuting, their route position is a
     // function of the clock — re-project presence each frame so observed
     // commuters travel the street smoothly (never teleport, FR-022). With no

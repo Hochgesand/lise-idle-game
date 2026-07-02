@@ -242,6 +242,10 @@ export class CampusScene extends Phaser.Scene {
   setActiveOffice(officeId: string): void {
     if (this.activeOffice === officeId) return;
     this.activeOffice = officeId;
+    // Before create() has parsed the map there is nothing to re-frame yet —
+    // create()'s own boot framing picks the updated office up (the loop may
+    // sync the save's office before this scene finishes booting).
+    if (this.map === undefined) return;
     this.bootCameraOnActiveOffice();
   }
 
