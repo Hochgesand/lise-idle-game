@@ -118,6 +118,17 @@ function coop(overrides: Record<string, unknown> = {}): Record<string, unknown> 
   };
 }
 
+/**
+ * A valid (003) world tuning block (003 data-model §3; T008 placeholder
+ * value). Override fields per test via `world({ ... })`.
+ */
+function world(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    walkSeconds: 2,
+    ...overrides,
+  };
+}
+
 /** A fresh, fully-valid envelope with one entry of each type. */
 function validEnvelope(): ContentEnvelope {
   return {
@@ -129,6 +140,7 @@ function validEnvelope(): ContentEnvelope {
     milestones: [milestone()],
     burners: [burner()],
     coop: coop(),
+    world: world(),
   };
 }
 
@@ -383,6 +395,157 @@ describe('loadContent — coop block validation (002)', () => {
 describe('FALLBACK_CONTENT — coop block (002)', () => {
   it('mirrors the placeholder coop values so offline boot integrates identically', () => {
     expect(FALLBACK_CONTENT.coop).toEqual(coop());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadContent — world block validation (003, FR-021) — T004 RED
+// ---------------------------------------------------------------------------
+//
+// The additive seventh content entry `world` (003 data-model §3; the exact
+// `coop.json` pattern). loadContent MUST enforce it present and validate
+// `walkSeconds` as a finite number > 0, all-or-nothing, throwing
+// ContentValidationError on any malformed value. RED until T010.
+
+describe('loadContent — world block validation (003)', () => {
+  it('parses a well-formed world block into the typed catalog', () => {
+    const catalog = loadContent(validEnvelope());
+
+    expect(catalog.world).toBeDefined();
+    expect(catalog.world!.walkSeconds).toBe(2);
+  });
+
+  it('throws ContentValidationError when the world block is missing (enforced-present)', () => {
+    const env = validEnvelope();
+    delete env.world;
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when world is not an object', () => {
+    const env = validEnvelope();
+    env.world = 'nope';
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when walkSeconds is missing', () => {
+    const env = validEnvelope();
+    env.world = world({ walkSeconds: undefined });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when walkSeconds is not a number', () => {
+    const env = validEnvelope();
+    env.world = world({ walkSeconds: '2' });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when walkSeconds is 0 (must be > 0)', () => {
+    const env = validEnvelope();
+    env.world = world({ walkSeconds: 0 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when walkSeconds is negative', () => {
+    const env = validEnvelope();
+    env.world = world({ walkSeconds: -1 });
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when walkSeconds is not finite (Infinity / NaN)', () => {
+    for (const bad of [Infinity, -Infinity, NaN]) {
+      const env = validEnvelope();
+      env.world = world({ walkSeconds: bad });
+      expect(() => loadContent(env)).toThrow(ContentValidationError);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadContent — Training.durationSeconds validation (003, FR-016/021) — T004 RED
+// ---------------------------------------------------------------------------
+//
+// Trainings gain an OPTIONAL duration (003 data-model §2): absent (or 0) keeps
+// the Spec 001 instant-purchase behavior — existing content stays valid
+// unchanged (FR-016). Present values must be finite numbers >= 0.
+
+describe('loadContent — Training.durationSeconds validation (003)', () => {
+  it('preserves a valid nonzero durationSeconds on the typed training', () => {
+    const env = validEnvelope();
+    env.trainings = [training({ durationSeconds: 90 })];
+
+    const catalog = loadContent(env);
+
+    expect(catalog.trainings[0].durationSeconds).toBe(90);
+  });
+
+  it('accepts durationSeconds = 0 (Spec 001 instant behavior)', () => {
+    const env = validEnvelope();
+    env.trainings = [training({ durationSeconds: 0 })];
+
+    const catalog = loadContent(env);
+
+    expect(catalog.trainings[0].durationSeconds).toBe(0);
+  });
+
+  it('keeps existing trainings WITHOUT durationSeconds valid unchanged (FR-016 backward compatibility)', () => {
+    const env = validEnvelope();
+    env.trainings = [training()]; // no durationSeconds key — pre-003 content
+
+    const catalog = loadContent(env);
+
+    expect(catalog.trainings).toHaveLength(1);
+    expect(catalog.trainings[0].durationSeconds).toBeUndefined();
+  });
+
+  it('normalizes an explicit null durationSeconds to absent (wire-leniency for served JSON)', () => {
+    const env = validEnvelope();
+    env.trainings = [training({ durationSeconds: null })];
+
+    const catalog = loadContent(env);
+
+    expect(catalog.trainings[0].durationSeconds).toBeUndefined();
+  });
+
+  it('throws when durationSeconds is not a number', () => {
+    const env = validEnvelope();
+    env.trainings = [training({ durationSeconds: '90' })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when durationSeconds is negative', () => {
+    const env = validEnvelope();
+    env.trainings = [training({ durationSeconds: -5 })];
+    expect(() => loadContent(env)).toThrow(ContentValidationError);
+  });
+
+  it('throws when durationSeconds is not finite (Infinity / NaN)', () => {
+    for (const bad of [Infinity, NaN]) {
+      const env = validEnvelope();
+      env.trainings = [training({ durationSeconds: bad })];
+      expect(() => loadContent(env)).toThrow(ContentValidationError);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FALLBACK_CONTENT — world block (003)
+// ---------------------------------------------------------------------------
+//
+// The bundled fallback MUST mirror the identical world block so an
+// offline-booting client walks with the same tuning as the served envelope
+// (FR-021; 003 data-model §3). RED until T010 mirrors it.
+
+describe('FALLBACK_CONTENT — world block (003)', () => {
+  it('mirrors the placeholder world tuning so offline boot walks identically', () => {
+    expect(FALLBACK_CONTENT.world).toEqual(world());
+  });
+
+  it('the entire fallback catalog passes loadContent validation (world + durations included)', () => {
+    // The fallback is shaped exactly like a served envelope; running it
+    // through the real validator guards the mirror against silent drift
+    // (world block present + valid, every durationSeconds within bounds).
+    const catalog = loadContent(FALLBACK_CONTENT as unknown as ContentEnvelope);
+    expect(catalog.world).toEqual(world());
   });
 });
 

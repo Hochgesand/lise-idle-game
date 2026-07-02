@@ -45,4 +45,20 @@ describe('FALLBACK_CONTENT', () => {
       lastSeenRetentionDays: 14,
     });
   });
+
+  it('mirrors the world tuning block so offline boot walks identically (003)', () => {
+    // Same values as backend/.../content/world.json (T008 placeholder); an
+    // offline-booting client must interpolate station walks with the exact
+    // tuning the served envelope carries (FR-021; 003 data-model §3).
+    expect(FALLBACK_CONTENT.world).toEqual({ walkSeconds: 2 });
+  });
+
+  it('mirrors the trainings duration values of the served content (003, FR-016)', () => {
+    // Until T050 tunes real durations, NO training carries durationSeconds on
+    // either side — backend/.../content/trainings.json and this fallback must
+    // stay in lockstep (a mismatch would desync offline vs online behavior).
+    for (const training of FALLBACK_CONTENT.trainings) {
+      expect(training.durationSeconds).toBeUndefined();
+    }
+  });
 });
