@@ -178,6 +178,10 @@ class DuplicateSessionIT {
         // closing the in-flight-heartbeat ordering window (mirrors
         // TwoSessionPresenceIT awaiting its final heartbeat before backdating).
         disconnectTracked(aliceA);
+        // Drain the collector so the await below matches ONLY B's new broadcast
+        // (the matcher keys on colleagueId+status, and section (1) already
+        // delivered an alice/live message into bobView).
+        drain(bobView);
         sendHeartbeat(aliceB, "office_1", "pairing"); // material change → re-broadcast
         awaitPresenceUpdate(bobView, ALICE_SUB, "live"); // confirms B's upsert is processed
         presenceService.sweepExpiredPresence();
@@ -230,6 +234,13 @@ class DuplicateSessionIT {
             session.disconnect();
         } catch (RuntimeException ignored) {
             // best-effort
+        }
+    }
+
+    /** Drop every collected broadcast so a subsequent await matches only new ones. */
+    private static void drain(Collector collector) {
+        synchronized (collector.messages) {
+            collector.messages.clear();
         }
     }
 
