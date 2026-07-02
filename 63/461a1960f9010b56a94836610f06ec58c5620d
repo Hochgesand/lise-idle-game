@@ -1,0 +1,27 @@
+frontend/src/main.ts
+  s_9e3cb57f61b316::t_472b924474480e 429-441,446-449
+  s_9e3cb57f61b316::t_86547cc7b3a748 40-41
+  s_9e3cb57f61b316::t_97377aa273a0b1 179-253
+  s_9e3cb57f61b316::t_a7734be23e8da7 450
+frontend/src/net/heartbeat.ts
+  s_9e3cb57f61b316::t_fe2c52a6534fc6 1-62
+frontend/src/net/heartbeat.test.ts
+  s_9e3cb57f61b316::t_2af5377f8c06e0 69-70
+  s_9e3cb57f61b316::t_cf1fe95179c532 99-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "63461a1960f9010b56a94836610f06ec58c5620d",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
