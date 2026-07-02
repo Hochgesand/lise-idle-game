@@ -76,7 +76,8 @@ class TwoSessionPresenceIT {
     private static final String ISSUER = "https://keycloak.novitasoft.de/realms/LiseIdler";
 
     private static final long TIMEOUT_MS = 5_000;
-    private static final long SUBSCRIBE_SETTLE_MS = 500;
+    /** Short per-retry window for the subscription-readiness loop. */
+    private static final long READINESS_POLL_MS = 400;
 
     @LocalServerPort
     private int port;
@@ -135,15 +136,21 @@ class TwoSessionPresenceIT {
         StompSession bob = connect(BOB_TOKEN);
         Collector aliceView = subscribe(alice);
         Collector bobView = subscribe(bob);
-        Thread.sleep(SUBSCRIBE_SETTLE_MS); // let SUBSCRIBE frames register
 
-        // Bob heartbeats → alice observes bob's live presence.update.
-        sendHeartbeat(bob, "office_1", "coding");
-        awaitPresenceUpdate(aliceView, BOB_SUB, "live");
+        // Confirm each subscription is live by sending heartbeats with varying
+        // activity until the sender receives its OWN presence.update (a
+        // /topic/presence broadcast reaches the sender too). Each varied
+        // activity is a material change, so it re-broadcasts until the
+        // subscription is registered — replacing a fragile fixed settle sleep.
+        ensureBroadcastReachesSelf(alice, aliceView, ALICE_SUB);
+        ensureBroadcastReachesSelf(bob, bobView, BOB_SUB);
 
-        // Alice heartbeats → bob observes alice's live presence.update.
-        sendHeartbeat(alice, "office_1", "coding");
+        // Both subscriptions are now confirmed live; a final material
+        // heartbeat from each is guaranteed to reach the other.
+        sendHeartbeat(alice, "office_1", "finalizing");
         awaitPresenceUpdate(bobView, ALICE_SUB, "live");
+        sendHeartbeat(bob, "office_1", "finalizing");
+        awaitPresenceUpdate(aliceView, BOB_SUB, "live");
 
         // The REST snapshot (alice's view) also shows bob.
         String snapshot = snapshotAs(ALICE_TOKEN);
@@ -215,14 +222,45 @@ class TwoSessionPresenceIT {
                 Instant.now().minusSeconds(10).toString()));
     }
 
+    /**
+     * Send heartbeats with varying activity until the sender receives its OWN
+     * {@code presence.update}, confirming the subscription is live and a
+     * broadcast can reach it. Each varied activity is a material change so the
+     * record re-broadcasts on every attempt (a steady repeat would not).
+     */
+    private static void ensureBroadcastReachesSelf(StompSession session, Collector selfView, String selfId) {
+        String[] activities = {"coding", "reviewing", "designing", "testing", "planning"};
+        for (String activity : activities) {
+            sendHeartbeat(session, "office_1", activity);
+            if (receivedWithin(selfView, selfId, "live", READINESS_POLL_MS)) {
+                return;
+            }
+        }
+        fail("never received own presence.update; " + selfId + " subscription may not be live");
+    }
+
+    /** True iff a matching presence.update is already in the collector within the window. */
+    private static boolean receivedWithin(Collector collector, String colleagueId, String status, long windowMs) {
+        long deadline = System.currentTimeMillis() + windowMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (containsMatching(collector, colleagueId, status)) {
+                return true;
+            }
+            try {
+                Thread.sleep(40);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return false;
+    }
+
     /** Poll until a matching presence.update arrives in the collector, else fail. */
     private static void awaitPresenceUpdate(Collector collector, String colleagueId, String status) {
         long deadline = System.currentTimeMillis() + TIMEOUT_MS;
         while (System.currentTimeMillis() < deadline) {
-            for (Map<String, Object> msg : collector.messages) {
-                if (matches(msg, colleagueId, status)) {
-                    return;
-                }
+            if (containsMatching(collector, colleagueId, status)) {
+                return;
             }
             try {
                 Thread.sleep(50);
@@ -232,6 +270,24 @@ class TwoSessionPresenceIT {
         }
         fail("no presence.update for " + colleagueId + "/" + status
                 + " within " + TIMEOUT_MS + "ms; received=" + collector.messages);
+    }
+
+    /**
+     * Scan the collector for a matching {@code presence.update}, snapshotting
+     * the synchronized list under its lock so the STOMP delivery thread's
+     * concurrent {@code add} cannot throw {@code ConcurrentModificationException}.
+     */
+    private static boolean containsMatching(Collector collector, String colleagueId, String status) {
+        List<Map<String, Object>> copy;
+        synchronized (collector.messages) {
+            copy = new ArrayList<>(collector.messages);
+        }
+        for (Map<String, Object> msg : copy) {
+            if (matches(msg, colleagueId, status)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @SuppressWarnings("unchecked")
