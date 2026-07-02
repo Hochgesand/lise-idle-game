@@ -113,7 +113,11 @@ vi.mock('@stomp/stompjs', () => ({ Client: MockClient }));
 import { StompClient } from './stompClient';
 import type { HeartbeatPayload } from './stompClient';
 import type { AccessToken, TokenSource } from './restClient';
-import type { GameState } from '../sim/types';
+import type { CoopSegment, GameState } from '../sim/types';
+// (T073) The real pure mutator + bundled content: the application-path tests
+// drive the REAL transport→sim conversion into the REAL merge rule.
+import { applyCoopPresence } from '../sim/coop';
+import { FALLBACK_CONTENT } from '../sim/fallbackContent';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -165,6 +169,32 @@ function deliver(body: string): void {
 /** Deliver to the (002) presence subscription. */
 function deliverPresence(body: string): void {
   deliverTo('/topic/presence', body);
+}
+
+/** (T073) Deliver to the per-player co-op lease subscription. */
+function deliverCoop(body: string): void {
+  deliverTo('/user/queue/coop', body);
+}
+
+/**
+ * (T073) A minimal live GameState fixture for the application-path tests
+ * (schemaVersion 2 co-op overlay present, empty segment list).
+ */
+function liveState(lastAdvancedAt: string): GameState {
+  return {
+    resources: { loc: '0', cash: '0', aiTokens: '0' },
+    ownedProducers: new Set(['manual_typing']),
+    ownedUpgrades: new Set<string>(),
+    ownedTrainings: new Set<string>(),
+    activeBurner: null,
+    earnedMilestones: new Set<string>(),
+    lastAdvancedAt,
+    schemaVersion: 2,
+    settings: { reducedMotion: false, muted: false },
+    coopSegments: [],
+    activeOffice: 'office_1',
+    commute: null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -443,5 +473,253 @@ describe('StompClient.publishHeartbeat', () => {
 
     stomp.publishHeartbeat({ office: 'office_1', activity: 'coding', commute: null });
     expect(client.publishCalls).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (002) T073 — /user/queue/coop subscription + onCoopSegment
+// ---------------------------------------------------------------------------
+//
+// contracts §3 `coop.segment`: a server-authored lease segment for the
+// receiving player only, on the user-addressed `/user/queue/coop` queue:
+//   { "type": "coop.segment",
+//     "segment": { "from": "<ISO>", "until": "<ISO>", "multiplier": 1.2 } }
+//
+// The wire carries ISO-8601 instants while the sim `CoopSegment` uses the
+// numeric sim-timeline (ms) — the client CONVERTS AT THE TRANSPORT BOUNDARY
+// (`Date.parse`), mirroring the array→Set conversion for state.corrections.
+// Beyond that conversion the transport does NOT validate: `applyCoopPresence`
+// is the defense layer (a garbage timestamp becomes NaN and is dropped there,
+// never thrown — FR-017/018).
+
+describe('StompClient — /user/queue/coop subscription + onCoopSegment (T073)', () => {
+  beforeEach(() => {
+    instances.length = 0;
+  });
+
+  it('subscribes to /user/queue/coop on connect (self-heals on reconnect)', () => {
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment: vi.fn() });
+
+    const dests = instances[0]!.subscriptions.map((s) => s.destination);
+    expect(dests).toContain('/user/queue/coop');
+  });
+
+  it('routes a coop.segment to onCoopSegment with ISO instants converted to sim-timeline ms', () => {
+    const onCoopSegment = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment });
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: {
+          from: '2026-07-01T09:00:00Z',
+          until: '2026-07-01T09:01:00Z',
+          multiplier: 1.2,
+        },
+      }),
+    );
+
+    expect(onCoopSegment).toHaveBeenCalledOnce();
+    expect(onCoopSegment).toHaveBeenCalledWith({
+      from: Date.parse('2026-07-01T09:00:00Z'),
+      until: Date.parse('2026-07-01T09:01:00Z'),
+      multiplier: 1.2,
+    });
+  });
+
+  it('does not route state/presence handlers from the coop queue (and vice versa)', () => {
+    const onCoopSegment = vi.fn();
+    const onStateCorrection = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment, onStateCorrection });
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:00Z', multiplier: 1.1 },
+      }),
+    );
+
+    expect(onStateCorrection).not.toHaveBeenCalled();
+    expect(onCoopSegment).toHaveBeenCalledOnce();
+  });
+
+  it('ignores an unknown message type on the coop queue (no handler call, no throw)', () => {
+    const onCoopSegment = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment });
+
+    expect(() =>
+      deliverCoop(JSON.stringify({ type: 'something.unknown', foo: 'bar' })),
+    ).not.toThrow();
+    expect(onCoopSegment).not.toHaveBeenCalled();
+  });
+
+  it('ignores a coop.segment with a missing/non-object segment field (no handler call)', () => {
+    const onCoopSegment = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment });
+
+    expect(() => deliverCoop(JSON.stringify({ type: 'coop.segment' }))).not.toThrow();
+    expect(() =>
+      deliverCoop(JSON.stringify({ type: 'coop.segment', segment: 'nope' })),
+    ).not.toThrow();
+    expect(onCoopSegment).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unparseable coop body without throwing (no handler call)', () => {
+    const onCoopSegment = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment });
+
+    expect(() => deliverCoop('<<<not-json>>>')).not.toThrow();
+    expect(onCoopSegment).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when onCoopSegment is omitted', () => {
+    const stomp = new StompClient(BROKER);
+    stomp.connect({}); // no onCoopSegment handler
+    expect(() =>
+      deliverCoop(
+        JSON.stringify({
+          type: 'coop.segment',
+          segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:00Z', multiplier: 1.2 },
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('passes garbage timestamps through as NaN (validation lives in applyCoopPresence)', () => {
+    // The transport is a thin wrapper: it converts, it does not judge.
+    // coop.ts explicitly defends against "a Date.parse('garbage') NaN the
+    // wire layer passed through" — this pins that layering.
+    const onCoopSegment = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onCoopSegment });
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: 'garbage', until: '2026-07-01T09:01:00Z', multiplier: 1.2 },
+      }),
+    );
+
+    expect(onCoopSegment).toHaveBeenCalledOnce();
+    const seg = onCoopSegment.mock.calls[0]![0] as CoopSegment;
+    expect(Number.isNaN(seg.from)).toBe(true);
+    expect(seg.until).toBe(Date.parse('2026-07-01T09:01:00Z'));
+  });
+});
+
+describe('StompClient — coop.segment application path via applyCoopPresence (T073)', () => {
+  // These tests drive the REAL transport conversion into the REAL pure merge
+  // (sim/coop.ts) with the REAL bundled content — the exact wiring main.ts
+  // performs at its safe mutation point, minus the loop/save side effects.
+  beforeEach(() => {
+    instances.length = 0;
+  });
+
+  /** Connect a client whose onCoopSegment merges into a captive state. */
+  function connectMerging(initial: GameState): { current: () => GameState } {
+    let state = initial;
+    const stomp = new StompClient(BROKER);
+    stomp.connect({
+      onCoopSegment: (segment: CoopSegment) => {
+        state = applyCoopPresence(state, segment, FALLBACK_CONTENT);
+      },
+    });
+    return { current: () => state };
+  }
+
+  it('merges a delivered coop.segment into state.coopSegments (upsert by from)', () => {
+    const anchor = '2026-07-01T09:00:00.000Z';
+    const handle = connectMerging(liveState(anchor));
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:00Z', multiplier: 1.2 },
+      }),
+    );
+
+    expect(handle.current().coopSegments).toEqual([
+      {
+        from: Date.parse('2026-07-01T09:00:00Z'),
+        until: Date.parse('2026-07-01T09:01:00Z'),
+        multiplier: 1.2,
+      },
+    ]);
+  });
+
+  it('re-delivery of the same heartbeat extension is idempotent (one segment)', () => {
+    const handle = connectMerging(liveState('2026-07-01T09:00:00.000Z'));
+    const body = JSON.stringify({
+      type: 'coop.segment',
+      segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:00Z', multiplier: 1.2 },
+    });
+
+    deliverCoop(body);
+    deliverCoop(body);
+
+    expect(handle.current().coopSegments).toHaveLength(1);
+    expect(handle.current().coopSegments[0]!.multiplier).toBe(1.2);
+  });
+
+  it('a heartbeat extension (same from, later until) extends the stored segment', () => {
+    const handle = connectMerging(liveState('2026-07-01T09:00:00.000Z'));
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:00Z', multiplier: 1.2 },
+      }),
+    );
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:20Z', multiplier: 1.2 },
+      }),
+    );
+
+    expect(handle.current().coopSegments).toEqual([
+      {
+        from: Date.parse('2026-07-01T09:00:00Z'),
+        until: Date.parse('2026-07-01T09:01:20Z'),
+        multiplier: 1.2,
+      },
+    ]);
+  });
+
+  it('a malformed segment (garbage timestamp) leaves the state untouched', () => {
+    const initial = liveState('2026-07-01T09:00:00.000Z');
+    const handle = connectMerging(initial);
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: 'garbage', until: '2026-07-01T09:01:00Z', multiplier: 1.2 },
+      }),
+    );
+
+    // applyCoopPresence returns the state UNCHANGED (same reference) on bad input.
+    expect(handle.current()).toBe(initial);
+  });
+
+  it('a stale segment (fully before lastAdvancedAt) is never re-credited', () => {
+    // Missed segments during a disconnect are NOT retroactively issued
+    // (contracts §3); a late/stale delivery must not credit past time.
+    const initial = liveState('2026-07-01T09:05:00.000Z');
+    const handle = connectMerging(initial);
+
+    deliverCoop(
+      JSON.stringify({
+        type: 'coop.segment',
+        segment: { from: '2026-07-01T09:00:00Z', until: '2026-07-01T09:01:00Z', multiplier: 1.5 },
+      }),
+    );
+
+    expect(handle.current()).toBe(initial);
   });
 });
