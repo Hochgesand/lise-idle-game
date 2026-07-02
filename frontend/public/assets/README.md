@@ -5,11 +5,13 @@ lise office buildings, the CC0 pixel-art tileset, and the avatar spritesheet
 that renders live/last-seen presence states. It supersedes the 001
 placeholder pipeline (`office_tileset.png` / `office.json` / `dev.png`).
 
-> **Status:** This document is the pipeline **scaffold** (T007). The asset
-> downloads and Tiled install are **manual/deferred** — see the checklist in
-> [Deferred manual setup](#deferred-manual-setup) below. Only the three
-> legacy 001 files (`dev.png`, `office_tileset.png`, `office.json`) are
-> present today.
+> **Status:** The committed files `campus.json`, `campus_tileset.png`, and
+> `avatars.png` are **PLACEHOLDERS** (programmatic, T040/T041) that satisfy
+> the CampusScene load contract but carry **no real art**. They **MUST** be
+> replaced by the real Kenney CC0 art and the Tiled-authored campus map
+> described below — see [Placeholder assets](#placeholder-assets-temporary--pending-t040t041)
+> and the manual checklist in
+> [Deferred manual setup](#deferred-manual-setup).
 
 ---
 
@@ -28,7 +30,10 @@ superseded by the manual T040/T041 work below:
 
 These satisfy the load contract (no thrown errors) but **must be replaced**
 by the real Kenney CC0 art and the real Tiled-authored campus map described
-below.
+below. Note that the placeholder `campus.json` carries only **20 total
+seat anchors** — well below the **≥ 60 total** production invariant; the
+real Tiled map (T040) authors the full ≥ 20 (Office #1) + ≥ 40 (Office #2)
+anchor set.
 
 ---
 
