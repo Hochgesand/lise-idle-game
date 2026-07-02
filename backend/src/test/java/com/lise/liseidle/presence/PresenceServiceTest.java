@@ -17,9 +17,13 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,11 +68,13 @@ class PresenceServiceTest {
 
     @BeforeEach
     void setUp() {
-        // PresenceService reads the co-op tuning once at construction (content
-        // is immutable per version), so the catalog stub is consumed here.
+        // PresenceService + CoopService both read the co-op tuning once at
+        // construction (content is immutable per version), so the catalog stub
+        // is consumed by both here.
         when(contentLoader.getCatalog()).thenReturn(
                 new ContentCatalog(1, "test", List.of(), List.of(), List.of(), List.of(), List.of(), COOP));
-        service = new PresenceService(registry, repository, pushService, contentLoader);
+        CoopService coopService = new CoopService(registry, repository, contentLoader);
+        service = new PresenceService(registry, repository, pushService, contentLoader, coopService);
     }
 
     // ── 1. accepted heartbeat marks the sender live + sets the lease ───────
@@ -245,6 +251,221 @@ class PresenceServiceTest {
 
         assertThat(registry.snapshot()).isEmpty();
         verify(pushService, never()).broadcastPresenceUpdate(any(), anyString());
+    }
+
+    // ── 5. co-op segment issuance (T072) ────────────────────────────────
+
+    /**
+     * A heartbeat with another distinct visible colleague present issues a
+     * server-authored {@code coop.segment} to the sender on
+     * {@code /user/queue/coop}: capped multiplier (1.1 for one colleague),
+     * {@code from = serverNow}, {@code until = serverNow + leaseSeconds}
+     * (contracts &sect;3 {@code coop.segment}; FR-010).
+     */
+    @Test
+    void heartbeatWithColleaguePresent_issuesCappedCoopSegmentToSender() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        when(repository.findById("bob")).thenReturn(Optional.of(row("bob", true, true)));
+        registry.upsert(live("bob", "Bob", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+
+        Instant before = Instant.now();
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+
+        ArgumentCaptor<CoopSegmentMessage.Segment> segment =
+                ArgumentCaptor.forClass(CoopSegmentMessage.Segment.class);
+        verify(pushService).sendCoopSegment(eq("alice"), segment.capture());
+        CoopSegmentMessage.Segment seg = segment.getValue();
+        assertThat(seg.multiplier()).isEqualTo(1.1, within(1e-9));
+        assertThat(Instant.parse(seg.from())).isBetween(before, Instant.now());
+        assertThat(Duration.between(before, Instant.parse(seg.until())).getSeconds())
+                .as("until = serverNow + leaseSeconds")
+                .isBetween((long) COOP.leaseSeconds(), (long) COOP.leaseSeconds() + 2);
+    }
+
+    /**
+     * No coop segment is issued to a sender who is alone or commuting: the
+     * bonus is suspended in transit and absent when no colleague shares the
+     * office (contracts &sect;3 "Server effects of one heartbeat" (3)).
+     */
+    @Test
+    void heartbeatAloneOrCommuting_issuesNoCoopSegmentToSender() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        // alone in office_1 (no other colleague)
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+        // then commuting (office = null)
+        service.applyHeartbeat("alice", new HeartbeatPayload(null, "commuting",
+                new HeartbeatPayload.CommuteRequest("office_1", "office_2")));
+
+        verify(pushService, never()).sendCoopSegment(eq("alice"), any());
+    }
+
+    /**
+     * The segment {@code from} is stable across heartbeat extensions: a second
+     * heartbeat with the same crowd reuses the first {@code from} and only
+     * extends {@code until} (contracts &sect;3; data-model.md "CoopSegment").
+     */
+    @Test
+    void heartbeatExtension_reusesStableFromAndExtendsUntil() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        when(repository.findById("bob")).thenReturn(Optional.of(row("bob", true, true)));
+        registry.upsert(live("bob", "Bob", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+
+        ArgumentCaptor<CoopSegmentMessage.Segment> aliceSegments =
+                ArgumentCaptor.forClass(CoopSegmentMessage.Segment.class);
+        verify(pushService, times(2)).sendCoopSegment(eq("alice"), aliceSegments.capture());
+        List<CoopSegmentMessage.Segment> segs = aliceSegments.getAllValues();
+        assertThat(segs).hasSize(2);
+        assertThat(segs.get(1).from())
+                .as("extension reuses the same `from`")
+                .isEqualTo(segs.get(0).from());
+        assertThat(Instant.parse(segs.get(1).until()))
+                .as("until extends on the second heartbeat")
+                .isAfter(Instant.parse(segs.get(0).until()));
+        assertThat(segs.get(1).multiplier()).isEqualTo(segs.get(0).multiplier());
+    }
+
+    // ── 6. proactive downgrade (SC-006) ─────────────────────────────────
+
+    /**
+     * A colleague leaving the office (their heartbeat reports a new office)
+     * triggers a <b>proactively pushed</b> recomputed downgrade segment to every
+     * remaining office-mate, with {@code from = serverTime} (SC-006 &mdash; the
+     * contribution stops at delta-propagation speed, not at lease expiry).
+     */
+    @Test
+    void colleagueLeavingOffice_proactivelyPushesDowngradeToRemainingMates() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        when(repository.findById("bob")).thenReturn(Optional.of(row("bob", true, true)));
+        registry.upsert(live("alice", "Alice", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+        registry.upsert(live("bob", "Bob", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+
+        // alice heartbeats first → establishes her bonus epoch (bob present, ×1.1)
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+
+        // bob leaves office_1 for office_2
+        Instant before = Instant.now();
+        service.applyHeartbeat("bob", new HeartbeatPayload("office_2", "coding", null));
+
+        // alice receives a recomputed downgrade with a fresh `from` and baseline multiplier
+        ArgumentCaptor<CoopSegmentMessage.Segment> aliceSegments =
+                ArgumentCaptor.forClass(CoopSegmentMessage.Segment.class);
+        verify(pushService, atLeastOnce()).sendCoopSegment(eq("alice"), aliceSegments.capture());
+        List<CoopSegmentMessage.Segment> downgrades = aliceSegments.getAllValues().stream()
+                .filter(s -> Math.abs(s.multiplier() - 1.0) < 1e-9)
+                .toList();
+        assertThat(downgrades)
+                .as("alice is downgraded to baseline when bob leaves")
+                .isNotEmpty();
+        assertThat(downgrades).allSatisfy(s ->
+                assertThat(!Instant.parse(s.from()).isBefore(before))
+                        .as("the baseline downgrade is stamped at the leave instant or later")
+                        .isTrue());
+    }
+
+    /**
+     * A colleague hiding (or revoking consent) triggers a
+     * {@code presence.remove} broadcast <b>and</b> a proactively pushed
+     * recomputed downgrade segment to every office-mate (SC-006) &mdash; the
+     * hider stops contributing to others' bonus immediately.
+     */
+    @Test
+    void hide_proactivelyPushesDowngradeToOfficeMates() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        when(repository.findById("bob")).thenReturn(Optional.of(row("bob", true, true)));
+        registry.upsert(live("alice", "Alice", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+        registry.upsert(live("bob", "Bob", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+
+        // alice heartbeats first → establishes her bonus epoch (bob present, ×1.1)
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+
+        // bob hides
+        service.applySettings("bob", true, false);
+
+        // presence.remove is broadcast so observers drop the avatar (SC-006) …
+        verify(pushService).broadcastPresenceRemove("bob");
+        // … and a proactive downgrade is pushed to alice (baseline multiplier)
+        ArgumentCaptor<CoopSegmentMessage.Segment> aliceSegments =
+                ArgumentCaptor.forClass(CoopSegmentMessage.Segment.class);
+        verify(pushService, atLeastOnce()).sendCoopSegment(eq("alice"), aliceSegments.capture());
+        assertThat(aliceSegments.getAllValues())
+                .as("alice is downgraded to baseline when bob hides")
+                .anyMatch(s -> Math.abs(s.multiplier() - 1.0) < 1e-9);
+    }
+
+    /**
+     * A colleague joining an office a mate already occupies triggers a
+     * proactively pushed recomputed <i>upgrade</i> segment to that mate
+     * (SC-006 &mdash; the higher multiplier is delivered at delta-propagation
+     * speed, not deferred to the mate's next heartbeat).
+     */
+    @Test
+    void colleagueJoining_proactivelyPushesUpgradeToOfficeMates() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        when(repository.findById("bob")).thenReturn(Optional.of(row("bob", true, true)));
+        registry.upsert(live("alice", "Alice", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+
+        // alice heartbeats alone first → no bonus (n = 0), epoch cleared
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+
+        // bob joins office_1
+        Instant before = Instant.now();
+        service.applyHeartbeat("bob", new HeartbeatPayload("office_1", "coding", null));
+
+        ArgumentCaptor<CoopSegmentMessage.Segment> aliceSegments =
+                ArgumentCaptor.forClass(CoopSegmentMessage.Segment.class);
+        verify(pushService, atLeastOnce()).sendCoopSegment(eq("alice"), aliceSegments.capture());
+        List<CoopSegmentMessage.Segment> upgrades = aliceSegments.getAllValues().stream()
+                .filter(s -> Math.abs(s.multiplier() - 1.1) < 1e-9)
+                .toList();
+        assertThat(upgrades).as("alice is upgraded when bob joins").isNotEmpty();
+        assertThat(upgrades).allSatisfy(s ->
+                assertThat(!Instant.parse(s.from()).isBefore(before))
+                        .as("the upgrade is stamped at the join instant or later")
+                        .isTrue());
+    }
+
+    /**
+     * A colleague showing (becoming visible again after hiding) triggers a
+     * {@code presence.update} broadcast <b>and</b> a proactively pushed
+     * recomputed <i>upgrade</i> segment to office-mates (SC-006) &mdash; the
+     * shower starts contributing to others' bonus immediately again.
+     */
+    @Test
+    void show_proactivelyPushesUpgradeToOfficeMates() {
+        when(repository.findById("alice")).thenReturn(Optional.of(row("alice", true, true)));
+        when(repository.findById("bob")).thenReturn(Optional.of(row("bob", true, true)));
+        registry.upsert(live("alice", "Alice", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+        registry.upsert(live("bob", "Bob", "office_1", "coding",
+                Instant.now().plusSeconds(60).toString()));
+
+        // alice heartbeats first → establishes her bonus epoch (bob present, ×1.1)
+        service.applyHeartbeat("alice", new HeartbeatPayload("office_1", "coding", null));
+        // bob hides → alice downgraded to baseline
+        service.applySettings("bob", true, false);
+
+        // bob shows again → alice upgraded back to ×1.1
+        Instant before = Instant.now();
+        service.applySettings("bob", true, true);
+
+        ArgumentCaptor<CoopSegmentMessage.Segment> aliceSegments =
+                ArgumentCaptor.forClass(CoopSegmentMessage.Segment.class);
+        verify(pushService, atLeastOnce()).sendCoopSegment(eq("alice"), aliceSegments.capture());
+        List<CoopSegmentMessage.Segment> upgrades = aliceSegments.getAllValues().stream()
+                .filter(s -> Math.abs(s.multiplier() - 1.1) < 1e-9
+                        && !Instant.parse(s.from()).isBefore(before))
+                .toList();
+        assertThat(upgrades).as("alice is upgraded back when bob shows").isNotEmpty();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

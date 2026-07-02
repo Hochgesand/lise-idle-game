@@ -40,8 +40,12 @@ import java.util.Optional;
  * broadcast <i>only</i> when the record materially changed (office/activity/
  * commute/status) AND the colleague is viewable (consented + visible) &mdash; a
  * steady 20&nbsp;s heartbeat cadence does not spam {@code /topic/presence}, and
- * hidden players contribute to no broadcast (FR-009). <b>No coop segment is
- * issued here</b> &mdash; that is Phase 5 (T072).
+ * hidden players contribute to no broadcast (FR-009). <b>The co-op lease
+ * segment is issued/extended here (T072)</b> via {@link CoopService}: when &ge; 1
+ * other distinct visible colleague shares the sender's office, a server-authored
+ * segment is pushed to the sender on {@code /user/queue/coop} (none while
+ * commuting); and when the sender's office changed, recomputed segments are
+ * proactively pushed to the affected office-mates (SC-006).
  *
  * <h2>Scheduled expiry sweep</h2>
  * {@link #sweepExpiredPresence} expires a {@code LIVE} record whose lease is in
@@ -60,9 +64,12 @@ import java.util.Optional;
  * <h2>Settings</h2>
  * {@link #applySettings} stores consent/visibility; {@code visible:true}
  * without consent throws {@link ConsentRequiredException} (&rarr; 409). Hiding
- * broadcasts {@code presence.remove} immediately so observers drop the avatar
- * (SC-006); showing surfaces the current live record. <b>No coop downgrade
- * segment is pushed here</b> &mdash; that is Phase 5 (T072).
+ * (or revoking consent) broadcasts {@code presence.remove} immediately so
+ * observers drop the avatar (SC-006) <b>and</b> proactively pushes recomputed
+ * <i>downgrade</i> coop segments to the hider's office-mates &mdash; the
+ * contribution stops at delta-propagation speed, not at lease expiry; showing
+ * surfaces the current live record and pushes recomputed <i>upgrade</i>
+ * segments. Segments are driven through {@link CoopService} (T072).
  *
  * <p>All presence side effects are advisory (contracts &sect;4): failures
  * degrade silently and never throw into the messaging channel or touch any
@@ -85,6 +92,7 @@ public class PresenceService {
     private final PresenceRepository repository;
     private final PresencePushService pushService;
     private final CoopConfig coop;
+    private final CoopService coopService;
 
     /**
      * @param registry       the in-memory live presence tier
@@ -92,13 +100,16 @@ public class PresenceService {
      * @param pushService    the {@code /topic/presence} + {@code /user/queue/coop} push seam
      * @param contentLoader  the content catalog (the co-op tuning is read once at construction;
      *                       content is immutable per version)
+     * @param coopService    the co-op multiplier/segment derivation (T071/T072)
      */
     public PresenceService(PresenceRegistry registry, PresenceRepository repository,
-                           PresencePushService pushService, ContentLoader contentLoader) {
+                           PresencePushService pushService, ContentLoader contentLoader,
+                           CoopService coopService) {
         this.registry = registry;
         this.repository = repository;
         this.pushService = pushService;
         this.coop = contentLoader.getCatalog().coop();
+        this.coopService = coopService;
     }
 
     // ── Heartbeat (client → server) ─────────────────────────────────────
@@ -141,6 +152,8 @@ public class PresenceService {
         Instant now = Instant.now();
         PlayerPresenceEntity row = repository.findById(colleagueId).orElse(null);
         PresenceRecord existing = registry.get(colleagueId).orElse(null);
+        String previousOffice = (existing != null) ? existing.office() : null;
+        boolean wasLive = (existing != null && existing.status() == PresenceRecord.Status.LIVE);
         PresenceRecord.Commute commute = resolveCommute(payload.commute(), existing, now);
 
         PresenceRecord updated = new PresenceRecord(
@@ -158,6 +171,45 @@ public class PresenceService {
 
         if (materiallyChanged(existing, updated) && isViewable(row)) {
             pushService.broadcastPresenceUpdate(updated, now.toString());
+        }
+
+        // Co-op lease segment + proactive recompute (T072; SC-006).
+        issueSenderSegmentAndRecompute(colleagueId, payload.office(), previousOffice, wasLive, now);
+    }
+
+    /**
+     * Issue/extend the sender's own coop lease segment (none while commuting or
+     * alone &mdash; {@link CoopService#heartbeatSegment}) and, when the sender's
+     * <i>live contribution</i> to an office changed, proactively push recomputed
+     * segments to that office's other colleagues (SC-006). A contribution
+     * change is an office move <b>or</b> a last-seen&rarr;live re-entry into the
+     * same office (a last-seen colleague does not count toward the crowd until
+     * they heartbeat again). The sender is excluded from the recompute (their
+     * own bonus is unaffected by their office move).
+     */
+    private void issueSenderSegmentAndRecompute(String senderId, String newOffice,
+                                                String previousOffice, boolean wasLive, Instant now) {
+        coopService.heartbeatSegment(senderId, newOffice, now)
+                .ifPresent(segment -> pushService.sendCoopSegment(senderId, segment));
+        // A colleague contributes to an office's crowd iff they are LIVE and in it
+        // (visibility is unchanged within a heartbeat — flips go through applySettings).
+        boolean wasContributingToPrevious = wasLive && previousOffice != null;
+        boolean wasContributingToNew = wasLive && previousOffice != null && previousOffice.equals(newOffice);
+        if (wasContributingToPrevious && !previousOffice.equals(newOffice)) {
+            pushRecompute(previousOffice, now, senderId); // left previousOffice as a live contributor → downgrade
+        }
+        if (newOffice != null && !wasContributingToNew) {
+            pushRecompute(newOffice, now, senderId);      // became a live contributor (new office or re-join) → upgrade
+        }
+    }
+
+    /**
+     * Push {@link CoopService#recomputeOffice} targets to their recipients on
+     * {@code /user/queue/coop} (best-effort; advisory, contracts &sect;4).
+     */
+    private void pushRecompute(String office, Instant now, String excludeId) {
+        for (CoopService.CoopTarget target : coopService.recomputeOffice(office, now, excludeId)) {
+            pushService.sendCoopSegment(target.colleagueId(), target.segment());
         }
     }
 
@@ -258,11 +310,15 @@ public class PresenceService {
     /**
      * Store the caller's consent/visibility settings (contracts &sect;2).
      * {@code visible:true} without consent throws {@link ConsentRequiredException}
-     * (&rarr; 409 {@code consent_required}). Hiding broadcasts
-     * {@code presence.remove} so observers drop the avatar immediately (SC-006);
-     * showing surfaces the current live record. The settings row is created if
-     * absent (the normal bootstrap is {@code GET /api/v1/me}, but the consent
-     * flow may run first).
+     * (&rarr; 409 {@code consent_required}). Hiding (or revoking consent)
+     * broadcasts {@code presence.remove} so observers drop the avatar immediately
+     * (SC-006) <b>and</b> proactively pushes recomputed <i>downgrade</i> coop
+     * segments to the caller's office-mates (the contribution stops at
+     * delta-propagation speed, not lease expiry); showing surfaces the current
+     * live record and proactively pushes recomputed <i>upgrade</i> segments.
+     * The settings row is created if absent (the normal bootstrap is
+     * {@code GET /api/v1/me}, but the consent flow may run first). The coop
+     * pushes are driven through {@link CoopService} (T072).
      *
      * @param colleagueId  the caller (JWT {@code sub})
      * @param consentGiven app-side first-run consent (FR-003)
@@ -282,15 +338,36 @@ public class PresenceService {
         repository.save(row);
 
         boolean nowViewable = consentGiven && visible;
-        String now = Instant.now().toString();
+        Instant now = Instant.now();
         if (wasViewable && !nowViewable) {
-            // hiding → observers drop the avatar immediately (SC-006)
+            // hiding / consent-revoke → observers drop the avatar immediately (SC-006) ...
             pushService.broadcastPresenceRemove(colleagueId);
+            // ... and the colleague stops counting toward others' bonus immediately:
+            // proactively push recomputed downgrade segments to office-mates (SC-006).
+            recomputeOfficeMates(colleagueId, now);
         } else if (!wasViewable && nowViewable) {
             // showing → surface the current live record if present
-            registry.get(colleagueId).ifPresent(r -> pushService.broadcastPresenceUpdate(r, now));
+            registry.get(colleagueId).ifPresent(r -> pushService.broadcastPresenceUpdate(r, now.toString()));
+            // showing → the colleague now counts toward others' bonus: proactively
+            // push recomputed upgrade segments to office-mates (SC-006).
+            recomputeOfficeMates(colleagueId, now);
         }
         return new SettingsResult(consentGiven, visible);
+    }
+
+    /**
+     * Proactively push recomputed coop segments to the live colleagues sharing
+     * the given colleague's office, after the colleague's viewability changed
+     * (SC-006). The colleague themselves is excluded (their own bonus is
+     * unaffected by their own visibility flip). No-op if the colleague has no
+     * live record or is commuting.
+     */
+    private void recomputeOfficeMates(String colleagueId, Instant now) {
+        String office = registry.get(colleagueId).map(PresenceRecord::office).orElse(null);
+        if (office == null) {
+            return;
+        }
+        pushRecompute(office, now, colleagueId);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────
