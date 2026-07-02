@@ -18,6 +18,8 @@
 //   Subscribe: /user/queue/coop (002 T073: per-player co-op lease segments)
 //     coop.segment    : { type, segment:{ from:ISO, until:ISO, multiplier } }
 //       -> onCoopSegment({ from:ms, until:ms, multiplier })  (ISO→ms here)
+//   On every (re)connect, after the subscriptions are (re)created:
+//       -> onConnected()  (caller re-fetches the presence snapshot, main.ts)
 //
 // The channel is ADVISORY only: the client's local localStorage save is the
 // authoritative source for play (Constitution IV — offline-capable core). A
@@ -93,6 +95,17 @@ export interface StompHandlers {
    * in main.ts.
    */
   onCoopSegment?: (segment: CoopSegment) => void;
+  /**
+   * Called after the (re)connect handshake completes and the subscriptions
+   * above have been (re)created — on EVERY library-driven reconnect, not just
+   * the first connect. The caller uses this to re-fetch snapshot state whose
+   * deltas may have been missed during the disconnect window (main.ts
+   * re-fetches the presence snapshot — presence deltas are broadcast-only and
+   * never replayed, so without this a colleague removed while the socket was
+   * down would stay rendered as a ghost until page reload). Fires after the
+   * subscribes so the re-fetch cannot race a gap in the delta stream.
+   */
+  onConnected?: () => void;
 }
 
 /**
@@ -233,6 +246,10 @@ export class StompClient {
         COOP_SUBSCRIPTION,
         (message) => this.handleCoopMessage(message),
       );
+      // Notify AFTER the subscriptions exist: a snapshot re-fetch triggered
+      // here sees every delta from this connection onward (no subscribe/fetch
+      // race window).
+      this.handlers.onConnected?.();
     };
     client.onStompError = (frame) => {
       console.error(

@@ -196,6 +196,15 @@ function connectStomp(): void {
           saveGame(state);
         }
       },
+      // (cubic 906588e P3) Presence deltas are broadcast-only and never
+      // replayed, so any missed during a disconnect window are gone — re-fetch
+      // the snapshot on every (re)connect (fires after the subscriptions
+      // self-heal) so e.g. a colleague removed while the socket was down does
+      // not linger as a ghost until page reload. The boot-time fetch below
+      // (step 6c) still covers the socket-never-connects degradation.
+      onConnected: () => {
+        void refreshPresenceSnapshot();
+      },
     });
   } catch (err) {
     console.warn('[main] STOMP connection failed — push channel disabled.', err);
