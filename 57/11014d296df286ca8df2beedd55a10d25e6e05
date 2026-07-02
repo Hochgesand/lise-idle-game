@@ -1,0 +1,34 @@
+specs/003-living-campus/plan.md
+  s_9e3cb57f61b316::t_8c52b89eeb93a6 265-268
+  s_9e3cb57f61b316::t_e547c7c074e7dd 185
+  s_9e3cb57f61b316::t_b65ccc1544d6f1 110-112
+  s_9e3cb57f61b316::t_8b6e8e6751b5bd 120-121
+specs/003-living-campus/spec.md
+  s_9e3cb57f61b316::t_cb42d565de10aa 347-351
+  s_9e3cb57f61b316::t_7aba6bc151fb9f 182-184
+  s_9e3cb57f61b316::t_f5f58b87dc7e6c 453-457
+  s_9e3cb57f61b316::t_00d5e5e2a4be7d 335-337
+specs/003-living-campus/tasks.md
+  s_9e3cb57f61b316::t_d6a0690401a0f5 11
+  s_9e3cb57f61b316::t_fe43edcb5bd7e4 86
+  s_9e3cb57f61b316::t_a4a20069d94eb7 33
+  s_9e3cb57f61b316::t_2ada5db98bb8f9 236
+specs/003-living-campus/research.md
+  s_9e3cb57f61b316::t_24b19751d563f1 245-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5711014d296df286ca8df2beedd55a10d25e6e05",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
