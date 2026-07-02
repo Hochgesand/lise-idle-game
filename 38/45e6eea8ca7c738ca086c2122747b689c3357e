@@ -1,0 +1,71 @@
+frontend/src/net/stompClient.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 197
+frontend/src/save/migrations.ts
+  s_9e3cb57f61b316::t_38f552cb15572f 57-70
+  s_9e3cb57f61b316::t_b64701ce961c77 25-28,30
+frontend/src/sim/advance.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 53,733
+frontend/src/net/stompClient.ts
+  s_9e3cb57f61b316::t_c48c49fa4aa8f9 164-165
+frontend/src/save/localStorage.ts
+  s_9e3cb57f61b316::t_80a909adb6bb7d 385-386
+  s_9e3cb57f61b316::t_1cff9c521b27d8 81-84
+  s_9e3cb57f61b316::t_a314b5d7f17b55 19-25
+  s_9e3cb57f61b316::t_fe6f221213b81f 107-108
+  s_9e3cb57f61b316::t_39d027c58684cd 201-205
+  s_9e3cb57f61b316::t_d10297e97f4552 221-223
+  s_9e3cb57f61b316::t_45ac7c2d0239ca 341-359
+frontend/src/sim/academy.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 32
+frontend/src/sim/actions.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 62,132,344,776,1049
+frontend/src/net/restClient.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 53
+frontend/src/sim/economy.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 34
+frontend/src/ui/academyPanel.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 44
+frontend/src/sim/coop.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 57
+frontend/src/game/academyWiring.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 62
+frontend/src/sim/coop.ts
+  s_9e3cb57f61b316::t_c48c49fa4aa8f9 61-62
+frontend/src/game/economyWiring.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 63
+frontend/src/net/heartbeat.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 35
+frontend/src/game/gameLoop.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 40
+frontend/src/sim/actions.ts
+  s_9e3cb57f61b316::t_ccd6ebb6befdad 67-68
+frontend/src/net/restClient.ts
+  s_9e3cb57f61b316::t_c48c49fa4aa8f9 130-131
+frontend/src/sim/advance.ts
+  s_9e3cb57f61b316::t_ccd6ebb6befdad 278-279
+frontend/src/sim/types.ts
+  s_9e3cb57f61b316::t_79c74f2cb9731b 81-97
+  s_9e3cb57f61b316::t_e498911610a1a0 258-264
+  s_9e3cb57f61b316::t_2c6143bf8184cf 119
+  s_9e3cb57f61b316::t_452be8dfda22e6 187-194
+  s_9e3cb57f61b316::t_86c4fff368b807 229-239
+  s_9e3cb57f61b316::t_e2a9cff0ccbcc2 282-283
+frontend/src/ui/economyPanel.test.ts
+  s_9e3cb57f61b316::t_595562c6deff60 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "3845e6eea8ca7c738ca086c2122747b689c3357e",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
