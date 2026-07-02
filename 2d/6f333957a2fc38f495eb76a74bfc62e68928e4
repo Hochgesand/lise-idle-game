@@ -1,0 +1,27 @@
+frontend/src/ui/hudPanel.ts
+  s_9e3cb57f61b316::t_8e04e394b73d8a 34
+  s_9e3cb57f61b316::t_120d97262c645f 136-162
+  s_9e3cb57f61b316::t_41be6db24356dc 95-108
+  s_9e3cb57f61b316::t_a44ec50f9a7ef8 57-59
+  s_9e3cb57f61b316::t_9ebfe2a51b777c 163
+frontend/src/ui/styles.css
+  s_9e3cb57f61b316::t_471985ca3926d8 23
+  s_9e3cb57f61b316::t_9dc405916daab3 233-239
+  s_9e3cb57f61b316::t_eee2d3b8850c7b 240-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "2d6f333957a2fc38f495eb76a74bfc62e68928e4",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
