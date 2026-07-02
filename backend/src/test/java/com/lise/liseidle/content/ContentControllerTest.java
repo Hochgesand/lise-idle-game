@@ -196,4 +196,24 @@ class ContentControllerTest {
                 new ByteArrayInputStream("{not valid json".getBytes(StandardCharsets.UTF_8));
         assertThrows(IllegalStateException.class, () -> loader.loadCoop(malformed));
     }
+
+    /**
+     * T027 — every required {@code coop} field must be present; a missing field
+     * is malformed and fails fast. Guards the narrow gap where a missing
+     * {@code perColleagueMultiplier} would otherwise default to {@code 0.0}
+     * (which passes the {@code >= 0} bound) and silently boot the game with the
+     * co-op bonus disabled (cubic P3).
+     */
+    @Test
+    void loadCoop_failsFast_whenRequiredFieldMissing() {
+        ContentLoader loader = new ContentLoader(objectMapper);
+        // perColleagueMultiplier deliberately omitted — the only field whose
+        // primitive default (0.0) would otherwise sneak past a bounds check.
+        InputStream missingField =
+                new ByteArrayInputStream((
+                        "{\"maxMultiplier\":1.5,\"leaseSeconds\":60,"
+                                + "\"heartbeatSeconds\":20,\"commuteSeconds\":30,"
+                                + "\"lastSeenRetentionDays\":14}").getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadCoop(missingField));
+    }
 }

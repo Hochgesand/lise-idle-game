@@ -4,11 +4,13 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Loads the versioned game content from the bundled classpath JSON files
@@ -37,6 +39,15 @@ public class ContentLoader {
 
     /** Balance version — bumped to 1.3.0 with the (002) co-op tuning block (T027). */
     static final String CONTENT_VERSION = "1.3.0";
+
+    /** The six required keys of the {@code coop.json} block (data-model.md "CoopConfig"). */
+    private static final Set<String> COOP_REQUIRED_FIELDS = Set.of(
+            "perColleagueMultiplier",
+            "maxMultiplier",
+            "leaseSeconds",
+            "heartbeatSeconds",
+            "commuteSeconds",
+            "lastSeenRetentionDays");
 
     private final ObjectMapper objectMapper;
 
@@ -107,23 +118,45 @@ public class ContentLoader {
 
     /**
      * Parses + validates a co-op tuning block from the given stream. Fail-fast:
-     * a syntactically broken or contract-violating stream surfaces as an
+     * a syntactically broken, structurally incomplete (any of the six required
+     * fields missing/null), or contract-violating stream surfaces as an
      * {@link IllegalStateException} (Constitution Principle II — never run with
      * half-parsed balance data). Closes the stream.
      *
+     * <p>The presence check is explicit (read the tree, assert every required
+     * key exists and is non-null) rather than relying on primitive defaults: a
+     * missing {@code perColleagueMultiplier} would otherwise default to
+     * {@code 0.0}, which passes the {@code >= 0} bound and silently boots the
+     * game with the co-op bonus disabled.
+     *
      * @param in the JSON stream (closed by this method)
      * @return the validated co-op tuning block
-     * @throws IllegalStateException if the stream is unparseable or invalid
+     * @throws IllegalStateException if the stream is unparseable, incomplete, or invalid
      */
     CoopConfig loadCoop(InputStream in) {
-        CoopConfig coop;
+        JsonNode root;
         try (in) {
-            coop = objectMapper.readValue(in, CoopConfig.class);
+            root = objectMapper.readTree(in);
         } catch (IOException | JacksonException e) {
-            throw new IllegalStateException(
-                    "Failed to load content resource 'content/coop.json' — "
-                            + "the game cannot start with missing or malformed content",
-                    e);
+            throw malformedCoop(e);
+        }
+        if (root == null || !root.isObject()) {
+            throw malformedCoop("coop block must be a JSON object");
+        }
+        for (String field : COOP_REQUIRED_FIELDS) {
+            JsonNode node = root.get(field);
+            if (node == null || node.isNull()) {
+                throw malformedCoop("missing required field '" + field + "'");
+            }
+            if (!node.isNumber()) {
+                throw malformedCoop("field '" + field + "' must be a number");
+            }
+        }
+        CoopConfig coop;
+        try {
+            coop = objectMapper.treeToValue(root, CoopConfig.class);
+        } catch (JacksonException e) {
+            throw malformedCoop(e);
         }
         validateCoop(coop);
         return coop;
@@ -156,10 +189,23 @@ public class ContentLoader {
      */
     private void require(boolean condition, String message) {
         if (!condition) {
-            throw new IllegalStateException(
-                    "Invalid content/coop.json — " + message
-                            + " (the game cannot start with malformed content)");
+            throw malformedCoop(message);
         }
+    }
+
+    /** Wraps a parse/IO failure of {@code coop.json} as a fail-fast error. */
+    private static IllegalStateException malformedCoop(Throwable cause) {
+        return new IllegalStateException(
+                "Failed to load content resource 'content/coop.json' — "
+                        + "the game cannot start with missing or malformed content",
+                cause);
+    }
+
+    /** Builds a fail-fast error for a specific {@code coop.json} contract violation. */
+    private static IllegalStateException malformedCoop(String detail) {
+        return new IllegalStateException(
+                "Invalid content/coop.json — " + detail
+                        + " (the game cannot start with malformed content)");
     }
 
     /**
