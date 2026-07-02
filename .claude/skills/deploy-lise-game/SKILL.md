@@ -38,7 +38,7 @@ Two equivalent forms. Prefer the one-liner.
 **One-liner** — the host runs the whole chain:
 
 ```bash
-ssh -p 2222 root@schmitz.gg "cd /root/lise-idle-game && git pull && docker compose build && docker compose up -d"
+ssh -p 2222 root@schmitz.gg "cd /root/lise-idle-game && git pull && docker compose pull && docker compose up -d"
 ```
 
 **Stepped** — interactive, for debugging:
@@ -48,21 +48,57 @@ ssh -p 2222 root@schmitz.gg
 # on the host:
 cd /root/lise-idle-game
 git pull
-docker compose build
+docker compose pull
 docker compose up -d
 exit
 ```
 
 What each step does:
 
-- `git pull` — fast-forwards `/root/lise-idle-game` to `origin/main`. Because
-  of the push-first rule, this is normally a clean `--ff-only`-style update.
-- `docker compose build` — rebuilds `lise-game-backend` and
-  `lise-game-frontend`. The frontend image **bakes** `VITE_API_BASE_URL` /
-  `VITE_WS_BASE_URL` at build time, so any change to those (or any frontend
-  code) requires a rebuild — `up -d` alone is **not** enough.
-- `docker compose up -d` — recreates changed containers, leaving volumes
-  (`/data`) intact.
+- `git pull` — fast-forwards `/root/lise-idle-game` to `origin/main`. This is
+  still required: `docker-compose.yml` is the source of the `image:` refs,
+  the env, the ports, and the host `.env` secret. The repo MUST match the
+  images you are about to pull.
+- `docker compose pull` — pulls the **CI-built** images from GHCR
+  (`ghcr.io/hochgesand/lise-game-backend:latest` and
+  `…/lise-game-frontend:latest`), built by `.github/workflows/docker-publish.yml`
+  on every push to `main`. Because `docker-compose.yml` sets BOTH `image:`
+  and `build:` per service, `pull` fetches the prebuilt image (no local
+  build, no toolchain on the host).
+- `docker compose up -d` — recreates changed containers with the freshly
+  pulled images, leaving volumes (`/data`) intact.
+
+### FALLBACK: `pull` failed → `docker compose build`
+
+If `docker compose pull` fails (image not yet built, package not public, or
+  GHCR unreachable), **fall back to building locally on the host**:
+
+```bash
+ssh -p 2222 root@schmitz.gg "cd /root/lise-idle-game && git pull && docker compose build && docker compose up -d"
+```
+
+This is the pre-GHCR procedure and still works because every service keeps
+its `build:` block. The frontend `build` bakes `VITE_API_BASE_URL` /
+`VITE_WS_BASE_URL` at build time, so the locally built image is identical to
+the CI one. Use the fallback only when `pull` is blocked; prefer `pull` for
+normal deploys (faster, no Maven/Node on the host).
+
+> **NOTE — GHCR package visibility (REQUIRED for unauthenticated pulls).**
+> For the host to `docker compose pull` **without** authenticating, the two
+> packages must be set to **PUBLIC** in GitHub:
+> `ghcr.io/hochgesand/lise-game-backend` and
+> `ghcr.io/hochgesand/lise-game-frontend` → (package page) **Package
+> settings → Change visibility → Public**. If they stay private, every pull
+> fails until either (a) they are made public, or (b) the host runs, **once**,
+> `docker login ghcr.io -u Hochgesand -p <PAT>` (a PAT with `read:packages`).
+>
+> **NOTE — first deploy after enabling this requires a green CI run.** The
+> images do not exist in GHCR until `.github/workflows/docker-publish.yml`
+> runs successfully on `main`. The very first deploy with the pull-based
+> procedure must happen **after** the owner confirms the GitHub Actions run
+> (triggered by the push that added the workflow + `image:` refs) completed
+> and published both packages. Until then, `pull` will 404/manifest-unknown —
+> use the `build` fallback above for that one deploy.
 
 ## 2. Host facts (Neulaender)
 
@@ -162,11 +198,25 @@ phone-portrait spot-checks), run those too — they live in the task, not here.
 
 - **Deploy serves old code after a push:** the host `git pull` didn't
   advance — re-check `git log -1 origin/main` vs the commit you pushed. You
-  must have pushed to `origin main` (push-first rule).
-- **Frontend shows stale API/WS URLs:** the values are **baked at build
-  time**; you must run `docker compose build` (not just `up -d`) for any
-  frontend change.
-- **`docker compose build`/`up` fails on interpolation
+  must have pushed to `origin main` (push-first rule). With the pull-based
+  flow, also confirm the GitHub Actions run for that push **succeeded**
+  (the `:latest` image only advances after a green build); a failed/skipped
+  CI run means `pull` fetches the previous image.
+- **`docker compose pull` fails (404 / manifest unknown / unauthorized):**
+  either the image isn't published yet, the GHCR package is private, or the
+  CI run is still running/failed. Check: (1) the GitHub Actions run for the
+  push is **green**; (2) the packages
+  `ghcr.io/hochgesand/lise-game-{backend,frontend}` are **PUBLIC** (see §1
+  NOTE) or the host ran `docker login ghcr.io` once; (3) if you can't fix it
+  now, **fall back to `docker compose build`** (see §1 FALLBACK) for this
+  deploy.
+- **Frontend shows stale API/WS URLs:** the values are **baked into the
+  image at build time**. With CI, the image is rebuilt on every push to
+  `main`; re-`pull` after the green run. If you fell back to a local
+  `docker compose build`, that build also bakes the prod URLs (they come
+  from `docker-compose.yml` `build.args`), so `up -d` after the build is
+  enough — but `up -d` alone (no `pull`/`build`) is **never** enough.
+- **`docker compose pull`/`build`/`up` fails on interpolation
   (`KEYCLOAK_BACKEND_CLIENT_SECRET`):** the host `.env` is missing or lacks
   the var — confirm `/root/lise-idle-game/.env` exists (**do not print it**).
 - **WS won't connect but `/api` is fine:** "Websockets Support" on the NPM
