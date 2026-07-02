@@ -38,7 +38,7 @@ Two equivalent forms. Prefer the one-liner.
 **One-liner** — the host runs the whole chain:
 
 ```bash
-ssh -p 2222 root@schmitz.gg "cd /root/lise-idle-game && git pull && docker compose pull && docker compose up -d"
+ssh -p 2222 root@schmitz.gg "cd /mnt/user/appdata/lise-game && git pull && docker compose pull && docker compose up -d"
 ```
 
 **Stepped** — interactive, for debugging:
@@ -46,7 +46,7 @@ ssh -p 2222 root@schmitz.gg "cd /root/lise-idle-game && git pull && docker compo
 ```bash
 ssh -p 2222 root@schmitz.gg
 # on the host:
-cd /root/lise-idle-game
+cd /mnt/user/appdata/lise-game
 git pull
 docker compose pull
 docker compose up -d
@@ -55,7 +55,7 @@ exit
 
 What each step does:
 
-- `git pull` — fast-forwards `/root/lise-idle-game` to `origin/main`. This is
+- `git pull` — fast-forwards `/mnt/user/appdata/lise-game` to `origin/main`. This is
   still required: `docker-compose.yml` is the source of the `image:` refs,
   the env, the ports, and the host `.env` secret. The repo MUST match the
   images you are about to pull.
@@ -74,7 +74,7 @@ If `docker compose pull` fails (image not yet built, package not public, or
   GHCR unreachable), **fall back to building locally on the host**:
 
 ```bash
-ssh -p 2222 root@schmitz.gg "cd /root/lise-idle-game && git pull && docker compose build && docker compose up -d"
+ssh -p 2222 root@schmitz.gg "cd /mnt/user/appdata/lise-game && git pull && docker compose build && docker compose up -d"
 ```
 
 This is the pre-GHCR procedure and still works because every service keeps
@@ -108,7 +108,7 @@ normal deploys (faster, no Maven/Node on the host).
 
 - **Unraid server** hostname **`Neulaender`**, reachable as
   **`root@schmitz.gg`** on **port `2222`** (**key auth only**).
-- The repo lives at **`/root/lise-idle-game`** on the host.
+- The repo lives at **`/mnt/user/appdata/lise-game`** on the host.
 - **Reverse proxy is Nginx Proxy Manager (NPM), NOT Traefik.** There is no
   shared proxy Docker network. Containers simply publish host ports and NPM
   maps the public domains onto them:
@@ -131,7 +131,7 @@ normal deploys (faster, no Maven/Node on the host).
     (H2 must be able to write the `gamedb.*` files there). Container security
     is **not** weakened to achieve this — the image sets `USER lise`.
 - **Backend secret on the host** — the UNTRACKED, gitignored file
-  **`/root/lise-idle-game/.env`** holds:
+  **`/mnt/user/appdata/lise-game/.env`** holds:
 
   ```
   KEYCLOAK_BACKEND_CLIENT_SECRET=<the value — DO NOT echo it>
@@ -183,7 +183,7 @@ failure is the bug to chase.
 4. **Backend container is healthy:**
 
    ```bash
-   ssh -p 2222 root@schmitz.gg "docker compose -f /root/lise-idle-game/docker-compose.yml ps"
+   ssh -p 2222 root@schmitz.gg "docker compose -f /mnt/user/appdata/lise-game/docker-compose.yml ps"
    ```
 
    Expect both `lise-game-backend` and `lise-game-frontend` `Up`, and the
@@ -222,7 +222,7 @@ phone-portrait spot-checks), run those too — they live in the task, not here.
   enough — but `up -d` alone (no `pull`/`build`) is **never** enough.
 - **`docker compose pull`/`build`/`up` fails on interpolation
   (`KEYCLOAK_BACKEND_CLIENT_SECRET`):** the host `.env` is missing or lacks
-  the var — confirm `/root/lise-idle-game/.env` exists (**do not print it**).
+  the var — confirm `/mnt/user/appdata/lise-game/.env` exists (**do not print it**).
 - **WS won't connect but `/api` is fine:** "Websockets Support" on the NPM
   proxy host for `lise-game-api.schmitz.gg` is OFF — re-enable it in the
   NPM UI.

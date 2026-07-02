@@ -36,11 +36,11 @@
 #
 # NOTE — non-root /data ownership (IMPORTANT):
 #   The backend image (backend/Dockerfile) runs as a non-root user `lise`
-#   (uid=100, gid=101). The bind-mounted /mnt/user/appdata/lise-game dir
+#   (uid=100, gid=101). The bind-mounted /mnt/user/appdata/lise-game/data dir
 #   (-> /data) MUST be writable by uid 100 so H2 can create gamedb.* files.
 #   On the Unraid host create it BEFORE the first `docker compose up`:
-#       mkdir -p /mnt/user/appdata/lise-game
-#       chown -R 100:101 /mnt/user/appdata/lise-game
+#       mkdir -p /mnt/user/appdata/lise-game/data
+#       chown -R 100:101 /mnt/user/appdata/lise-game/data
 #   Container security is NOT weakened (we keep USER lise).
 
 services:
@@ -71,7 +71,9 @@ services:
       - "8086:8080"
     volumes:
       # Durable backend state (H2 db files, saves) on the Unraid appdata share.
-      - /mnt/user/appdata/lise-game:/data
+      # Lives in a `data/` subfolder so the deploy dir's docker-compose.yml/.env
+      # are NOT exposed inside the container at /data.
+      - /mnt/user/appdata/lise-game/data:/data
 
   frontend:
     build:
