@@ -1,0 +1,20 @@
+frontend/src/scenes/OfficeScene.ts
+  s_38463098d043fc::t_0fbcc9d59c768b 81
+  s_38463098d043fc::t_da8d767eecdeb6 78-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "63a1bcc81739fe70238ddea4a8a61db1ad8551ee",
+  "prompts": {},
+  "sessions": {
+    "s_38463098d043fc": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f1e71-0340-7304-9b76-ea065ef3da64",
+        "model": "glm-5.2"
+      },
+      "human_author": "André Schmitz <andre.schmitz@lise.de>"
+    }
+  }
+}
