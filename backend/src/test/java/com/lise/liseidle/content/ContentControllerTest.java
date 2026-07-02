@@ -1,5 +1,6 @@
 package com.lise.liseidle.content;
 
+import com.lise.liseidle.content.ContentLoader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,7 +9,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.ObjectMapper;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -33,6 +40,9 @@ class ContentControllerTest {
 
     @Autowired
     private WebApplicationContext context;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private MockMvc mockMvc;
 
@@ -141,5 +151,49 @@ class ContentControllerTest {
             .andExpect(jsonPath("$.burners[0].fuelCostToActivate").value("100"))
             .andExpect(jsonPath("$.burners[0].burnRate").value("10"))
             .andExpect(jsonPath("$.burners[0].productionMultiplier").value(3.0));
+    }
+
+    /**
+     * T018 — the content envelope carries the additive sixth {@code coop}
+     * block (data-model.md "CoopConfig"; contracts §2) alongside the five
+     * 001 arrays, with {@code schemaVersion} and {@code contentVersion}
+     * intact. {@code contentVersion} bumps to {@code "1.3.0"} as the coop
+     * block is additive new content (FR-015). RED until {@code ContentCatalog}
+     * serves {@code coop} (T027).
+     */
+    @Test
+    void getContent_carriesAdditiveSixthCoopBlockAlongsideFiveArrays() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            // five 001 arrays + the two scalar envelope fields stay intact
+            .andExpect(jsonPath("$.schemaVersion").value(1))
+            .andExpect(jsonPath("$.contentVersion").value("1.3.0"))
+            .andExpect(jsonPath("$.producers").isArray())
+            .andExpect(jsonPath("$.upgrades").isArray())
+            .andExpect(jsonPath("$.trainings").isArray())
+            .andExpect(jsonPath("$.milestones").isArray())
+            .andExpect(jsonPath("$.burners").isArray())
+            // additive sixth coop tuning block (FR-015)
+            .andExpect(jsonPath("$.coop.perColleagueMultiplier").value(0.10))
+            .andExpect(jsonPath("$.coop.maxMultiplier").value(1.5))
+            .andExpect(jsonPath("$.coop.leaseSeconds").value(60))
+            .andExpect(jsonPath("$.coop.heartbeatSeconds").value(20))
+            .andExpect(jsonPath("$.coop.commuteSeconds").value(30))
+            .andExpect(jsonPath("$.coop.lastSeenRetentionDays").value(14));
+    }
+
+    /**
+     * T018 — {@link ContentLoader} fails fast ({@code @PostConstruct}) on a
+     * malformed {@code coop.json}: the game must never start with half-parsed
+     * co-op tuning data (Constitution Principle II). A syntactically broken
+     * stream must surface as an {@link IllegalStateException}. RED until
+     * {@code loadCoop} parses + validates (T027).
+     */
+    @Test
+    void loadCoop_failsFast_whenCoopJsonMalformed() {
+        ContentLoader loader = new ContentLoader(objectMapper);
+        InputStream malformed =
+                new ByteArrayInputStream("{not valid json".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadCoop(malformed));
     }
 }

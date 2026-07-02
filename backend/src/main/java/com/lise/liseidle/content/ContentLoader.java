@@ -82,6 +82,17 @@ public class ContentLoader {
     }
 
     /**
+     * STUB for T018 RED — T027 loads {@code content/coop.json} fail-fast
+     * (parse + validate the six {@link CoopConfig} fields, throw on malformed)
+     * and wires it into {@link #loadContent()} / the served envelope. This stub
+     * neither parses nor validates the supplied stream, so the fail-fast test is
+     * RED (it never throws).
+     */
+    CoopConfig loadCoop(InputStream in) {
+        return new CoopConfig(0.10, 1.5, 60, 20, 30, 14);
+    }
+
+    /**
      * Reads a classpath JSON file into a list of the given element type.
      *
      * @param path        the classpath resource path (e.g. "content/producers.json")
