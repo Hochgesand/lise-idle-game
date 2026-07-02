@@ -1,0 +1,261 @@
+/* T047 — DOM overlay styles (FR-019).
+ *
+ * Framework-free CSS for the overlay that replaces the three in-canvas Phaser
+ * UI scenes (retired in T051). The container (#ui + the .ui-root created by
+ * createOverlay) is a pointer-transparent layer over the canvas; interactive
+ * surfaces opt back in via .ui-interactive so camera pan/zoom gestures still
+ * reach the canvas. Layout is responsive: corner/side panels on desktop and a
+ * bottom-sheet stack on phone portrait (<= 600px) — per research's "UI
+ * architecture" decision and quickstart Scenario 8 (375x812), and the direct
+ * fix for the audited off-screen PANEL_X = 520 mobile defect.
+ *
+ * Per-scene color tokens are CSS custom properties so the panels (T048–T050)
+ * theme themselves without hardcoding hex in TS; they consolidate the retired
+ * scenes' COLOR_* constants (HudScene/EconomyScene/AcademyScene).
+ */
+
+/* ── Per-scene color tokens (consolidated from the retired scenes) ──────── */
+:root {
+  /* HUD (was HudScene colors) */
+  --hud-color: #e2e8f0; /* LOC counter text */
+  --hud-rate-color: #94a3b8; /* rate line / secondary label */
+  --hud-boost-color: #22c55e; /* boost float-text / affordable */
+  /* Economy (was EconomyScene colors) */
+  --economy-color: #e2e8f0;
+  --economy-affordable: #22c55e;
+  --economy-locked: #64748b;
+  --economy-owned: #3b82f6;
+  --economy-active: #f59e0b; /* burner active (amber) */
+  /* Academy (was AcademyScene colors) */
+  --academy-color: #e2e8f0;
+  --academy-earned: #f59e0b; /* earned credential badge (gold) */
+  --academy-locked: #64748b;
+  /* Social (new — presence panel, T064) */
+  --social-color: #e2e8f0;
+  --social-live: #22c55e; /* live avatar (green, FR-023) */
+  --social-lastseen: #ef4444; /* last-seen avatar (red, FR-023) */
+  --social-offline: #64748b; /* "social offline" badge (FR-016) */
+  /* Shared surface tokens */
+  --ui-stroke: #0f172a; /* dark text stroke for legibility over the canvas */
+  --ui-bg: rgba(15, 23, 42, 0.82); /* translucent slate panel background */
+  --ui-radius: 8px;
+  --ui-gap: 12px;
+}
+
+/* ── Overlay layer ────────────────────────────────────────────────────────
+ * #ui is the mount from index.html; .ui-root is created by createOverlay.
+ * Both cover the viewport and pass pointer events through to the canvas so
+ * camera pan/zoom gestures keep working. (createOverlay also sets the
+ * pointer-events:none INLINE on .ui-root as a load-race-safe guarantee; this
+ * rule is the human-readable source of truth and styles the children.) */
+#ui,
+.ui-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10; /* above the Phaser canvas (#game) */
+  pointer-events: none; /* gestures reach the canvas by default */
+  margin: 0;
+  padding: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--hud-color);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.ui-root {
+  box-sizing: border-box;
+}
+
+/* ── Panel slots ──────────────────────────────────────────────────────────
+ * Each .ui-panel is a positioned slot for one section. By default it is
+ * pointer-transparent (gestures pass through to the camera); interactive
+ * surfaces opt back in with .ui-interactive. Slots have a translucent
+ * background + radius so a rendered panel reads as a card over the canvas. */
+.ui-panel {
+  box-sizing: border-box;
+  pointer-events: none;
+  background: var(--ui-bg);
+  border-radius: var(--ui-radius);
+  padding: 8px;
+  max-height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch; /* momentum scroll on iOS sheet */
+}
+
+/* Interactive children (buttons, links, drag handles, sheet surfaces) opt
+ * back into pointer events. Panels (T048–T050) apply .ui-interactive to their
+ * clickable elements; this rule is the single opt-in point. */
+.ui-interactive,
+.ui-panel button,
+.ui-panel a,
+.ui-panel input,
+.ui-panel [role='button'] {
+  pointer-events: auto;
+}
+
+/* ── Desktop layout (default, > 600px): corner / side panels ───────────────
+ * HUD top-left, economy on the right, academy below economy, social
+ * bottom-left. Panels are anchored via the grid so the overlay never hangs off
+ * the right edge (the audited PANEL_X = 520 defect). Empty grid cells stay
+ * gesture-transparent for the camera. */
+@media (min-width: 601px) {
+  .ui-root {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr auto;
+    align-items: start;
+    justify-items: start;
+    gap: var(--ui-gap);
+    padding: var(--ui-gap);
+  }
+
+  .ui-panel[data-panel='hud'] {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    max-width: 22rem;
+  }
+
+  .ui-panel[data-panel='economy'] {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-self: end;
+    max-width: 22rem;
+  }
+
+  .ui-panel[data-panel='academy'] {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+    max-width: 22rem;
+  }
+
+  .ui-panel[data-panel='social'] {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: start;
+    max-width: 22rem;
+  }
+}
+
+/* ── Phone portrait (<= 600px): bottom-sheet stack ────────────────────────
+ * quickstart Scenario 8 (375x812). Panels dock to the bottom as a stacked
+ * sheet; the top of the viewport stays gesture-transparent for the camera.
+ * This is the direct fix for the audited off-screen defect: nothing hangs off
+ * the right edge, and every panel is reachable by scrolling the sheet. */
+@media (max-width: 600px) {
+  .ui-root {
+    /* Bottom-anchored flex column — a "bottom sheet". The top of the viewport
+     * (no panel) stays pointer-transparent so camera gestures work there. */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .ui-panel {
+    /* The sheet itself is a touch surface (scroll + tap) … */
+    pointer-events: auto;
+    max-height: 40vh; /* … but never consumes more than ~40% of the height */
+    overflow: auto;
+  }
+
+  /* HUD stays a compact pill at top-left, readable at a glance without opening
+     the sheet (LOC counter + rate always visible — quickstart Scenario 1). */
+  .ui-panel[data-panel='hud'] {
+    align-self: flex-start;
+    max-width: max-content;
+    max-height: none;
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────
+ * Honors prefers-reduced-motion AND state.settings.reducedMotion (T051 applies
+ * the .ui-reduced-motion class to .ui-root from the save setting). Disables all
+ * transitions/animations — e.g. the boost float-text CSS animation (T048). */
+@media (prefers-reduced-motion: reduce) {
+  .ui-root,
+  .ui-root * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.ui-root.ui-reduced-motion,
+.ui-root.ui-reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ── HUD panel (T048) ──────────────────────────────────────────────────────
+ * The HUD lives in its `.ui-panel[data-panel='hud']` slot (T047 layout). The
+ * LOC counter + rate use the consolidated --hud-* tokens (was HudScene
+ * COLOR_*); the boost button opts into pointer events via .ui-interactive so
+ * the camera gestures still reach the canvas elsewhere. */
+.hud-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--hud-color);
+}
+
+.hud-loc {
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-shadow: 0 0 3px var(--ui-stroke), 0 0 3px var(--ui-stroke);
+}
+
+.hud-rate {
+  font-size: 1rem;
+  color: var(--hud-rate-color);
+  text-shadow: 0 0 3px var(--ui-stroke), 0 0 3px var(--ui-stroke);
+}
+
+/* The manual-boost button (replaces the retired scene-wide pointerdown
+ * boost). pointer-events: auto comes from .ui-interactive / .ui-panel button. */
+.hud-boost {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--hud-boost-color);
+  border-radius: var(--ui-radius);
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--hud-boost-color);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hud-boost:active {
+  transform: translateY(1px);
+}
+
+/* Boost float-text: a transient "+N" that rises and fades from the boost
+ * button (hudPanel.ts spawns it; appended to .ui-root so it survives the
+ * per-frame slot rebuild). Honors reducedMotion both in JS (the panel skips
+ * spawning when state.settings.reducedMotion) and via the .ui-reduced-motion
+ * rule above. */
+.hud-boost-float {
+  position: fixed;
+  z-index: 20; /* above the .ui-root overlay (z-index: 10) */
+  transform: translateX(-50%);
+  color: var(--hud-boost-color);
+  font-weight: 700;
+  text-shadow: 0 0 3px var(--ui-stroke), 0 0 3px var(--ui-stroke);
+  pointer-events: none; /* never blocks gestures while it animates */
+  animation: hud-boost-rise 600ms ease-out forwards;
+}
+
+@keyframes hud-boost-rise {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -40px);
+  }
+}

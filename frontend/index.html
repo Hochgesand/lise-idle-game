@@ -9,9 +9,16 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
     <title>Lise Dev Idle Game</title>
+    <!-- T047: DOM overlay stylesheet (FR-019). Vite bundles this link. -->
+    <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>
     <div id="game"></div>
+    <!-- T047: DOM overlay mount (FR-019). createOverlay mounts into this; the
+         three in-canvas Phaser UI scenes are retired in T051. Sits above
+         #game via z-index in styles.css; pointer-events:none passes camera
+         gestures through to the canvas. -->
+    <div id="ui"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
