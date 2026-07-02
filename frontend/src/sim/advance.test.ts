@@ -1171,3 +1171,170 @@ describe('T011 — computeRate + manualBoost: covering-segment consistency', () 
       parseFloat(boostedBaseline.resources.loc)).toBeCloseTo(1.2, 10);
   });
 });
+
+// ===========================================================================
+// T070 — offline-baseline CHARACTERIZATION/REGRESSION tests.
+//
+// Explicitly EXEMPT from the RED-first gate (tasks.md T070): the pure
+// `advance` behavior exercised here shipped in Phase 2 (T024), so these
+// tests arrive GREEN by design — they pin the behavior down as a regression
+// guard while T071/T072 land the server side.
+//
+// ## The carve-out being characterized (plan.md Complexity Tracking;
+// ## quickstart Scenario 5; FR-012/013 with the FR-013/SC-003 carve-out)
+// An offline span integrates at BASELINE, with one documented, bounded
+// deviation: the residual lease tail earned while the player was still
+// online. The last heartbeat happens at/before the go-offline moment
+// (== `lastAdvancedAt` of the persisted save), so a saved segment extends
+// at most `coop.leaseSeconds` past that moment; beyond the segment's
+// `until` the integration continues at exactly baseline. Presence during
+// the absence contributes nothing — only the SAVED `coopSegments` enter
+// the result, so replaying the identical save reproduces identical credit.
+// ===========================================================================
+
+describe('T070 — offline baseline characterization (carve-out regression guard)', () => {
+  /**
+   * The 001 ε-tolerance convention for LOC comparison (see the "Fuzzy
+   * associativity" block above: generous 1e-9 relative; actual drift ~1e-15).
+   * The values in these tests are integer-second sums and come out exact —
+   * the tolerance documents the 001 offline comparison convention.
+   */
+  function expectLoc001Close(actual: string, expected: string, epsilon = 1e-9): void {
+    const a = parseFloat(actual);
+    const e = parseFloat(expected);
+    if (e === 0) {
+      expect(Math.abs(a)).toBeLessThan(epsilon);
+    } else {
+      expect(Math.abs(a - e) / Math.abs(e)).toBeLessThan(epsilon);
+    }
+  }
+
+  /**
+   * The maximal legitimate residual lease tail: a segment issued while the
+   * player was still online (last heartbeat at/before T0 == lastAdvancedAt),
+   * extending exactly `coop.leaseSeconds` past the go-offline moment.
+   */
+  function residualTailSegment(multiplier = 1.2): CoopSegment {
+    return {
+      from: T0 - 30_000, // issued while still online
+      until: T0 + COOP_CONFIG.leaseSeconds * 1000, // ≤ one lease past go-offline
+      multiplier,
+    };
+  }
+
+  // ── Case 1: offline span covered ONLY by the pre-offline lease tail ─────
+
+  it('carve-out: ×mult for the ≤ leaseSeconds tail, baseline beyond — piecewise total (5 min offline → 72 + 240 = 312)', () => {
+    const content = makeCoopContent();
+    const tail = residualTailSegment(1.2);
+    // The tail extends at most coop.leaseSeconds past the go-offline moment.
+    expect(tail.until - T0).toBeLessThanOrEqual(COOP_CONFIG.leaseSeconds * 1000);
+    const state = makeCoopState([tail]);
+    const dt = 300_000; // 5 min offline (quickstart Scenario 5 step 4)
+
+    const result = advance(state, dt, content);
+
+    // Piecewise expectation: tail [T0, T0+60s] at 1 LOC/s × 1.2 = 72, then
+    // baseline [T0+60s, T0+300s] at 1 LOC/s × 240s = 240 → total 312.
+    expect(compare(bn(result.resources.loc), bn('312'))).toBe(0);
+    // The extra over the pure 001 baseline is EXACTLY the bounded tail bonus:
+    // (mult − 1) × leaseSeconds × rate = 0.2 × 60 × 1 = 12 — never more.
+    const baseline001 = advance(makeCoopState([]), dt, content);
+    expect(compare(bn(baseline001.resources.loc), bn('300'))).toBe(0);
+    const extra =
+      parseFloat(result.resources.loc) - parseFloat(baseline001.resources.loc);
+    expect(extra).toBeCloseTo((1.2 - 1) * COOP_CONFIG.leaseSeconds * 1, 9);
+    // Bounded by the cap: extra ≤ (maxMultiplier − 1) × leaseSeconds × rate.
+    expect(extra).toBeLessThanOrEqual(
+      (COOP_CONFIG.maxMultiplier - 1) * COOP_CONFIG.leaseSeconds * 1,
+    );
+    // The fully-integrated tail is compacted away (no segment survives whose
+    // until ≤ the new lastAdvancedAt) — no re-credit on a later advance.
+    expect(result.coopSegments).toEqual([]);
+  });
+
+  // ── Case 2: long offline span (hours) — baseline beyond the stale tail ──
+
+  it('long offline span (3 h) with a stale tail: baseline beyond the tail matches the 001 offline result within the 001 tolerance', () => {
+    const content = makeCoopContent();
+    const state = makeCoopState([residualTailSegment(1.2)]);
+    const dt = 3 * 3600_000; // 3 hours offline
+
+    // One-shot catch-up: tail 60s × 1.2 = 72, then 10740s baseline → 10812.
+    const oneShot = advance(state, dt, content);
+    expect(compare(bn(oneShot.resources.loc), bn('10812'))).toBe(0);
+
+    // Beyond the tail the integration IS the 001 offline math: consume the
+    // tail (60s → 72 LOC, segment compacted), then the remaining 2h59m gain
+    // equals the pure-001 (coopSegments: []) gain over the same remainder,
+    // within the 001 ε-tolerance convention.
+    const afterTail = advance(state, COOP_CONFIG.leaseSeconds * 1000, content);
+    expect(afterTail.coopSegments).toEqual([]);
+    const rest = advance(afterTail, dt - COOP_CONFIG.leaseSeconds * 1000, content);
+    const beyondTailGain =
+      parseFloat(rest.resources.loc) - parseFloat(afterTail.resources.loc);
+    const pure001 = advance(
+      makeCoopState([]),
+      dt - COOP_CONFIG.leaseSeconds * 1000,
+      content,
+    );
+    expectLoc001Close(String(beyondTailGain), pure001.resources.loc);
+    // Whole-span comparison against the 001 result (3h @ 1 LOC/s = 10800):
+    // identical except the bounded tail extra (12 = 0.2 × 60 × 1).
+    const baseline001 = advance(makeCoopState([]), dt, content);
+    expect(compare(bn(baseline001.resources.loc), bn('10800'))).toBe(0);
+    expectLoc001Close(
+      String(parseFloat(oneShot.resources.loc) - (1.2 - 1) * COOP_CONFIG.leaseSeconds),
+      baseline001.resources.loc,
+    );
+    // And split === one-shot (associativity holds across the tail boundary).
+    expect(normalize(rest)).toEqual(normalize(oneShot));
+  });
+
+  // ── Case 3: replay determinism (quickstart Scenario 5 steps 6–7) ────────
+
+  it('replay determinism: identical saved coopSegments over the identical span → byte-identical resources (FR-012/013)', () => {
+    const content = makeCoopContent();
+    const dt = 300_000; // the same 5 min absence, computed twice
+    // Two independently-constructed, value-identical saves — the Scenario 5
+    // step-2 "copy the localStorage save aside, then restore it" form.
+    const original = makeCoopState([residualTailSegment(1.2)]);
+    const restoredCopy = makeCoopState([residualTailSegment(1.2)]);
+
+    const first = advance(original, dt, content);
+    const replayed = advance(restoredCopy, dt, content);
+
+    // Byte-identical resource strings — the credit is a deterministic
+    // function of the save, never of wall clock or live presence.
+    expect(replayed.resources.loc).toBe(first.resources.loc);
+    expect(replayed.resources.cash).toBe(first.resources.cash);
+    expect(replayed.resources.aiTokens).toBe(first.resources.aiTokens);
+    // Full-state determinism (segments, timestamp, everything).
+    expect(normalize(replayed)).toEqual(normalize(first));
+  });
+
+  it('replay over a longer span differs by exactly baseline × extra time (presence enters only via saved segments)', () => {
+    // Scenario 5 step 7: replaying the restored save after MORE wall-clock
+    // time has passed recomputes the same segment credit — the result differs
+    // from the original catch-up only by the extra elapsed time at BASELINE
+    // rate (no segment can cover it; nothing arrives live).
+    const content = makeCoopContent();
+    const extraMs = 120_000; // 2 further minutes at baseline
+    const original = advance(
+      makeCoopState([residualTailSegment(1.2)]),
+      300_000,
+      content,
+    );
+    const replayedLonger = advance(
+      makeCoopState([residualTailSegment(1.2)]),
+      300_000 + extraMs,
+      content,
+    );
+
+    // 312 (original credit) + 1 LOC/s × 120s baseline = 432 — exact.
+    expect(compare(bn(replayedLonger.resources.loc), bn('432'))).toBe(0);
+    expect(
+      parseFloat(replayedLonger.resources.loc) - parseFloat(original.resources.loc),
+    ).toBeCloseTo(extraMs / 1000, 9);
+  });
+});
