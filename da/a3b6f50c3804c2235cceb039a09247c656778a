@@ -1,0 +1,21 @@
+frontend/src/scenes/world/campusMap.test.ts
+  s_9e3cb57f61b316::t_bb9e17c31190c0 23-25,29
+  s_9e3cb57f61b316::t_0378cb3a03a3ee 1-22,26-28,30-79,81-312
+  s_9e3cb57f61b316::t_9c095ad6e01f8a 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "daa3b6f50c3804c2235cceb039a09247c656778a",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
