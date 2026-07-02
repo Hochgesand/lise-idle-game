@@ -572,6 +572,15 @@ rewritten for the new assets.
 
 ## Decision: Art direction & asset sourcing
 
+> **AMENDMENT (superseded 2026-07-02):** programmatic **flat-design
+> generation** modeled on the real floor-plan tool
+> (`scripts/gen_campus_assets.py`, blueprint
+> `specs/002-shared-office-coop/campus-layout.md`) replaced the Kenney CC0
+> assembly described below. Rationale: fidelity to the real office map the
+> team knows, zero external dependencies, deterministic diff-clean
+> regeneration — per Andre's vision update. The Kenney/Tiled plan below is
+> retained for the historical record only.
+
 ### Decision
 Replace the 8-tile placeholder tileset (`office_tileset.png`, 128×64) with
 a **CC0 pixel-art tileset plus small custom lise touches**. Primary

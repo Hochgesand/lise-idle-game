@@ -1,181 +1,85 @@
 # Game Assets (002 — Shared Office Co-op)
 
-This directory holds the **002 campus world assets**: the Tiled map of both
-lise office buildings, the CC0 pixel-art tileset, and the avatar spritesheet
-that renders live/last-seen presence states. It supersedes the 001
-placeholder pipeline (`office_tileset.png` / `office.json` / `dev.png`).
+This directory holds the **002 campus world assets**: the campus map of both
+lise office buildings, the flat-design tileset atlas, and the avatar
+spritesheet that renders live/last-seen presence states.
 
-> **Status:** The committed files `campus.json`, `campus_tileset.png`, and
-> `avatars.png` are **PLACEHOLDERS** (programmatic, T040/T041) that satisfy
-> the CampusScene load contract but carry **no real art**. They **MUST** be
-> replaced by the real Kenney CC0 art and the Tiled-authored campus map
-> described below — see [Placeholder assets](#placeholder-assets-temporary--pending-t040t041)
-> and the manual checklist in
-> [Deferred manual setup](#deferred-manual-setup).
-
----
-
-## Placeholder assets (temporary — pending T040/T041)
-
-The following three files are **PLACEHOLDERS** generated programmatically
-(`scripts/gen_placeholder_assets.py`) solely to unblock the Phase 3
-CampusScene. They are valid and loadable but carry **no real art**. They are
-superseded by the manual T040/T041 work below:
-
-| File | Placeholder content |
-|------|---------------------|
-| `campus_tileset.png` | 128×128 atlas (8×8 tiles of 16px, 64 tiles) of distinct solid colors |
-| `avatars.png` | 128×16 horizontal strip, 8 frames: green-tinted live + red/desaturated last-seen |
-| `campus.json` | Valid Tiled orthogonal map (50×40, 16px tiles): `Ground` tilelayer, `Rooms` polygons (both buildings, `building` property), `SeatAnchors` points, `CommutePaths` polyline, embedded tileset |
-
-These satisfy the load contract (no thrown errors) but **must be replaced**
-by the real Kenney CC0 art and the real Tiled-authored campus map described
-below. Note that the placeholder `campus.json` carries only **20 total
-seat anchors** — well below the **≥ 60 total** production invariant; the
-real Tiled map (T040) authors the full ≥ 20 (Office #1) + ≥ 40 (Office #2)
-anchor set.
+> **Art direction (current):** the assets are **programmatic flat-design,
+> floor-plan style** — self-drawn by `scripts/gen_campus_assets.py` from the
+> blueprint `specs/002-shared-office-coop/campus-layout.md`. There are **no
+> external asset packs** and therefore **no licensing concerns**. The earlier
+> Kenney-CC0 + Tiled-authoring plan was **superseded 2026-07-02** by this
+> flat-design decision — see `campus-layout.md` and the amendment at the
+> Art-direction decision in `specs/002-shared-office-coop/research.md`.
 
 ---
 
-## Required CC0 asset packs
+## Generator
 
-All base art is **CC0 (Creative Commons Zero)** — free to use commercially,
-no attribution required, no redistribution limits. This removes every
-licensing question for both the company-internal deployment and the public
-repository. All packs are **16×16 tiles from a single author (Kenney)** so
-the palette and proportions are consistent.
+All three shipped files are produced deterministically by the generator:
 
-| Pack | Role | License |
-|------|------|---------|
-| **Kenney "Roguelike Modern City"** | Primary — streets, building exteriors, urban props, the commute route | CC0 |
-| **Kenney "Roguelike Indoors"** | Primary — office interiors, desks, chairs, furniture, room fittings | CC0 |
-| **Kenney "Tiny Town"** | Fallback — 16×16 CC0, used only if the primary pair proves insufficient | CC0 |
+```sh
+uv run --with pillow scripts/gen_campus_assets.py
+```
 
-### Art direction note
+(The system `python3` lacks Pillow, hence `uv run --with pillow`.)
 
-- **LimeZu "Modern Interiors"** (the popular office interior pack) was
-  **rejected** — it is **not CC0**; its license terms conflict with
-  redistribution in an open repository.
-- The custom pixel budget is concentrated on a few **lise-specific touches**
-  drawn on top of the CC0 base, in the same 16×16 grid — that is what makes
-  the offices recognizable rather than a full custom commission:
-  - **lise logo signage**
-  - **skier trophy shelf**
-  - **room-name plates**
-  - **coffee points**
+Optional fidelity-check flags:
+
+```sh
+uv run --with pillow scripts/gen_campus_assets.py --preview out.png    # full-map composite render
+uv run --with pillow scripts/gen_campus_assets.py \
+    --crop 350 950 900 1350 3 crop.png                                 # scaled crop (px coords)
+# --labels overlays room names on the preview/crop
+```
+
+The output is **deterministic** (stable JSON ordering), so regeneration is
+diff-clean — re-running the generator on an unchanged blueprint produces no
+git diff.
 
 ---
 
-## Tooling
+## Shipped files
 
-### Tiled (map editor)
-
-The campus map is authored in **Tiled** — https://www.mapeditor.org/ —
-
-and exported as JSON (`tilemapTiledJSON`) so Phaser 4 loads it directly.
-Tilesets **must be embedded** in the export (FR-020/021/022) so the map is
-a single self-contained file with no external tileset references to lose.
+| File | Spec |
+|------|------|
+| `campus_tileset.png` | **94-tile** flat-design atlas, 16×16 px tiles, **256×96** image |
+| `campus.json` | Tiled-JSON map, **200×140** tiles (16 px base): **6 tile layers** (`Ground`, `Streets`, `Floors`, `Walls`, `Furniture`, `Decor`) + **3 object layers** (`Rooms` — 22 named polygons, `SeatAnchors` — **128** building-tagged points, `CommutePaths` — entrance-to-entrance polyline); tileset **embedded** |
+| `avatars.png` | **8-frame** horizontal strip of 16 px frames (128×16): green **live** vs red/desaturated **last-seen** styling (FR-023) |
 
 ---
 
-## Campus map structure (`campus.json`)
+## Production invariants
 
-One orthogonal Tiled map containing **both lise office buildings** with
-preserved footprints and named rooms, joined by the streets/tram commute
-route. Base tile is **16×16**.
+The generator and tests enforce the checklist in
+`specs/002-shared-office-coop/campus-layout.md` **§8 Production invariants**,
+verified by `frontend/src/scenes/world/campusMap.test.ts`:
 
-### Named rooms
-
-**Office #1:**
-- `corkscrew`
-- `spiderweb`
-- `skier`
-- the Office
-- Stairs/Elevator core
-
-**Office #2:**
-- `deco-office-chair`
-- `frog`
-- `bongo`
-- `bridge`
-- the executive Office
-- both cores (Stairs/Elevator)
-
-The two buildings are joined by the **streets / tram commute route** — the
-visible path commuting avatars travel between them (FR-022).
-
-### Tile layers
-
-Draw-ordered visual world (ground, streets, floors, furniture); the exact
-set is fixed during authoring.
-
-### Object layers (three — required)
-
-| Layer | Kind | Purpose |
-|-------|------|---------|
-| `Rooms` | named polygons | one per named space; drives room labels and presence grouping |
-| `SeatAnchors` | point objects, **building-tagged** | desk/seat positions avatars snap to |
-| `CommutePaths` | polylines (entrance-to-entrance) | routes commuting avatars travel between building entrances |
-
-**Seat capacity invariant (FR-021):** each building MUST author clearly
-more `SeatAnchors` than its expected rendered population (peak live crowd
-plus last-seen avatars retained within the retention window):
-
-- **Office #1 — ≥ 20 anchors** (peak live share ~10)
-- **Office #2 — ≥ 40 anchors** (peak live share ~20 — carries the greater share)
-- **≥ 60 total**
-
-Overflow beyond the anchors falls back to standing/roaming spots — never
-hides or stacks colleagues.
-
-### Export requirements
-
-- Tilesets **embedded** in the export (no external `.tsx`/tileset image
-  references at runtime — Phaser needs the map to be self-contained).
-- Base tile **16×16** (changes `TILE_SIZE` in `scenes/layout.ts`; avatar
-  frames shrink accordingly; Phaser config gains `pixelArt: true`).
+- **SeatAnchors capacity (FR-021):** ≥ 20 anchors in Office #1, ≥ 40 in
+  Office #2, **≥ 60 total** — all on walkable floor inside the correct
+  building polygon (shipped map: 128 total).
+- Every named room from campus-layout.md §3/§4 present as a `Rooms` polygon
+  with the correct `building` property; the 9 spec'd names exactly:
+  `corkscrew`, `spiderweb`, `skier`, `Office` (office_1);
+  `deco-office-chair`, `frog`, `bongo`, `bridge`, `the executive Office`
+  (office_2).
+- One `CommutePaths` polyline with `from`/`to` properties, endpoints at the
+  two building doors.
+- Tileset **embedded** in the map export, named `campus_tileset`, image
+  `campus_tileset.png` (FR-020/021/022 — self-contained, Phaser loads it
+  directly via `tilemapTiledJSON`).
+- Map loads in CampusScene with zero thrown errors; all tile layers render.
+- JSON output deterministic so regeneration diffs stay clean.
 
 ---
 
-## Planned production files
+## History
 
-| File | Description |
-|------|-------------|
-| `campus.json` | Tiled JSON map export — both buildings, tile + object layers, **embedded** tilesets (T040) |
-| `campus_tileset.png` | Kenney CC0 16×16 base + custom lise touches; combined atlas well below 4096×4096 (T041) |
-| `avatars.png` | 16 px frames with **green live vs red/desaturated last-seen** styling + activity icons (T041, FR-023) |
-
----
-
-## Deferred manual setup
-
-The following are **TODO / manual** — not yet done. The downloads and Tiled
-install cannot be automated; they require a human to fetch the packs and
-run the installer.
-
-- [ ] **Download the Kenney CC0 packs** — "Roguelike Modern City" +
-      "Roguelike Indoors" (fallback "Tiny Town") from kenney.nl.
-- [ ] **Install Tiled** — https://www.mapeditor.org/ — for authoring the
-      campus map.
-- [ ] **Stage raw sources** — place the raw Kenney sources in this
-      directory (`frontend/public/assets/`) so they are versioned alongside
-      the README.
-- [ ] **Produce `campus_tileset.png`** — Kenney CC0 16×16 base combined
-      with the custom lise touches (logo signage, skier trophy shelf,
-      room-name plates, coffee points); combined atlas < 4096×4096.
-- [ ] **Produce `avatars.png`** — 16 px frames with green live vs
-      red/desaturated last-seen styling + activity icons (FR-023).
-- [ ] **Author `campus.json`** in Tiled (depends on `campus_tileset.png` —
-      T040 → T041) and export with embedded tilesets.
-
----
-
-## Legacy 001 assets (superseded)
-
-The three files below are the 001 placeholder pipeline, superseded by the
-002 campus assets above. They are retained until the CampusScene (T046)
-replaces OfficeScene and the loop is rewired (T051).
-
-- `office_tileset.png` — 128×64 placeholder tileset (8 tiles, 32×32)
-- `office.json` — 001 Tiled map (single office, 20×15 tiles)
-- `dev.png` — 4-frame 32×32 dev idle spritesheet
+- **2026-07-02:** Programmatic flat-design generation (modeled on the real
+  floor-plan tool) replaced the planned Kenney CC0 assembly + manual Tiled
+  authoring. The former "PLACEHOLDER" status, the CC0 pack table, and the
+  Tiled install/download TODO checklist are superseded — rationale and
+  details in `specs/002-shared-office-coop/campus-layout.md` and the
+  research.md Art-direction amendment.
+- The 001 placeholder pipeline (`office_tileset.png` / `office.json` /
+  `dev.png`) has been removed — unreferenced by any code.
