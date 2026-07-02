@@ -135,11 +135,14 @@ class ContentControllerTest {
     void getContent_returnsSeededMilestonesWithCorrectValues() throws Exception {
         mockMvc.perform(get("/api/v1/content"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.milestones.length()").value(3))
+            .andExpect(jsonPath("$.milestones.length()").value(4))
             .andExpect(jsonPath("$.milestones[0].id").value("iso_9001_certified"))
             .andExpect(jsonPath("$.milestones[0].reward.type").value("grantResource"))
-            .andExpect(jsonPath("$.milestones[1].id").value("ms_gold_partner"))
-            .andExpect(jsonPath("$.milestones[2].id").value("ai_design_sprint_facilitator"));
+            // office_2_unlock gates the T082 switch-office affordance (001 FR-014)
+            .andExpect(jsonPath("$.milestones[1].id").value("office_2_unlock"))
+            .andExpect(jsonPath("$.milestones[1].requirement.threshold").value("50000"))
+            .andExpect(jsonPath("$.milestones[2].id").value("ms_gold_partner"))
+            .andExpect(jsonPath("$.milestones[3].id").value("ai_design_sprint_facilitator"));
     }
 
     @Test
