@@ -259,6 +259,34 @@
   transform: translateY(1px);
 }
 
+/* Switch-office affordance (T082): hidden entirely before the Office #2
+ * unlock milestone (the panel appends no element); an interactive button when
+ * unlocked + idle; a non-interactive in-progress span while a commute is in
+ * flight (no data-action — the affordability-rule convention). */
+.hud-switch-office {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border: 1px solid var(--hud-rate-color);
+  border-radius: var(--ui-radius);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--hud-color);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.hud-switch-office:active {
+  transform: translateY(1px);
+}
+
+.hud-switch-office-commuting {
+  border-color: var(--economy-locked);
+  color: var(--economy-locked);
+  cursor: default;
+}
+
 /* Boost float-text: a transient "+N" that rises and fades from the boost
  * button (hudPanel.ts spawns it; appended to .ui-root so it survives the
  * per-frame slot rebuild). Honors reducedMotion both in JS (the panel skips

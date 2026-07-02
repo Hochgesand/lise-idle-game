@@ -39,6 +39,19 @@ const BOOST_FLOAT_MS = 600;
 /** Safety margin before the float's setTimeout fallback cleanup fires (ms). */
 const BOOST_FLOAT_CLEANUP_MS = BOOST_FLOAT_MS + 200;
 
+/**
+ * The milestone id gating the office switch (T082; Spec 001 FR-014 — Office #2
+ * is unlockable as a long-term milestone). The affordance reads ONLY
+ * `state.earnedMilestones` — presence rendering never reads unlock state
+ * (data-model "Visibility vs unlock"), so this gates the viewer's OWN
+ * switching, nothing else.
+ */
+export const OFFICE_2_UNLOCK_MILESTONE = 'office_2_unlock';
+
+/** The two office ids of the campus (Spec 001 FR-014; campus-layout.md). */
+const OFFICE_1 = 'office_1';
+const OFFICE_2 = 'office_2';
+
 // ── Factory ──────────────────────────────────────────────────────────────
 
 /** Options for {@link hudPanel}. */
@@ -50,6 +63,16 @@ export interface HudPanelOptions {
    * mutates state directly (it has no write access).
    */
   onBoost: () => void;
+  /**
+   * (T082) Called when the player activates the switch-office control with the
+   * DESTINATION office id. main.ts wires this to the `switchOffice` mutator via
+   * the safe mutation template (`state = next; loop.load(state, Date.now());
+   * saveGame(state)`); the NEXT heartbeat then automatically reports
+   * `{ office: null, commute }` (net/heartbeat.ts) so observers see the
+   * transition. Only reachable when the control is interactive: unlocked
+   * (Office #2 milestone earned) and no commute in flight.
+   */
+  onSwitchOffice: (toOffice: string) => void;
 }
 
 /**
@@ -64,9 +87,9 @@ export interface HudPanelOptions {
  * its `render` is called once per frame by `createOverlay`'s `refresh()`.
  */
 export function hudPanel(opts: HudPanelOptions): OverlaySection {
-  // The STABLE action callback is captured once at construction; per-frame data
-  // (state/content) flows fresh through render's accessors (overlay.ts seam).
-  const { onBoost } = opts;
+  // The STABLE action callbacks are captured once at construction; per-frame
+  // data (state/content) flows fresh through render's accessors (overlay.ts seam).
+  const { onBoost, onSwitchOffice } = opts;
 
   return {
     id: 'hud',
@@ -120,6 +143,32 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
       boost.textContent = 'Boost';
       root.appendChild(boost);
 
+      // T082 — Switch-office affordance (US3; closes the 001 FR-014/016 UI
+      // gap). Gated on the Office #2 unlock milestone: before the unlock
+      // NOTHING renders (hidden — the T074 badge convention). Unlocked + idle
+      // renders an interactive button (data-action delegation, destination on
+      // `data-to-office`); while a commute is in flight the control is a
+      // non-interactive in-progress span per the affordability-rule
+      // convention (span, NO data-action — an in-flight tap can never reach
+      // the mutator; `advance` resolves the commute, never a second switch).
+      if (state.earnedMilestones.has(OFFICE_2_UNLOCK_MILESTONE)) {
+        if (state.commute !== null) {
+          const commuting = document.createElement('span');
+          commuting.className = 'hud-switch-office hud-switch-office-commuting';
+          commuting.textContent = `Commuting to ${officeLabel(state.commute.toOffice)}…`;
+          root.appendChild(commuting);
+        } else {
+          const toOffice = switchDestination(state.activeOffice);
+          const switchBtn = document.createElement('button');
+          switchBtn.type = 'button';
+          switchBtn.className = 'hud-switch-office ui-interactive';
+          switchBtn.dataset.action = 'switch-office';
+          switchBtn.dataset.toOffice = toOffice;
+          switchBtn.textContent = `Switch to ${officeLabel(toOffice)}`;
+          root.appendChild(switchBtn);
+        }
+      }
+
       return root;
     },
     // Delegated actions (overlay.ts dispatches by `data-action` from a SINGLE
@@ -131,8 +180,36 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
         onBoost();
         spawnBoostFloat(el, accessors.getState, accessors.getContent);
       },
+      // T082 — the destination travels on the button's `data-to-office`
+      // attribute (the per-entry-id pattern of the sibling panels), so the
+      // handler stays stable across per-frame rebuilds.
+      'switch-office': (el) => {
+        const toOffice = el.dataset.toOffice;
+        if (toOffice) onSwitchOffice(toOffice);
+      },
     },
   };
+}
+
+// ── Switch-office helpers (T082) ─────────────────────────────────────────
+
+/**
+ * The destination of an office switch: the OTHER office of the two-building
+ * campus (Spec 001 FR-014 models exactly two). From `office_2` back to
+ * `office_1`; from `office_1` (or any unexpected value — fail safe toward the
+ * unlocked expansion) to `office_2`.
+ */
+function switchDestination(activeOffice: string): string {
+  return activeOffice === OFFICE_2 ? OFFICE_1 : OFFICE_2;
+}
+
+/**
+ * Human-readable office label: `office_2` → `Office #2`. Falls back to the
+ * raw id for anything outside the `office_<n>` scheme (display-only).
+ */
+function officeLabel(officeId: string): string {
+  const match = /^office_(\d+)$/.exec(officeId);
+  return match !== null ? `Office #${match[1]}` : officeId;
 }
 
 // ── Co-op bonus badge helpers (T074) ─────────────────────────────────────

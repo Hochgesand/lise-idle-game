@@ -29,7 +29,7 @@
 import Phaser from 'phaser';
 import type { ContentCatalog, ContentEnvelope, GameState } from './sim/types';
 import { loadContent } from './sim/content';
-import { manualBoost, cashOut, purchaseUpgrade, activateBurner, purchaseTraining, InsufficientResourcesError } from './sim/actions';
+import { manualBoost, cashOut, purchaseUpgrade, activateBurner, purchaseTraining, switchOffice, InsufficientResourcesError } from './sim/actions';
 import { applyCoopPresence } from './sim/coop';
 import { bn, compare } from './sim/bigNumber';
 import { GameLoop } from './game/gameLoop';
@@ -450,6 +450,20 @@ class ControllerScene extends Phaser.Scene {
           hudPanel({
             onBoost: () => {
               state = manualBoost(state, content);
+            },
+            // T082 — switch-office affordance (US3). The panel only renders
+            // the interactive control when the Office #2 unlock milestone is
+            // earned and no commute is in flight, so this callback never needs
+            // its own gate. Safe mutation template: replace state, re-anchor
+            // the loop to the wall clock, persist. From here the machinery is
+            // automatic: `advance` resolves the commute after
+            // `content.coop.commuteSeconds`, and the NEXT heartbeat tick
+            // derives `{ office: null, commute }` from the save
+            // (net/heartbeat.ts) so observers see the transition (FR-022).
+            onSwitchOffice: (toOffice: string) => {
+              state = switchOffice(state, toOffice);
+              loop.load(state, Date.now());
+              saveGame(state);
             },
           }),
           economyPanel({
