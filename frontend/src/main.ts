@@ -250,7 +250,6 @@ let presenceHasCommuters = false;
 function pushPresenceToWorld(): void {
   if (campusScene === null) return;
   const records = presenceClient.model.colleagues();
-  presenceHasCommuters = records.some((r) => r.office === null && r.commute !== null);
 
   // The commute context needs the parsed route AND the coop tuning; without
   // either (a map missing its CommutePaths layer / a catalog without a coop
@@ -263,6 +262,10 @@ function pushPresenceToWorld(): void {
       : undefined;
 
   const renders = buildAvatarRenders(campusScene.getSeatAnchors(), records, commuteCtx);
+  // Per-frame re-projection is needed exactly while someone renders ON the
+  // route (progress < 1). An arrived-but-not-yet-heartbeat-cleared commuter
+  // is seated (inTransit false), so the per-frame loop stops at arrival.
+  presenceHasCommuters = renders.some((r) => r.inTransit === true);
   campusScene.updateAvatars(renders);
 }
 
