@@ -1,0 +1,19 @@
+specs/002-shared-office-coop/tasks.md
+  s_9e3cb57f61b316::t_7bc7ffda7f3e38 160,183-184,200,204-206,208,220,224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "f9c981b8a4d21b04319c07e238fa90a3602cdd42",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
