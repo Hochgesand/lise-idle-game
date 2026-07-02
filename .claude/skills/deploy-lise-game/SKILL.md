@@ -100,8 +100,12 @@ cd /mnt/user/appdata/lise-game
 git clone https://github.com/Hochgesand/lise-idle-game.git repo
 cd repo
 git pull           # make sure it's on the commit you pushed
-docker compose build
-docker compose up -d
+# Pin the project name so the fallback-managed containers match the ones the
+# pull-based flow and the verification `ps` query (§5) expect (project
+# `lise-game`). Otherwise Compose derives `project=repo` from the dir and the
+# §5 `docker compose -f …/docker-compose.yml ps` reports nothing.
+docker compose -p lise-game build
+docker compose -p lise-game up -d
 exit
 ```
 
