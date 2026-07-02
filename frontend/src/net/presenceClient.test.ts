@@ -13,9 +13,10 @@
 // fails to resolve its import = RED, the correct TDD starting state
 // (Constitution Principle III).
 
-import { describe, it, expect } from 'vitest';
-import { PresenceModel } from './presenceClient';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { PresenceModel, PresenceClient, PresenceFetchError } from './presenceClient';
 import type { PresenceRecord, PresenceSnapshot } from './presenceClient';
+import type { AccessToken, TokenSource } from './restClient';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -255,5 +256,129 @@ describe('PresenceModel — robustness (never throw into the game loop)', () => 
 
     // Model is unchanged by any of the malformed payloads.
     expect(byId(model.colleagues())).toEqual({ a: rec('a') });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PresenceClient.fetchSnapshot — snapshot fetch + bearer (contracts §2)
+// ---------------------------------------------------------------------------
+
+const FETCH_BASE = 'https://api.example.test';
+
+/** Build a TokenSource that returns the given token (null => signed out). */
+function tokenSource(token: string | null): TokenSource {
+  let current: AccessToken | null = token === null ? null : { token };
+  return { getToken: () => current };
+}
+
+/** Build a JSON `Response` with the given status + body. */
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+describe('PresenceClient.fetchSnapshot', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('GETs <base>/api/v1/presence with the bearer and applies the snapshot to the model', async () => {
+    const client = new PresenceClient(FETCH_BASE, tokenSource('tok-1'));
+    const snap = snapshot('2026-07-01T09:00:00Z', [rec('a'), rec('b')], rec('self'));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, snap));
+
+    await client.fetchSnapshot();
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${FETCH_BASE}/api/v1/presence`);
+    expect(init?.method).toBe('GET');
+    expect((init!.headers as Record<string, string>).Authorization).toBe('Bearer tok-1');
+    // The snapshot replaced the model wholesale.
+    expect(client.model.serverTime()).toBe('2026-07-01T09:00:00Z');
+    expect(client.model.self()).toEqual(rec('self'));
+    expect(client.model.colleagues()).toHaveLength(2);
+  });
+
+  it('omits the bearer when no token source is configured (signed out)', async () => {
+    const client = new PresenceClient(FETCH_BASE); // no token source
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, snapshot('2026-07-01T09:00:00Z', [])));
+
+    await client.fetchSnapshot();
+
+    const headers = (fetchMock.mock.calls[0]![1]!.headers as Record<string, string>);
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  it('throws PresenceFetchError(status) on a non-2xx response and leaves the model untouched', async () => {
+    const client = new PresenceClient(FETCH_BASE, tokenSource('tok-1'));
+    // Pre-load the model so we can assert a failed fetch does not wipe it.
+    client.model.applySnapshot(snapshot('2026-07-01T09:00:00Z', [rec('a')]));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(401, { error: { code: 'not_authenticated', message: 'no token' } }),
+    );
+
+    await expect(client.fetchSnapshot()).rejects.toMatchObject({
+      name: 'PresenceFetchError',
+      status: 401,
+    });
+    // The prior model is intact (presence is display-only + best-effort).
+    expect(client.model.serverTime()).toBe('2026-07-01T09:00:00Z');
+    expect(client.model.colleagues()).toHaveLength(1);
+  });
+
+  it('PresenceFetchError carries the status', () => {
+    const err = new PresenceFetchError(500);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.status).toBe(500);
+  });
+
+  it('leaves the model intact on a 2xx with a malformed body (no throw, no half-wipe)', async () => {
+    const client = new PresenceClient(FETCH_BASE, tokenSource('tok-1'));
+    client.model.applySnapshot(snapshot('2026-07-01T09:00:00Z', [rec('a'), rec('b')]));
+    // A 200 whose body is nominally a snapshot but `colleagues` is not an array.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { serverTime: '2026-07-01T10:00:00Z', colleagues: 'not-an-array' }),
+    );
+
+    await expect(client.fetchSnapshot()).resolves.toBeUndefined();
+    // Prior model intact (not cleared / not half-wiped).
+    expect(client.model.serverTime()).toBe('2026-07-01T09:00:00Z');
+    expect(client.model.colleagues()).toHaveLength(2);
+  });
+
+  it('leaves the model intact (no throw) on a 2xx with a non-JSON body', async () => {
+    const client = new PresenceClient(FETCH_BASE, tokenSource('tok-1'));
+    client.model.applySnapshot(snapshot('2026-07-01T09:00:00Z', [rec('a')]));
+    // A 200 carrying a non-JSON body (e.g. an empty body or an HTML proxy page).
+    fetchMock.mockResolvedValueOnce(
+      new Response('<html>upstream proxy error</html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    );
+
+    await expect(client.fetchSnapshot()).resolves.toBeUndefined();
+    // Prior model intact; no SyntaxError escaped into the game loop.
+    expect(client.model.serverTime()).toBe('2026-07-01T09:00:00Z');
+    expect(client.model.colleagues()).toHaveLength(1);
+  });
+
+  it('leaves the model intact (no throw) on a 2xx with a literal null body', async () => {
+    const client = new PresenceClient(FETCH_BASE, tokenSource('tok-1'));
+    client.model.applySnapshot(snapshot('2026-07-01T09:00:00Z', [rec('a')]));
+    // A 200 whose body is valid JSON `null` (a proxy / empty-result serializer).
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, null));
+
+    await expect(client.fetchSnapshot()).resolves.toBeUndefined();
+    expect(client.model.serverTime()).toBe('2026-07-01T09:00:00Z');
+    expect(client.model.colleagues()).toHaveLength(1);
   });
 });
