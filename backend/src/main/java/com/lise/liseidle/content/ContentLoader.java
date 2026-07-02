@@ -38,7 +38,7 @@ public class ContentLoader {
     static final int SCHEMA_VERSION = 1;
 
     /** Balance version — bumped to 1.3.0 with the (002) co-op tuning block (T027). */
-    static final String CONTENT_VERSION = "1.3.0";
+    static final String CONTENT_VERSION = "1.4.0";
 
     /** The six required keys of the {@code coop.json} block (data-model.md "CoopConfig"). */
     private static final Set<String> COOP_REQUIRED_FIELDS = Set.of(

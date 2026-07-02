@@ -61,7 +61,7 @@ class ContentControllerTest {
         mockMvc.perform(get("/api/v1/content"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.schemaVersion").value(1))
-            .andExpect(jsonPath("$.contentVersion").value("1.3.0"))
+            .andExpect(jsonPath("$.contentVersion").value("1.4.0"))
             .andExpect(jsonPath("$.producers").isArray())
             .andExpect(jsonPath("$.upgrades").isArray())
             .andExpect(jsonPath("$.trainings").isArray())
@@ -157,7 +157,7 @@ class ContentControllerTest {
      * T018 — the content envelope carries the additive sixth {@code coop}
      * block (data-model.md "CoopConfig"; contracts §2) alongside the five
      * 001 arrays, with {@code schemaVersion} and {@code contentVersion}
-     * intact. {@code contentVersion} bumps to {@code "1.3.0"} as the coop
+     * intact. {@code contentVersion} bumps to {@code "1.4.0"} as the coop
      * block is additive new content (FR-015). RED until {@code ContentCatalog}
      * serves {@code coop} (T027).
      */
@@ -167,7 +167,7 @@ class ContentControllerTest {
             .andExpect(status().isOk())
             // five 001 arrays + the two scalar envelope fields stay intact
             .andExpect(jsonPath("$.schemaVersion").value(1))
-            .andExpect(jsonPath("$.contentVersion").value("1.3.0"))
+            .andExpect(jsonPath("$.contentVersion").value("1.4.0"))
             .andExpect(jsonPath("$.producers").isArray())
             .andExpect(jsonPath("$.upgrades").isArray())
             .andExpect(jsonPath("$.trainings").isArray())

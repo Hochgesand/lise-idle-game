@@ -33,6 +33,7 @@ import { describe, it, expect } from 'vitest';
 import { loadContent, ContentValidationError } from './content';
 import type { ContentEnvelope, ContentCatalog } from './types';
 import { FALLBACK_CONTENT } from './fallbackContent';
+import { OFFICE_2_UNLOCK_MILESTONE } from '../ui/hudPanel';
 
 // ---------------------------------------------------------------------------
 // Fixture builders (DRY) — each returns a fresh deep clone so a test may
@@ -382,5 +383,25 @@ describe('loadContent — coop block validation (002)', () => {
 describe('FALLBACK_CONTENT — coop block (002)', () => {
   it('mirrors the placeholder coop values so offline boot integrates identically', () => {
     expect(FALLBACK_CONTENT.coop).toEqual(coop());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FALLBACK_CONTENT — office_2_unlock milestone (T082 gate contract)
+// ---------------------------------------------------------------------------
+//
+// The HUD switch-office affordance is gated on this exact milestone id
+// (OFFICE_2_UNLOCK_MILESTONE in ui/hudPanel.ts). If the id ever drops out of
+// the catalog, Office #2 becomes unreachable — this pins content to the gate.
+
+describe('FALLBACK_CONTENT — office_2_unlock milestone (T082)', () => {
+  it('carries the milestone the switch-office gate reads, valid per loadContent', () => {
+    const milestone = FALLBACK_CONTENT.milestones.find((m) => m.id === OFFICE_2_UNLOCK_MILESTONE);
+    expect(milestone).toBeDefined();
+    expect(milestone?.requirement).toEqual({
+      type: 'resourceGte',
+      targetId: 'loc',
+      threshold: '50000',
+    });
   });
 });

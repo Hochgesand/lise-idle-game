@@ -26,7 +26,7 @@ import type { ContentCatalog } from './types';
  */
 export const FALLBACK_CONTENT: ContentCatalog = {
   schemaVersion: 1,
-  contentVersion: '1.2.0',
+  contentVersion: '1.4.0',
   producers: [
     {
       id: 'manual_typing',
@@ -99,6 +99,12 @@ export const FALLBACK_CONTENT: ContentCatalog = {
       name: 'ISO 9001 Certified',
       requirement: { type: 'resourceGte', targetId: 'loc', threshold: '10000' },
       reward: { type: 'grantResource', resource: 'cash', amount: '1000' },
+    },
+    {
+      id: 'office_2_unlock',
+      name: 'Office #2 Lease Signed',
+      requirement: { type: 'resourceGte', targetId: 'loc', threshold: '50000' },
+      reward: { type: 'grantResource', resource: 'cash', amount: '2500' },
     },
     {
       id: 'ms_gold_partner',

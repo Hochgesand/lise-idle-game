@@ -1,20 +1,58 @@
 [
-  {
-    "id": "iso_9001_certified",
-    "name": "ISO 9001 Certified",
-    "requirement": { "type": "resourceGte", "targetId": "loc", "threshold": "10000" },
-    "reward": { "type": "grantResource", "resource": "cash", "amount": "1000", "multiplier": 0 }
-  },
-  {
-    "id": "ms_gold_partner",
-    "name": "Microsoft Gold Partner",
-    "requirement": { "type": "resourceGte", "targetId": "loc", "threshold": "100000" },
-    "reward": { "type": "globalMultiplier", "multiplier": 2 }
-  },
-  {
-    "id": "ai_design_sprint_facilitator",
-    "name": "AI Design Sprint Facilitator",
-    "requirement": { "type": "resourceGte", "targetId": "loc", "threshold": "1000000" },
-    "reward": { "type": "globalMultiplier", "multiplier": 3 }
-  }
+    {
+        "id": "iso_9001_certified",
+        "name": "ISO 9001 Certified",
+        "requirement": {
+            "type": "resourceGte",
+            "targetId": "loc",
+            "threshold": "10000"
+        },
+        "reward": {
+            "type": "grantResource",
+            "resource": "cash",
+            "amount": "1000",
+            "multiplier": 0
+        }
+    },
+    {
+        "id": "office_2_unlock",
+        "name": "Office #2 Lease Signed",
+        "requirement": {
+            "type": "resourceGte",
+            "targetId": "loc",
+            "threshold": "50000"
+        },
+        "reward": {
+            "type": "grantResource",
+            "resource": "cash",
+            "amount": "2500",
+            "multiplier": 0
+        }
+    },
+    {
+        "id": "ms_gold_partner",
+        "name": "Microsoft Gold Partner",
+        "requirement": {
+            "type": "resourceGte",
+            "targetId": "loc",
+            "threshold": "100000"
+        },
+        "reward": {
+            "type": "globalMultiplier",
+            "multiplier": 2
+        }
+    },
+    {
+        "id": "ai_design_sprint_facilitator",
+        "name": "AI Design Sprint Facilitator",
+        "requirement": {
+            "type": "resourceGte",
+            "targetId": "loc",
+            "threshold": "1000000"
+        },
+        "reward": {
+            "type": "globalMultiplier",
+            "multiplier": 3
+        }
+    }
 ]

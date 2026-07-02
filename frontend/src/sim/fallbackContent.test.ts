@@ -18,7 +18,7 @@ describe('FALLBACK_CONTENT', () => {
 
   it('has a valid schemaVersion and contentVersion', () => {
     expect(FALLBACK_CONTENT.schemaVersion).toBe(1);
-    expect(FALLBACK_CONTENT.contentVersion).toBe('1.2.0');
+    expect(FALLBACK_CONTENT.contentVersion).toBe('1.4.0');
   });
 
   it('produces a non-zero rate for a fresh player with manual_typing granted', () => {
