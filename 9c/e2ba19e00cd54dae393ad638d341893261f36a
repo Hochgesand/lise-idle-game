@@ -1,0 +1,25 @@
+specs/002-shared-office-coop/research.md
+  s_9e3cb57f61b316::t_c051fc8466c438 575-583
+frontend/public/assets/README.md
+  s_9e3cb57f61b316::t_19dbcb9eac0614 3-13,17,19,21-23,25,27,29-34,36-38,42,44-48,52-72,76,78-85
+specs/002-shared-office-coop/tasks.md
+  s_9e3cb57f61b316::t_a792277149f9b3 114
+  s_9e3cb57f61b316::t_b1df14ccd646e5 115
+  s_9e3cb57f61b316::t_f1afe83e8ff502 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "9ce2ba19e00cd54dae393ad638d341893261f36a",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
