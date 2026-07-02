@@ -48,6 +48,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * colleagues, never a real signed-in one. The seeder holds no authority over
  * any real player's state &mdash; it only adds/removes its own synthetic
  * records (FR-008).
+ *
+ * <p><b>Ephemeral scope.</b> The dev profile runs an in-memory H2 database
+ * (T006), so both the registry and the {@code player_presence} rows are
+ * ephemeral and clear together on a backend restart &mdash; there are no
+ * orphaned rows to leak. The seeder targets the seed-then-load flow (page load
+ * reads {@code GET /api/v1/presence}); it does not push {@code presence.update}/
+ * {@code presence.remove} on seed/clear, so an already-open browser must re-fetch
+ * the snapshot to see changes (real-time avatar transitions are not its job).
  */
 @RestController
 @Profile("dev")
@@ -156,7 +164,7 @@ public class DevPresenceSeeder {
         int n = counter.incrementAndGet();
         String id = "dev-seed-" + n;
         String name = "Seed " + n;
-        String avatar = String.valueOf(Math.floorMod(id.hashCode(), 16));
+        String avatar = String.valueOf(Math.floorMod(id.hashCode(), PresenceService.AVATAR_FRAME_COUNT));
 
         PlayerPresenceEntity row = new PlayerPresenceEntity(id);
         row.setDisplayName(name);
