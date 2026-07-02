@@ -1,6 +1,8 @@
 package com.lise.liseidle.sync;
 
 import com.lise.liseidle.state.BurnerState;
+import com.lise.liseidle.state.CommuteState;
+import com.lise.liseidle.state.CoopSegment;
 import com.lise.liseidle.state.GameState;
 import com.lise.liseidle.state.PlayerSettings;
 import com.lise.liseidle.state.ResourceSet;
@@ -221,5 +223,164 @@ class StateMergerTest {
         // the same way the established round-trip test does (compares set
         // contents). merge(a, a) must reproduce a exactly.
         assertThat(merged).usingRecursiveComparison().isEqualTo(a);
+    }
+
+    // ── 8. (002) coopSegments: union keyed by `from`, max(until) + max(multiplier)
+    //
+    // Identical by contract to the client-side `applyCoopPresence` upsert
+    // (contracts §1/§2): an existing segment with the same `from` takes
+    // `until = max(...)` AND `multiplier = max(...)`; disjoint segments are
+    // kept. Client merge and server merge MUST NOT disagree.
+
+    @Test
+    void coopSegments_areUnion_keyedByFrom_takingMaxUntilAndMaxMultiplier() {
+        // Client carries two segments: one shares `from` with a server segment
+        // (must upsert to max until + max multiplier); the other is client-only.
+        List<CoopSegment> clientSegs = List.of(
+                new CoopSegment(100L, 200L, 1.2),
+                new CoopSegment(300L, 400L, 1.3));
+        List<CoopSegment> serverSegs = List.of(
+                new CoopSegment(100L, 250L, 1.1), // same `from` as client's first
+                new CoopSegment(500L, 600L, 1.4)); // server-only
+
+        GameState client = stateWithOverlay(clientSegs, "office_1", null, TIE_TIME);
+        GameState server = stateWithOverlay(serverSegs, "office_1", null, TIE_TIME);
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getCoopSegments()).containsExactlyInAnyOrder(
+                new CoopSegment(100L, 250L, 1.2), // max(200,250) until, max(1.2,1.1) mult
+                new CoopSegment(300L, 400L, 1.3),
+                new CoopSegment(500L, 600L, 1.4));
+    }
+
+    @Test
+    void coopSegments_upsertTakesMaxUntilAndMultiplier_whenServerSideIsHigher() {
+        // Same `from`; the server side carries the higher until AND the higher
+        // multiplier — proves the upsert takes the max from EITHER side, not
+        // "always client" or "always server".
+        List<CoopSegment> clientSegs = List.of(new CoopSegment(100L, 150L, 1.1));
+        List<CoopSegment> serverSegs = List.of(new CoopSegment(100L, 200L, 1.5));
+
+        GameState client = stateWithOverlay(clientSegs, "office_1", null, TIE_TIME);
+        GameState server = stateWithOverlay(serverSegs, "office_1", null, TIE_TIME);
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getCoopSegments()).containsExactly(new CoopSegment(100L, 200L, 1.5));
+    }
+
+    // ── 9. (002) activeOffice/commute: a PAIR from the state with the later
+    //         lastAdvancedAt (client copy on a tie) — data-model.md invariant.
+
+    @Test
+    void activeOfficeAndCommute_takenAsPairFromClient_whenClientLater() {
+        CommuteState clientCommute = new CommuteState("office_1", "office_2", 1000L);
+        GameState client = stateWithOverlay(List.of(), "office_2", clientCommute,
+                "2026-07-01T09:00:00.000Z");
+        GameState server = stateWithOverlay(List.of(), "office_1", null,
+                "2026-06-30T12:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveOffice()).isEqualTo("office_2");
+        assertThat(merged.getCommute()).isEqualTo(clientCommute);
+    }
+
+    @Test
+    void activeOfficeAndCommute_takenAsPairFromServer_whenServerLater() {
+        CommuteState serverCommute = new CommuteState("office_2", "office_1", 2000L);
+        GameState client = stateWithOverlay(List.of(), "office_2", null,
+                "2026-06-30T12:00:00.000Z");
+        GameState server = stateWithOverlay(List.of(), "office_1", serverCommute,
+                "2026-07-01T09:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveOffice()).isEqualTo("office_1");
+        assertThat(merged.getCommute()).isEqualTo(serverCommute);
+    }
+
+    @Test
+    void activeOfficeAndCommute_clientWinsOnTie() {
+        // Identical lastAdvancedAt: the CLIENT's office/commute pair wins
+        // (consistent with the sim owning that state) — note this is the
+        // opposite tie-break from `settings` (server on tie).
+        CommuteState clientCommute = new CommuteState("office_1", "office_2", 3000L);
+        GameState client = stateWithOverlay(List.of(), "office_2", clientCommute, TIE_TIME);
+        GameState server = stateWithOverlay(List.of(), "office_1", null, TIE_TIME);
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveOffice()).isEqualTo("office_2");
+        assertThat(merged.getCommute()).isEqualTo(clientCommute);
+    }
+
+    // ── 10. (002) null-normalization of the overlay BEFORE merging (no NPE)
+    //
+    // A pre-existing v1 row or a pre-002 PUT body deserializes the overlay
+    // fields as null; the merge MUST normalize (coopSegments → [], activeOffice
+    // → "office_1", commute → null) itself before the segment-union, otherwise
+    // the first sync of any v1 player NPEs (contracts §2).
+
+    @Test
+    void nullOverlayFields_normalizedBeforeMerge_neverNpe() {
+        // A v1-shaped client (null overlay) merged against a normal server.
+        GameState client = v1Shaped("2026-07-01T09:00:00.000Z");
+        GameState server = stateWithOverlay(List.of(), "office_1", null,
+                "2026-06-30T12:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getCoopSegments()).isEmpty();
+        assertThat(merged.getActiveOffice()).isEqualTo("office_1");
+        assertThat(merged.getCommute()).isNull();
+    }
+
+    @Test
+    void nullOverlayOnServer_normalizedBeforeMerge_preservingClientSegments() {
+        // A v1-shaped SERVER (null coopSegments) merged against a client with
+        // real segments — the union must keep the client's segment, not NPE on
+        // the server's null. Client is later so its office/commute pair wins.
+        CoopSegment seg = new CoopSegment(100L, 200L, 1.2);
+        GameState client = stateWithOverlay(List.of(seg), "office_2", null,
+                "2026-07-01T09:00:00.000Z");
+        GameState server = v1Shaped("2026-06-30T12:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getCoopSegments()).containsExactly(seg);
+        assertThat(merged.getActiveOffice()).isEqualTo("office_2");
+        assertThat(merged.getCommute()).isNull();
+    }
+
+    // ── (002) controlled-state builders ─────────────────────────────────
+
+    private static final String TIE_TIME = "2026-06-30T12:00:00.000Z";
+
+    /** A GameState carrying explicit (002) co-op overlay fields. */
+    private static GameState stateWithOverlay(List<CoopSegment> coopSegments,
+                                              String activeOffice, CommuteState commute,
+                                              String lastAdvancedAt) {
+        return new GameState(
+                new ResourceSet("0", "0", "0"),
+                Set.of(), Set.of(), Set.of(), null, Set.of(),
+                lastAdvancedAt, 1, new PlayerSettings(false, false),
+                coopSegments, activeOffice, commute);
+    }
+
+    /**
+     * A v1-shaped state whose (002) overlay fields are {@code null} — the shape
+     * a freshly deserialized pre-002 row has before normalization. StateMerger
+     * must normalize this itself (contracts §2 "normalized ... before merging").
+     */
+    private static GameState v1Shaped(String lastAdvancedAt) {
+        return new GameState(
+                new ResourceSet("0", "0", "0"),
+                Set.of(), Set.of(), Set.of(), null, Set.of(),
+                lastAdvancedAt, 1, new PlayerSettings(false, false),
+                /* coopSegments */ null,
+                /* activeOffice */ null,
+                /* commute */ null);
     }
 }

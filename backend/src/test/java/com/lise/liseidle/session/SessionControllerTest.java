@@ -2,6 +2,8 @@ package com.lise.liseidle.session;
 
 import com.lise.liseidle.state.GameState;
 import com.lise.liseidle.state.PlayerSettings;
+import com.lise.liseidle.state.PlayerStateEntity;
+import com.lise.liseidle.state.PlayerStateRepository;
 import com.lise.liseidle.state.ResourceSet;
 import com.lise.liseidle.state.SampleStates;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +53,9 @@ class SessionControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private PlayerStateRepository playerStateRepository;
 
     private MockMvc mockMvc;
 
@@ -220,6 +225,54 @@ class SessionControllerTest {
         assertThat(returned.activeBurner().fuelRemaining()).isEqualTo("100");
         assertThat(returned.settings().muted()).isTrue();
         assertThat(returned.settings().reducedMotion()).isFalse();
+        assertThat(returned.schemaVersion()).isEqualTo(1);
+    }
+
+    /**
+     * 7. (002 T017) Bootstrap null-leak (the PlayerStateService half of the
+     * leniency rule, data-model "Save migration"): a stored v1-shaped
+     * {@code player_state} row — JSON with NO {@code coopSegments}/
+     * {@code activeOffice}/{@code commute} fields, exactly what a pre-002 build
+     * persisted — loaded via {@code POST /api/v1/session} must respond with the
+     * normalized defaults ({@code []} / {@code "office_1"} / {@code null}),
+     * never {@code null} fields that would NPE a v2 client or the
+     * segment-union merge. The v1 scalar fields survive untouched.
+     */
+    @Test
+    void postSession_normalizesNullOverlayFields_forV1ShapedRow() throws Exception {
+        // A raw v1 JSON document — the three (002) overlay fields absent.
+        String v1Json = """
+                {
+                  "resources": {"loc": "777", "cash": "0", "aiTokens": "0"},
+                  "ownedProducers": [],
+                  "ownedUpgrades": [],
+                  "ownedTrainings": [],
+                  "activeBurner": null,
+                  "earnedMilestones": [],
+                  "lastAdvancedAt": "2026-06-30T12:00:00.000Z",
+                  "schemaVersion": 1,
+                  "settings": {"reducedMotion": false, "muted": false}
+                }
+                """;
+        // Persist it directly as a v1-shaped row (bypassing GameState round-trip).
+        playerStateRepository.save(new PlayerStateEntity(
+                "v1-bootstrap-player", v1Json, "2026-06-30T12:00:00.000Z", 1));
+
+        MvcResult result = mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody("v1-bootstrap-player")))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        JsonNode stateNode = objectMapper.readTree(result.getResponse().getContentAsString()).get("state");
+        GameState returned = objectMapper.treeToValue(stateNode, GameState.class);
+
+        // The (002) overlay fields are normalized — never null leaks.
+        assertThat(returned.getCoopSegments()).isEmpty();
+        assertThat(returned.getActiveOffice()).isEqualTo("office_1");
+        assertThat(returned.getCommute()).isNull();
+        // The v1 scalar content survives untouched (leniency, not wipe).
+        assertThat(returned.resources().loc()).isEqualTo("777");
         assertThat(returned.schemaVersion()).isEqualTo(1);
     }
 }
