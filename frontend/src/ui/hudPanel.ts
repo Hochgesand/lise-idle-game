@@ -31,6 +31,7 @@ import type { OverlaySection } from './overlay';
 import type { ContentCatalog, GameState } from '../sim/types';
 import { formatLoc, formatRate } from '../sim/format';
 import { computeRate } from '../sim/advance';
+import { effectiveMultiplier } from '../sim/coop';
 import { toString } from '../sim/bigNumber';
 
 /** Boost float-text rise duration (ms); mirrors the retired HudScene tween. */
@@ -53,8 +54,9 @@ export interface HudPanelOptions {
 
 /**
  * Build the HUD overlay section: a live LOC counter (`formatLoc`), a rate
- * preview from `computeRate` (`formatRate`), and a manual-boost DOM button
- * wired to `onBoost`. A boost float-text ("+N") rises from the button as a CSS
+ * preview from `computeRate` (`formatRate`), an active co-op bonus badge
+ * (T074 — only when a segment covers "now"; nothing at baseline), and a
+ * manual-boost DOM button wired to `onBoost`. A boost float-text ("+N") rises from the button as a CSS
  * animation (`.hud-boost-float`, styles.css), suppressed when
  * `state.settings.reducedMotion` is set (accessibility).
  *
@@ -90,6 +92,20 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
       rate.textContent = rateStr;
       root.appendChild(rate);
 
+      // T074 — Co-op bonus badge (US2): when a co-op segment covers the sim's
+      // "now" (the same Date.parse(lastAdvancedAt) anchor advance uses), show
+      // the capped multiplier; at baseline (no covering segment, or an
+      // effective ×1) append NOTHING — no empty badge element. The
+      // covering-segment rule is `effectiveMultiplier` (sim/coop.ts), the
+      // exact helper computeRate applies — never reimplemented here.
+      const coopMult = coopMultiplierNow(state, content);
+      if (coopMult > 1) {
+        const coop = document.createElement('div');
+        coop.className = 'hud-coop';
+        coop.textContent = `×${formatMultiplier(coopMult)} co-op`;
+        root.appendChild(coop);
+      }
+
       // Manual-boost button — the DOM replacement for the retired scene-wide
       // `pointerdown` boost. `.ui-interactive` opts it back into pointer events
       // so the camera's pan/zoom gestures still reach the canvas everywhere
@@ -115,6 +131,34 @@ export function hudPanel(opts: HudPanelOptions): OverlaySection {
       },
     },
   };
+}
+
+// ── Co-op bonus badge helpers (T074) ─────────────────────────────────────
+
+/**
+ * The effective co-op multiplier at the sim's "now" — the
+ * `Date.parse(state.lastAdvancedAt)` anchor, consistent with how `advance`
+ * anchors time — via `effectiveMultiplier`'s covering-segment rule
+ * (sim/coop.ts; the same rule `computeRate` applies). Returns exactly 1 at
+ * baseline: no covering segment, a partial content catalog without `coop`
+ * (fail safe, mirrors `applyCoopPresence`), or a corrupt `lastAdvancedAt`
+ * (NaN covers nothing).
+ */
+function coopMultiplierNow(state: GameState, content: ContentCatalog): number {
+  const coop = content.coop;
+  if (coop === undefined) {
+    return 1;
+  }
+  const nowMs = Date.parse(state.lastAdvancedAt);
+  return effectiveMultiplier(state.coopSegments, nowMs, coop.maxMultiplier);
+}
+
+/**
+ * Format a co-op multiplier for the badge: one decimal unless clean
+ * (`1.2 → "1.2"`, `2 → "2"`, never `"2.0"`).
+ */
+function formatMultiplier(multiplier: number): string {
+  return Number.isInteger(multiplier) ? String(multiplier) : multiplier.toFixed(1);
 }
 
 // ── Boost float-text ─────────────────────────────────────────────────────

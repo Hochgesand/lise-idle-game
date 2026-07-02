@@ -20,6 +20,7 @@
   --hud-color: #e2e8f0; /* LOC counter text */
   --hud-rate-color: #94a3b8; /* rate line / secondary label */
   --hud-boost-color: #22c55e; /* boost float-text / affordable */
+  --hud-coop-color: #22c55e; /* active co-op bonus badge (matches --social-live) */
   /* Economy (was EconomyScene colors) */
   --economy-color: #e2e8f0;
   --economy-affordable: #22c55e;
@@ -226,6 +227,16 @@
 .hud-rate {
   font-size: 1rem;
   color: var(--hud-rate-color);
+  text-shadow: 0 0 3px var(--ui-stroke), 0 0 3px var(--ui-stroke);
+}
+
+/* Active co-op bonus badge (T074): "×N co-op" while a co-op segment covers
+ * the sim's "now" (effectiveMultiplier's covering-segment rule). The panel
+ * appends NO element at baseline (multiplier 1), so this never renders empty. */
+.hud-coop {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--hud-coop-color);
   text-shadow: 0 0 3px var(--ui-stroke), 0 0 3px var(--ui-stroke);
 }
 
