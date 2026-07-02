@@ -1,0 +1,20 @@
+frontend/src/ui/a11y.test.ts
+  s_9e3cb57f61b316::t_78822e5089f8d5 1-8,10-373
+  s_9e3cb57f61b316::t_425b23e6a129fa 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "60c22a5b949ff2d666482b603eea9344f5d689bb",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
