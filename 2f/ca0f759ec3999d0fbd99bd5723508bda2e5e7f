@@ -1,0 +1,21 @@
+frontend/src/ui/hudPanel.ts
+  s_9e3cb57f61b316::t_55fd4c662f4983 101-103
+frontend/src/ui/hudPanel.test.ts
+  s_9e3cb57f61b316::t_60f1a0b544c9b5 289-297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "2fca0f759ec3999d0fbd99bd5723508bda2e5e7f",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
