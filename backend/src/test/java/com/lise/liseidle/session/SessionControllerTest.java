@@ -1,5 +1,7 @@
 package com.lise.liseidle.session;
 
+import com.lise.liseidle.presence.PlayerPresenceEntity;
+import com.lise.liseidle.presence.PresenceRepository;
 import com.lise.liseidle.state.GameState;
 import com.lise.liseidle.state.PlayerSettings;
 import com.lise.liseidle.state.PlayerStateEntity;
@@ -21,24 +23,38 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItems;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * T028 — RED integration test for the REST session endpoints (TDD).
+ * Integration test for the REST session endpoints (TDD; T023 RED, T031
+ * extends with the principal-derived identity + identity-bound ownership
+ * rules).
  * <p>
  * Covers the contract surface in {@code contracts.md} §2 for
- * {@code POST /api/v1/session} and {@code PUT /api/v1/session/{playerId}/state}.
- * The {@code SessionController} does NOT exist yet (implemented in T023), so
- * these tests fail with {@code 404} (no handler) — the correct TDD RED state
- * per Constitution Principle III. Spring Boot 4.x removed
- * {@code @AutoConfigureMockMvc}, so MockMvc is built manually from the
- * {@link WebApplicationContext} (same pattern as {@code ContentControllerTest}).
+ * {@code POST /api/v1/session} and {@code PUT /api/v1/session/{playerId}/state}:
+ * the 001 load/merge/save round-trip, the {@code 409 schema_too_new} guard, the
+ * v1→v2 bootstrap null-leak leniency, and the (002 T031) identity rules —
+ * {@code 403 player_mismatch} for an authenticated request whose body/path
+ * {@code playerId} does not match the JWT {@code sub}, {@code 401
+ * not_authenticated} for a tokenless request to an identity-bound id (a
+ * {@code player_presence} row exists), and the open 001 anonymous path for
+ * never-claimed ids.
+ *
+ * <p>MockMvc is built with {@code .apply(springSecurity())} so the real Spring
+ * Security filter chain runs (the identity rules are enforced by
+ * {@code SessionController} reading the resolved {@link
+ * org.springframework.security.oauth2.jwt.Jwt} principal, which only the
+ * security configurer populates). The (002 T031) tests use spring-security-test
+ * MOCK JWTs ({@link jwt}) — no network to Keycloak.
  *
  * <p>Test isolation: each test uses a unique {@code playerId} (no
  * {@code @DirtiesContext}), matching the {@code PlayerStateRepositoryTest}
@@ -57,11 +73,19 @@ class SessionControllerTest {
     @Autowired
     private PlayerStateRepository playerStateRepository;
 
+    @Autowired
+    private PresenceRepository presenceRepository;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        this.mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+        // springSecurity() wires the real SecurityConfig filter chain so the
+        // (002 T031) identity rules see the resolved Jwt principal and the
+        // mock-JWT post-processor (jwt()) installs an authentication.
+        this.mockMvc = MockMvcBuilders.webAppContextSetup(context)
+                .apply(springSecurity())
+                .build();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -274,5 +298,107 @@ class SessionControllerTest {
         // The v1 scalar content survives untouched (leniency, not wipe).
         assertThat(returned.resources().loc()).isEqualTo("777");
         assertThat(returned.schemaVersion()).isEqualTo(1);
+    }
+
+    // ── (002 T031) Principal-derived identity + identity-bound ownership ─
+
+    /**
+     * 8. (002 T031) Authenticated {@code POST /api/v1/session} whose body
+     * {@code playerId} does NOT match the JWT {@code sub} → 403
+     * {@code player_mismatch}. Proves the controller derives the save identity
+     * from the bearer and rejects a cross-identity body (contracts §2).
+     */
+    @Test
+    void postSession_returns403PlayerMismatch_whenBodyPlayerIdDoesNotMatchSub() throws Exception {
+        mockMvc.perform(post("/api/v1/session")
+                .with(jwt().jwt(j -> j.subject("alice-uuid")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody("not-alice")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("player_mismatch"));
+    }
+
+    /**
+     * 9. (002 T031) Authenticated {@code PUT /api/v1/session/{id}/state} whose
+     * path {@code playerId} does NOT match the JWT {@code sub} → 403
+     * {@code player_mismatch}. Same rule as the POST, applied to the path
+     * variable (the identity the client MUST adopt after sign-in).
+     */
+    @Test
+    void putState_returns403PlayerMismatch_whenPathPlayerIdDoesNotMatchSub() throws Exception {
+        GameState state = stateWith("1", Set.of());
+        mockMvc.perform(put("/api/v1/session/not-alice/state")
+                .with(jwt().jwt(j -> j.subject("alice-uuid")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(putBody(state, "2026-06-30T12:00:00.000Z")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("player_mismatch"));
+    }
+
+    /**
+     * 10. (002 T031) Authenticated {@code POST /api/v1/session} whose body
+     * {@code playerId} EQUALS the JWT {@code sub} → the owner is allowed (here
+     * 404 no_save, since no server save exists). Proves the matching owner path
+     * proceeds even before a {@code player_presence} row exists (the row is
+     * created by {@code GET /api/v1/me} in T034, not by the session endpoint).
+     */
+    @Test
+    void postSession_allowsOwner_whenBodyPlayerIdEqualsSub() throws Exception {
+        mockMvc.perform(post("/api/v1/session")
+                .with(jwt().jwt(j -> j.subject("owner-uuid")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody("owner-uuid")))
+            .andExpect(status().isNotFound());
+    }
+
+    /**
+     * 11. (002 T031) Identity-bound ownership rule: a tokenless
+     * {@code POST /api/v1/session} for an id that HAS a {@code player_presence}
+     * row → 401 {@code not_authenticated}. The presence row simulates an id
+     * claimed by a signed-in identity; once claimed it requires a matching
+     * bearer (contracts §2 binding rule — protects a broadcast {@code sub} from
+     * anonymous reads/writes).
+     */
+    @Test
+    void postSession_returns401NotAuthenticated_forIdentityBoundIdWithoutToken() throws Exception {
+        presenceRepository.save(new PlayerPresenceEntity("bound-post-uuid"));
+        mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody("bound-post-uuid")))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("not_authenticated"));
+    }
+
+    /**
+     * 12. (002 T031) Same identity-bound rule on the PUT path: a tokenless
+     * {@code PUT /api/v1/session/{id}/state} for an identity-bound id → 401
+     * {@code not_authenticated}. Without this, a colleague could PUT an
+     * inflated state that the monotonic max-merge would fold into the victim's
+     * real save (FR-014).
+     */
+    @Test
+    void putState_returns401NotAuthenticated_forIdentityBoundIdWithoutToken() throws Exception {
+        presenceRepository.save(new PlayerPresenceEntity("bound-put-uuid"));
+        GameState state = stateWith("1", Set.of());
+        mockMvc.perform(put("/api/v1/session/bound-put-uuid/state")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(putBody(state, "2026-06-30T12:00:00.000Z")))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.error.code").value("not_authenticated"));
+    }
+
+    /**
+     * 13. (002 T031) Never-claimed anonymous UUID stays open (FR-002): a
+     * tokenless {@code POST /api/v1/session} for an id with NO
+     * {@code player_presence} row keeps the 001 anonymous path (here 404
+     * no_save, proving the request reached the handler, not a security 401/403).
+     */
+    @Test
+    void postSession_staysOpen_forNeverClaimedAnonymousUuidWithoutToken() throws Exception {
+        String anonId = "anon-never-claimed-" + UUID.randomUUID();
+        mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody(anonId)))
+            .andExpect(status().isNotFound());
     }
 }
