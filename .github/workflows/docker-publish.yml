@@ -51,8 +51,12 @@ jobs:
       # scopes default to `none`, so `actions: write` must be granted here.
       actions: write
     strategy:
-      # fail-fast defaults to true: if one component fails, the sibling is
-      # cancelled so we never advance only half of a matched image pair.
+      # fail-fast defaults to true: if one component fails, any still-running
+      # sibling is cancelled. This NARROWS (does not eliminate) the window in
+      # which only half of a matched image pair advances — a job that already
+      # pushed `:latest` cannot be un-pushed. Pair-matching is best-effort,
+      # not atomic; for a guaranteed-matched deploy pin both images by tag (sha)
+      # rather than the mutable `:latest`.
       matrix:
         include:
           - component: backend
