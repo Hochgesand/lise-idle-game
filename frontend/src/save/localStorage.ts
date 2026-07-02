@@ -16,7 +16,13 @@
 // understands throws `SaveVersionTooNewError` (refuse, do not corrupt). The
 // loader never silently discards a save.
 
-import type { GameState, PlayerSettings, CoopSegment, CommuteState } from '../sim/types';
+import type {
+  GameState,
+  PlayerSettings,
+  CoopSegment,
+  CommuteState,
+  ActiveTrainingState,
+} from '../sim/types';
 import { CURRENT_SCHEMA_VERSION, migrate } from './migrations';
 
 /** Fixed localStorage key for the v1 save. */
@@ -72,6 +78,10 @@ interface SerializedGameState {
   coopSegments: CoopSegment[];
   activeOffice: string;
   commute: CommuteState | null;
+  // (003) The in-progress Academy training — persisted so a v3 save written
+  // mid-training round-trips losslessly (FR-022; 003 data-model §8). Plain
+  // JSON data (string id + sim-timeline ms number), serializes as-is.
+  activeTraining: ActiveTrainingState | null;
 }
 
 /**
@@ -94,6 +104,8 @@ export function serializeState(state: GameState): string {
     coopSegments: state.coopSegments,
     activeOffice: state.activeOffice,
     commute: state.commute,
+    // (003) Persist the in-progress training verbatim (null when idle).
+    activeTraining: state.activeTraining,
   };
   return JSON.stringify(serialized);
 }
@@ -186,6 +198,11 @@ function toGameState(parsed: unknown): GameState {
   const activeOffice = toActiveOffice(parsed.activeOffice);
   const commute = toCommute(parsed.commute);
 
+  // (003) `activeTraining` — LENIENT like the (002) overlay fields: absent →
+  // `null` BEFORE the migration chain runs, so every v1/v2 save stays loadable
+  // (003 data-model §8); present-but-malformed is corruption (Constitution IV).
+  const activeTraining = toActiveTraining(parsed.activeTraining);
+
   return {
     resources: { loc, cash, aiTokens },
     ownedProducers,
@@ -201,6 +218,9 @@ function toGameState(parsed: unknown): GameState {
     coopSegments,
     activeOffice,
     commute,
+    // (003) `null` baseline = no training in progress; `migrate()` re-affirms
+    // it for v2 → v3.
+    activeTraining,
   };
 }
 
@@ -318,6 +338,25 @@ function toCommute(v: unknown): CommuteState | null {
   return { fromOffice: v.fromOffice, toOffice: v.toOffice, startedAt: v.startedAt };
 }
 
+// ── (003) Lenient activeTraining validator ───────────────────────────────
+
+/** `activeTraining`: absent/null → `null` (lenient default — v1/v2 save);
+ * present → validated ActiveTrainingState; malformed → `CorruptedSaveError`. */
+function toActiveTraining(v: unknown): ActiveTrainingState | null {
+  if (v === undefined || v === null) {
+    return null; // lenient default — v1/v2 save (003 data-model §8)
+  }
+  if (!isObject(v)) {
+    throw new CorruptedSaveError('`activeTraining` is neither null nor an object.');
+  }
+  if (typeof v.trainingId !== 'string' || typeof v.startedAt !== 'number') {
+    throw new CorruptedSaveError(
+      '`activeTraining` is missing `trainingId` (string) or `startedAt` (number).',
+    );
+  }
+  return { trainingId: v.trainingId, startedAt: v.startedAt };
+}
+
 // ── Fresh state factory ──────────────────────────────────────────────────
 
 /**
@@ -343,6 +382,8 @@ export function createInitialState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    // (003) No training in progress on a fresh save.
+    activeTraining: null,
   };
 }
 

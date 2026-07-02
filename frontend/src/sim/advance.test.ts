@@ -50,6 +50,7 @@ function makeFixtureState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 
@@ -729,6 +730,7 @@ describe('T051 — advance numeric integrity at extreme LOC values', () => {
       coopSegments: [],
       activeOffice: 'office_1',
       commute: null,
+      activeTraining: null,
     };
   }
 

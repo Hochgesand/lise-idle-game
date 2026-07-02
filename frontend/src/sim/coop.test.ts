@@ -54,6 +54,7 @@ function makeState(
     coopSegments: (overrides.coopSegments ?? []).map((s) => ({ ...s })),
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 

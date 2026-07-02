@@ -127,6 +127,8 @@ function fromWire(wire: WireGameState): GameState {
     coopSegments: wire.coopSegments ?? [],
     activeOffice: wire.activeOffice ?? 'office_1',
     commute: wire.commute ?? null,
+    // (003) baseline until T014 adds the wire passthrough for activeTraining.
+    activeTraining: null,
   };
 }
 

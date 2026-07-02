@@ -60,6 +60,7 @@ function makeState(activeBurner: GameState['activeBurner']): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 

@@ -52,6 +52,7 @@ function makeState(overrides: {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
   return s;
 }

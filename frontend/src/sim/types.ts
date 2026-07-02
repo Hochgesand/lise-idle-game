@@ -78,6 +78,23 @@ export interface CommuteState {
   startedAt: number; // sim-timeline ms, derived from lastAdvancedAt
 }
 
+// ── Living campus (003 — timed trainings) ─────────────────────────────────
+
+/**
+ * (003) The one in-progress Academy training, else the field is `null`
+ * (003 data-model §1). At most one exists at a time (FR-020's single Academy
+ * seat). `startedAt` is a **sim-timeline timestamp in milliseconds**, written
+ * by the `startTraining` mutator from `Date.parse(state.lastAdvancedAt)` —
+ * the same deterministic conversion `CommuteState.startedAt` uses, NEVER
+ * `Date.now()` — so `advance` resolves completion at
+ * `startedAt + Training.durationSeconds * 1000` purely from state + elapsed
+ * time (FR-017/018), including inside offline spans.
+ */
+export interface ActiveTrainingState {
+  trainingId: string; // references a Training content definition
+  startedAt: number; // sim-timeline ms, derived from lastAdvancedAt
+}
+
 /**
  * The complete saveable snapshot — the ONLY input/output of `advance`.
  * See data-model.md "GameState".
@@ -99,6 +116,7 @@ export interface GameState {
   coopSegments: CoopSegment[]; // (002) server-issued co-op lease segments; default []
   activeOffice: string; // (002) the dev's active office; default "office_1"
   commute: CommuteState | null; // (002) in-progress office switch; default null
+  activeTraining: ActiveTrainingState | null; // (003) in-progress training; default null
 }
 
 // ── Content entities (versioned JSON data, NOT in the save) ──────────────
@@ -166,6 +184,14 @@ export interface Training {
   cost: Cost;
   permanentMultiplier: number; // multiplies base production (persists)
   prerequisite: Requirement | null; // gating
+  /**
+   * (003) Optional run duration in seconds (003 data-model §2). Absent or 0 →
+   * Spec 001 instant purchase (FR-016 backward compatibility). Nonzero → timed
+   * job (US3): `startTraining` records an ActiveTrainingState and `advance`
+   * resolves it at `startedAt + durationSeconds * 1000`. Validation: finite
+   * number `>= 0`. Tuning band per spec: seconds-to-minutes (soft guidance).
+   */
+  durationSeconds?: number;
 }
 
 /** A long-term goal themed on lise GmbH credentials. */
@@ -200,6 +226,17 @@ export interface CoopConfig {
   lastSeenRetentionDays: number; // rendering/retention window for durable last-seen rows (> 0)
 }
 
+/**
+ * (003) World/presentation tuning (003 data-model §3). A single content object
+ * (`world.json`) — the additive seventh entry in the served envelope, exactly
+ * the `coop.json` pattern — mirrored into the bundled fallback. Consumed ONLY
+ * by the presentation layer (station-walk interpolation, US2); nothing in
+ * `advance` reads it (the sim/presentation boundary of research Decision 3).
+ */
+export interface WorldConfig {
+  walkSeconds: number; // station-walk duration in seconds (> 0, finite)
+}
+
 // ── Aggregates ───────────────────────────────────────────────────────────
 
 /** Validated, typed game content (the output of loadContent in content.ts). */
@@ -218,6 +255,13 @@ export interface ContentCatalog {
    * the co-op block stay valid without churn.
    */
   coop?: CoopConfig;
+  /**
+   * (003) World/presentation tuning. Always present on catalogs produced by
+   * `loadContent` and on `FALLBACK_CONTENT` (the loader validates + enforces
+   * it — the `coop` convention); typed optional only so partial test fixtures
+   * that do not exercise the world block stay valid without churn.
+   */
+  world?: WorldConfig;
 }
 
 /**
@@ -235,4 +279,6 @@ export interface ContentEnvelope {
   burners: unknown[];
   /** (002) raw coop block — validated/narrowed by loadContent into CoopConfig. */
   coop?: unknown;
+  /** (003) raw world block — validated/narrowed by loadContent into WorldConfig. */
+  world?: unknown;
 }

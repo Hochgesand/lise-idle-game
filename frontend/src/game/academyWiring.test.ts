@@ -59,6 +59,7 @@ function makeState(ownedTrainings: Set<string>): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 

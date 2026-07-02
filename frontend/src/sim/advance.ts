@@ -275,6 +275,8 @@ function cloneState(state: GameState): GameState {
     coopSegments: state.coopSegments.map((s) => ({ ...s })),
     activeOffice: state.activeOffice,
     commute: state.commute === null ? null : { ...state.commute },
+    // (003) in-progress training — deep-copied for the same purity guarantee.
+    activeTraining: state.activeTraining === null ? null : { ...state.activeTraining },
   };
 }
 

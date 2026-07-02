@@ -22,8 +22,12 @@ import type { GameState } from '../sim/types';
  * v2 (002-shared-office-coop): the GameState gained the additive co-op
  * overlay fields `coopSegments`, `activeOffice`, and `commute`
  * (data-model.md "Save migration"). See `migrations[1]` below.
+ *
+ * v3 (003-living-campus): the GameState gained the additive `activeTraining`
+ * field — the one in-progress Academy training, `null` when idle (003
+ * data-model §§1/8; FR-022). See `migrations[2]` below.
  */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /** A migration transforms a state AT a given source version into the next. */
 export type Migration = (state: GameState) => GameState;
@@ -49,6 +53,20 @@ const migrations: Record<number, Migration> = {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+  }),
+
+  // v2 → v3 (003-living-campus): introduce `activeTraining` at its baseline
+  // (`null` — no training in progress). The migration is ADDITIVE — it spreads
+  // every 001/002 field through untouched (including non-default coopSegments/
+  // activeOffice/commute values) and only adds the one new field + the version
+  // bump (003 data-model §8: "add activeTraining: null. Nothing else changes").
+  // `toGameState` (localStorage.ts) already applies this same lenient default
+  // before the chain runs; setting it here keeps `migrate()` total even when
+  // handed a raw v2 save shape that never carried the field.
+  2: (s): GameState => ({
+    ...s,
+    schemaVersion: 3,
+    activeTraining: null,
   }),
 };
 

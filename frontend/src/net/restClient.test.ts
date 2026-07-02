@@ -50,6 +50,7 @@ function makeState(loc = '100'): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 

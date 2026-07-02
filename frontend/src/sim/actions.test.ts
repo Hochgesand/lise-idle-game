@@ -59,6 +59,7 @@ function makeFixtureState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 
@@ -128,6 +129,7 @@ function makeEmptyState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 
@@ -339,6 +341,7 @@ function makeEconomyState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 
@@ -770,6 +773,7 @@ function makeAcademyState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 
@@ -1042,6 +1046,7 @@ function makeOfficeState(): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 

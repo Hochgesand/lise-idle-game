@@ -194,6 +194,7 @@ function liveState(lastAdvancedAt: string): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
   };
 }
 

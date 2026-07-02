@@ -31,6 +31,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     coopSegments: [],
     activeOffice: 'office_1',
     commute: null,
+    activeTraining: null,
     ...overrides,
   };
 }
