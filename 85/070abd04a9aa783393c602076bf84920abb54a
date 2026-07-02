@@ -1,0 +1,30 @@
+frontend/src/main.ts
+  s_9e3cb57f61b316::t_98718507c6ab4b 184-198
+  s_9e3cb57f61b316::t_875fd6ceae8de2 33
+frontend/src/net/stompClient.ts
+  s_9e3cb57f61b316::t_dfeccfd24c30e4 166
+  s_9e3cb57f61b316::t_58ffdbba42f6c1 232-235
+  s_9e3cb57f61b316::t_0931d760018909 85-107,305
+  s_9e3cb57f61b316::t_8b6026839e0d6b 16-20
+  s_9e3cb57f61b316::t_54673456d71ee6 306-341
+  s_9e3cb57f61b316::t_457e41241a79bc 368-369
+  s_9e3cb57f61b316::t_31685af215ad1a 49-56
+frontend/src/net/stompClient.test.ts
+  s_9e3cb57f61b316::t_8c1f1c5374b07a 506-513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "85070abd04a9aa783393c602076bf84920abb54a",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
