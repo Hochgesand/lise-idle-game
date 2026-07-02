@@ -324,17 +324,19 @@ async function boot(): Promise<void> {
   loop.load(state, now);
 
   // 3. Start Phaser immediately (renders the campus world + DOM overlay).
-  // T046: pixelArt: true keeps the Phase 3 16px campus tiles crisp at every
-  // zoom (nearest-neighbor filtering + roundPixels) instead of bilinear
-  // smoothing — the campus renders as intended from minZoom to maxZoom
-  // (research: Art direction; FR-024). ControllerScene (first in the array) is
-  // auto-started and launches CampusScene; the three retired in-canvas Phaser
-  // UI scenes are gone (T051) — the DOM overlay replaces them.
+  // campus-layout.md §2: the real campus is flat-design art (not pixel art),
+  // so bilinear smoothing renders it cleanly at every zoom — `pixelArt: false`
+  // with antialias ON and `roundPixels` off (supersedes the T046
+  // nearest-neighbor config that suited the placeholder 16px pixel tiles).
+  // ControllerScene (first in the array) is auto-started and launches
+  // CampusScene; the three retired in-canvas Phaser UI scenes are gone (T051)
+  // — the DOM overlay replaces them.
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     backgroundColor: '#0f172a',
-    pixelArt: true,
+    pixelArt: false,
+    antialias: true,
     scale: {
       mode: Phaser.Scale.RESIZE,
       width: '100%',

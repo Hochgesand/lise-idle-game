@@ -1,9 +1,10 @@
 // T046 — Phaser campus scene: tilemap + camera/seats/avatars wiring.
 //
 // Supersedes the retired 001 `OfficeScene.ts` (deleted in T051). Loads the
-// Phase 3 campus map (`frontend/public/assets/campus.json`, 50×40 tiles × 16
-// px → 800×640 px world) authored in T040, renders its tile layer(s), and wires
-// the THREE pure world modules from T042–T045 onto a real Phaser scene:
+// real campus map (`frontend/public/assets/campus.json`, 200×140 tiles × 16
+// px → 3200×2240 px world, campus-layout.md §2), renders ALL its tile layers
+// in array order (`Ground` → `Streets` → `Floors` → `Walls` → `Furniture` →
+// `Decor`), and wires the THREE pure world modules onto a real Phaser scene:
 //
 //   - camera.ts — boot fit/center on the ACTIVE office's `Rooms` bounds,
 //     pointer-drag pan, wheel + pinch zoom, resize recompute. Every value that
@@ -18,7 +19,7 @@
 //
 // ## Asset keys / tileset-name contract (mirrors retired OfficeScene by design)
 // `campus.json` embeds one tileset named `campus_tileset` (image
-// `campus_tileset.png`, 128×128, 64 tiles). `addTilesetImage` is called with
+// `campus_tileset.png`). `addTilesetImage` is called with
 // that exact name; a mismatch returns null and we THROW (research: World &
 // tilemap decision — "a create() that throws on tileset-name mismatch, as 001
 // did by design") so a map/asset desync fails loud at boot, not as a silent
@@ -153,9 +154,10 @@ export class CampusScene extends Phaser.Scene {
       );
     }
 
-    // Render EVERY tile layer in authoring order. (campus.json currently has a
-    // single `Ground` layer; looping `map.layers` is robust to later additions
-    // and skips object layers, which live in `map.objects`, not `map.layers`.)
+    // Render EVERY tile layer in authoring order (campus-layout.md §2:
+    // `Ground` → `Streets` → `Floors` → `Walls` → `Furniture` → `Decor`).
+    // Looping `map.layers` renders them all in array order and skips object
+    // layers, which live in `map.objects`, not `map.layers`.
     for (const layerData of this.map.layers) {
       this.map.createLayer(layerData.name, tileset, 0, 0);
     }
@@ -191,8 +193,9 @@ export class CampusScene extends Phaser.Scene {
       this.scale.off('resize', this.onResize, this);
     });
 
-    // Flat dark background behind the map edges (the 800×640 map may letterbox
-    // at some zoom/viewport combos). Matches the retired OfficeScene.
+    // Flat dark background behind the map edges (at the whole-campus-fit zoom
+    // the map letterboxes CENTERED on the non-binding axis — §7). Matches the
+    // retired OfficeScene.
     this.cameras.main.setBackgroundColor('#0f172a');
   }
 
@@ -248,7 +251,7 @@ export class CampusScene extends Phaser.Scene {
       width: this.scale.width,
       height: this.scale.height,
     };
-    this.cam = clampToMap(bootCamera(viewport, this.activeOfficeBounds()), this.mapBounds);
+    this.cam = clampToMap(bootCamera(viewport, this.activeOfficeBounds(), this.mapBounds), this.mapBounds);
     this.applyCamera();
   }
 
@@ -335,7 +338,7 @@ export class CampusScene extends Phaser.Scene {
   private onResize(gameSize: Phaser.Structs.Size): void {
     if (this.map === undefined) return; // guard before create() completes
     const viewport: Viewport = { width: gameSize.width, height: gameSize.height };
-    this.cam = clampToMap(recomputeOnResize(viewport, this.activeOfficeBounds()), this.mapBounds);
+    this.cam = clampToMap(recomputeOnResize(viewport, this.activeOfficeBounds(), this.mapBounds), this.mapBounds);
     this.applyCamera();
   }
 

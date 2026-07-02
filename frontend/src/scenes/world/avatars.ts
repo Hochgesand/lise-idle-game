@@ -52,8 +52,9 @@ export const LAST_SEEN_FRAME = 3;
 
 /**
  * Zoom at/above which avatar labels render persistently; below it labels are
- * on tap/hover only (FR-005 × FR-024). Tuned between `MIN_ZOOM` (1.5) and
- * `MAX_ZOOM` (4) from the camera module.
+ * on tap/hover only (FR-005 × FR-024). Sits below `MAX_ZOOM` (4) from the
+ * camera module; unchanged by the §7 zoom-out-to-fit lower clamp (at far-out
+ * zoom taps are for panning, interaction happens zoomed-in — same as CoC).
  */
 export const LABEL_ZOOM_THRESHOLD = 2.5;
 
