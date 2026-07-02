@@ -301,12 +301,16 @@ describe('campus.json — embedded tileset (§2/§8)', () => {
   it('references only gids the tileset actually contains', () => {
     const ts = campus.tilesets[0];
     const maxGid = ts.firstgid + (ts.tilecount ?? 0) - 1;
+    // One assertion over collected violations — a per-cell expect() across
+    // 6 × 28 000 cells blows the 5 s test timeout.
+    const violations: string[] = [];
     for (const layer of campus.layers.filter((l) => l.type === 'tilelayer')) {
-      for (const gid of layer.data ?? []) {
-        if (gid === 0) continue; // 0 = empty cell
-        expect(gid, `${layer.name} gid in range`).toBeLessThanOrEqual(maxGid);
-        expect(gid).toBeGreaterThanOrEqual(ts.firstgid);
-      }
+      (layer.data ?? []).forEach((gid, i) => {
+        if (gid !== 0 && !(Number.isInteger(gid) && gid >= ts.firstgid && gid <= maxGid)) {
+          violations.push(`${layer.name}[${i}] = ${JSON.stringify(gid)}`);
+        }
+      });
     }
+    expect(violations).toEqual([]);
   });
 });
