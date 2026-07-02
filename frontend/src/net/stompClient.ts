@@ -33,16 +33,42 @@
 
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import type { GameState, CoopSegment, CommuteState } from '../sim/types';
+import type { TokenSource } from './restClient';
 
-/** The single STOMP destination both message types arrive on. */
+/** The 001 state/content push destination (both message types arrive here, by `type`). */
 const SUBSCRIPTION_DESTINATION = '/user/queue/state';
 
-/** Handlers for the two push message types (either may be omitted). */
+/** (002 T061) The broadcast presence-delta destination (contracts §3). */
+const PRESENCE_SUBSCRIPTION = '/topic/presence';
+
+/** (002 T061) The client→server heartbeat destination. */
+const HEARTBEAT_DESTINATION = '/app/presence.heartbeat';
+
+/**
+ * (002 T061) The heartbeat body (contracts §3 `/app/presence.heartbeat`).
+ * `office` is null while commuting; `activity` is a client-derived display label;
+ * `commute` mirrors the save's commute state (no `startedAt` — the server stamps
+ * it). No client timestamps, no colleagueId (identity comes from the Principal).
+ */
+export interface HeartbeatPayload {
+  office: string | null;
+  activity: string;
+  commute: { fromOffice: string; toOffice: string } | null;
+}
+
+/** Handlers for the push message types (any may be omitted). */
 export interface StompHandlers {
   /** Called with the authoritative merged state + reason for a correction. */
   onStateCorrection?: (state: GameState, reason: string) => void;
   /** Called with the new content version string for a content update. */
   onContentUpdate?: (contentVersion: string) => void;
+  /**
+   * (002 T061) Called with a parsed `/topic/presence` delta
+   * (`presence.update` / `presence.remove`) — the caller routes it into the
+   * presence model. The body is parsed but otherwise unvalidated; the model
+   * defends against malformed payloads (presenceClient.ts, T056/T062).
+   */
+  onPresence?: (message: unknown) => void;
 }
 
 /**
@@ -100,9 +126,21 @@ function fromWire(wire: WireGameState): GameState {
 export class StompClient {
   private client: Client | null = null;
   private subscription: StompSubscription | null = null;
+  private presenceSubscription: StompSubscription | null = null;
   private handlers: StompHandlers = {};
+  private tokenSource: TokenSource | null;
 
-  constructor(private readonly brokerUrl: string) {}
+  constructor(
+    private readonly brokerUrl: string,
+    tokenSource: TokenSource | null = null,
+  ) {
+    this.tokenSource = tokenSource;
+  }
+
+  /** (002 T061) Late-bind the auth token source (once auth.ts has initialized). */
+  setTokenSource(tokenSource: TokenSource | null): void {
+    this.tokenSource = tokenSource;
+  }
 
   /** True once the underlying STOMP client reports a connection. */
   get isConnected(): boolean {
@@ -128,10 +166,31 @@ export class StompClient {
     const client = new Client({ brokerURL: this.brokerUrl });
     this.client = client;
 
+    // (002 T061) Fresh bearer per connection attempt (contracts §3
+    // token-freshness clause): access tokens live minutes while the socket
+    // lives hours, so beforeConnect re-reads the token source on EVERY attempt
+    // (incl. library-driven reconnects) and updates connectHeaders — static
+    // headers would replay a stale token and silently kill presence after the
+    // first expiry.
+    client.beforeConnect = () => {
+      const token = this.tokenSource?.getToken();
+      client.connectHeaders =
+        token !== null && token !== undefined
+          ? { Authorization: `Bearer ${token.token}` }
+          : {};
+    };
+
     client.onConnect = () => {
+      // Both subscriptions are created inside onConnect, which re-fires on every
+      // library-driven reconnect — subscriptions self-heal (contracts §3), and
+      // each reconnect carries a fresh access token (beforeConnect above).
       this.subscription = client.subscribe(
         SUBSCRIPTION_DESTINATION,
         (message) => this.handleMessage(message),
+      );
+      this.presenceSubscription = client.subscribe(
+        PRESENCE_SUBSCRIPTION,
+        (message) => this.handlePresenceMessage(message),
       );
     };
     client.onStompError = (frame) => {
@@ -186,6 +245,39 @@ export class StompClient {
   }
 
   /**
+   * (002 T061) Route one `/topic/presence` message to `onPresence` as a parsed
+   * object (the presence model defends against malformed payloads). Unparseable
+   * bodies are ignored silently — the channel is advisory and must never throw
+   * into the game loop.
+   */
+  private handlePresenceMessage(message: IMessage): void {
+    let body: unknown;
+    try {
+      body = JSON.parse(message.body);
+    } catch (err) {
+      console.warn('[stompClient] Ignoring unparseable presence message body.', err);
+      return;
+    }
+    this.handlers.onPresence?.(body);
+  }
+
+  /**
+   * (002 T061) Publish a heartbeat to `/app/presence.heartbeat` (contracts §3).
+   * Guarded by `isConnected` — the heartbeat is advisory; when not connected it
+   * is a no-op (the lease simply lapses). Identity comes from the STOMP
+   * Principal installed by the CONNECT bearer, so no per-frame auth header.
+   */
+  publishHeartbeat(payload: HeartbeatPayload): void {
+    if (!this.isConnected || this.client === null) {
+      return;
+    }
+    this.client.publish({
+      destination: HEARTBEAT_DESTINATION,
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /**
    * Unsubscribe and deactivate the underlying client. Safe to call when not
    * connected. After disconnect, a subsequent `connect()` creates a fresh
    * client.
@@ -193,6 +285,8 @@ export class StompClient {
   disconnect(): void {
     this.subscription?.unsubscribe();
     this.subscription = null;
+    this.presenceSubscription?.unsubscribe();
+    this.presenceSubscription = null;
     this.client?.deactivate();
     this.client = null;
   }
@@ -209,9 +303,12 @@ export const WS_BASE_URL: string =
   import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8080/ws';
 
 /** Factory: build a client for a custom broker URL (defaults to the configured one). */
-export function createStompClient(brokerUrl: string = WS_BASE_URL): StompClient {
-  return new StompClient(brokerUrl);
+export function createStompClient(
+  brokerUrl: string = WS_BASE_URL,
+  tokenSource: TokenSource | null = null,
+): StompClient {
+  return new StompClient(brokerUrl, tokenSource);
 }
 
 /** Default app-wide client, wired to the build-time `VITE_WS_BASE_URL`. */
-export const stompClient = new StompClient(WS_BASE_URL);
+export const stompClient = new StompClient(WS_BASE_URL, null);
