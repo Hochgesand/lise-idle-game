@@ -172,9 +172,14 @@ class DuplicateSessionIT {
         // ── (2) max-of-heartbeats: closing one session keeps alice live ──
         // Disconnect session A; session B keeps heartbeating, refreshing the
         // lease. A sweep must NOT expire alice (the surviving session keeps her
-        // live) — exactly one alice record, still live.
+        // live) — exactly one alice record, still live. B's heartbeat uses a
+        // fresh activity so it re-broadcasts; awaiting that broadcast
+        // synchronizes the registry upsert before the sweep/backdate below,
+        // closing the in-flight-heartbeat ordering window (mirrors
+        // TwoSessionPresenceIT awaiting its final heartbeat before backdating).
         disconnectTracked(aliceA);
-        sendHeartbeat(aliceB, "office_1", "coding"); // B refreshes the lease
+        sendHeartbeat(aliceB, "office_1", "pairing"); // material change → re-broadcast
+        awaitPresenceUpdate(bobView, ALICE_SUB, "live"); // confirms B's upsert is processed
         presenceService.sweepExpiredPresence();
 
         assertThat(snapshotColleagues(BOB_TOKEN).stream()
