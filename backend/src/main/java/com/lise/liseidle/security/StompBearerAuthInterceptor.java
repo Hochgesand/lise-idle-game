@@ -44,7 +44,7 @@ import java.security.Principal;
  * destinations deliver nothing to it (no {@link Principal} &rarr; no user
  * destination resolves) and its {@code /app/presence.heartbeat} frames carry
  * no identity (the presence heartbeat handler requires the Principal; T059).
- * Decode failures ({@link JwtException} for a malformed/expired/invalid token)
+ * Decode failures ({@link org.springframework.security.oauth2.jwt.JwtException} for a malformed/expired/invalid token)
  * and a missing/malformed {@code Authorization} header are all swallowed into
  * the anonymous case rather than surfaced as an ERROR frame, which would break
  * anonymous reconnect.
@@ -104,7 +104,7 @@ public class StompBearerAuthInterceptor implements ChannelInterceptor {
      * Decodes the bearer token (if the header is a well-formed bearer value)
      * into a {@link Principal} named by the {@code sub}. Returns {@code null}
      * for a missing or malformed header and for any decode failure
-     * ({@link JwtException} &mdash; invalid signature, wrong issuer, expired),
+     * ({@link org.springframework.security.oauth2.jwt.JwtException} &mdash; invalid signature, wrong issuer, expired),
      * so all of those map uniformly to the accepted anonymous case.
      *
      * @param authorization the raw {@code Authorization} STOMP header value, or {@code null}
