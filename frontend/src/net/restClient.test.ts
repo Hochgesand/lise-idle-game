@@ -601,3 +601,76 @@ describe('RestClient.adoptIdentity — identity adoption (T058, contracts §2)',
     expect(result.reason).toBe('schema_too_new');
   });
 });
+
+// ---------------------------------------------------------------------------
+// (002) T064 — PUT /api/v1/presence/settings: consent & visibility
+// ---------------------------------------------------------------------------
+//
+// The social panel's consent decision and hide/show toggle both land on
+// `PUT /api/v1/presence/settings` (contracts §2, FR-003). The endpoint is
+// authenticated (bearer attached when held); the server echoes the STORED
+// result. A `visible: true` request without stored-or-same-request consent
+// is a 409 `consent_required` — surfaced as a typed RestError, never thrown
+// into the game loop by the caller (main.ts degrades).
+
+describe('RestClient.putPresenceSettings (T064)', () => {
+  it('PUTs the settings body with the bearer and returns the stored result', async () => {
+    const client = new RestClient(BASE, tokenSource('tok-1'));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { consentGiven: true, visible: true }),
+    );
+
+    const result = await client.putPresenceSettings({ consentGiven: true, visible: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${BASE}/api/v1/presence/settings`);
+    expect(init?.method).toBe('PUT');
+    expect(sentHeaders(fetchMock.mock.calls[0]!)).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer tok-1',
+    });
+    expect(JSON.parse((init as { body: string }).body)).toEqual({
+      consentGiven: true,
+      visible: true,
+    });
+    expect(result).toEqual({ consentGiven: true, visible: true });
+  });
+
+  it('returns the STORED server result even when it differs from the request', async () => {
+    const client = new RestClient(BASE, tokenSource('tok-1'));
+    // Server may normalize (e.g. revoking consent also hides).
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { consentGiven: false, visible: false }),
+    );
+
+    const result = await client.putPresenceSettings({ consentGiven: false, visible: true });
+
+    expect(result).toEqual({ consentGiven: false, visible: false });
+  });
+
+  it('omits Authorization when signed out (server will 401; transport stays dumb)', async () => {
+    const client = new RestClient(BASE, tokenSource(null));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(401, { error: { code: 'not_authenticated', message: 'no token' } }),
+    );
+
+    await expect(
+      client.putPresenceSettings({ consentGiven: true, visible: true }),
+    ).rejects.toMatchObject({ name: 'RestError', status: 401, code: 'not_authenticated' });
+    expect(sentHeaders(fetchMock.mock.calls[0]!)).toEqual({
+      'Content-Type': 'application/json',
+    });
+  });
+
+  it('surfaces 409 consent_required as a typed RestError', async () => {
+    const client = new RestClient(BASE, tokenSource('tok-1'));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(409, { error: { code: 'consent_required', message: 'consent first' } }),
+    );
+
+    await expect(
+      client.putPresenceSettings({ consentGiven: false, visible: true }),
+    ).rejects.toMatchObject({ name: 'RestError', status: 409, code: 'consent_required' });
+  });
+});
