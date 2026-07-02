@@ -142,8 +142,14 @@ public class PresenceService {
     /**
      * Apply one authenticated heartbeat: upsert the sender's record, mark them
      * live, extend the lease, and broadcast a {@code presence.update} on a
-     * material change (only if viewable). Package-private so the lease/sweep
-     * tests can drive it directly without a STOMP frame.
+     * material change (only if viewable). The first heartbeat reporting a
+     * commute server-stamps {@code commute.startedAt} (via {@link #resolveCommute});
+     * while a commute is reported the record's {@code office} is forced to
+     * {@code null} (the &quot;office is null while commuting&quot; record invariant,
+     * data-model PresenceRecord) regardless of the client's {@code office} field,
+     * and no co-op segment is issued (the bonus is suspended in transit). Package-
+     * private so the lease/sweep/commute tests can drive it directly without a
+     * STOMP frame.
      *
      * @param colleagueId the sender (JWT {@code sub})
      * @param payload     the heartbeat body
@@ -156,11 +162,18 @@ public class PresenceService {
         boolean wasLive = (existing != null && existing.status() == PresenceRecord.Status.LIVE);
         PresenceRecord.Commute commute = resolveCommute(payload.commute(), existing, now);
 
+        // While a commute is reported, the colleague is present in NO office
+        // (data-model PresenceRecord: "office is null while commuting"). The
+        // server enforces this invariant regardless of the client's `office`
+        // field, so a buggy/tampered client cannot claim to be both commuting
+        // and seated (which would inflate a co-op bonus, contracts &sect;4).
+        String effectiveOffice = (payload.commute() != null) ? null : payload.office();
+
         PresenceRecord updated = new PresenceRecord(
                 colleagueId,
                 displayName(colleagueId, row),
                 avatar(colleagueId, row),
-                payload.office(),
+                effectiveOffice,
                 payload.activity(),
                 commute,
                 PresenceRecord.Status.LIVE,
@@ -173,8 +186,10 @@ public class PresenceService {
             pushService.broadcastPresenceUpdate(updated, now.toString());
         }
 
-        // Co-op lease segment + proactive recompute (T072; SC-006).
-        issueSenderSegmentAndRecompute(colleagueId, payload.office(), previousOffice, wasLive, now);
+        // Co-op lease segment + proactive recompute (T072; SC-006). Uses the
+        // commute-enforced effective office so the bonus stays suspended in
+        // transit even if the client misreported a non-null office.
+        issueSenderSegmentAndRecompute(colleagueId, effectiveOffice, previousOffice, wasLive, now);
     }
 
     /**
