@@ -1,0 +1,20 @@
+specs/003-living-campus/tasks.md
+  s_9e3cb57f61b316::t_495653f2122e3e 188
+  s_9e3cb57f61b316::t_4b30644011a165 1-187,189-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "3a3014a728c5a883776e57ba0c3cb762f083d09c",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
