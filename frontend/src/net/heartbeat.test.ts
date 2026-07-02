@@ -66,8 +66,8 @@ describe('deriveHeartbeat', () => {
   it('labels an active burner "burning tokens" (office unchanged)', () => {
     const state = makeState({
       activeBurner: {
-        burnerId: 'burner_1',
-        activatedAt: '2026-07-02T08:59:00.000Z',
+        definitionId: 'burner_1',
+        startedAt: '2026-07-02T08:59:00.000Z',
         fuelRemaining: '500',
       },
     });
@@ -96,8 +96,8 @@ describe('deriveHeartbeat', () => {
   it('commuting wins over an active burner (the dev is in transit, not producing labels)', () => {
     const state = makeState({
       activeBurner: {
-        burnerId: 'burner_1',
-        activatedAt: '2026-07-02T08:59:00.000Z',
+        definitionId: 'burner_1',
+        startedAt: '2026-07-02T08:59:00.000Z',
         fuelRemaining: '500',
       },
       commute: { fromOffice: 'office_2', toOffice: 'office_1', startedAt: 1_751_446_800_000 },

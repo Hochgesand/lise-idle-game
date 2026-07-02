@@ -37,6 +37,8 @@ import { FALLBACK_CONTENT } from './sim/fallbackContent';
 import { loadGame, saveGame, createInitialState } from './save/localStorage';
 import { restClient } from './net/restClient';
 import { stompClient } from './net/stompClient';
+import { initAuth, handleSigninCallback, restoreSession, isSignedIn, authTokenSource } from './net/auth';
+import { deriveHeartbeat, heartbeatIntervalMs } from './net/heartbeat';
 // T051: the retired in-canvas Phaser UI scenes (OfficeScene/HudScene/
 // EconomyScene/AcademyScene) are replaced by CampusScene (the world) + a DOM
 // overlay (the three UI panels). The world renders campus tiles + avatars; the
@@ -172,6 +174,81 @@ function connectStomp(): void {
   } catch (err) {
     console.warn('[main] STOMP connection failed — push channel disabled.', err);
   }
+}
+
+// ── Presence heartbeat (002 T063, best-effort) ─────────────────────────────
+//
+// While signed in AND presence consent is granted (contracts §2
+// `PUT /api/v1/presence/settings` — consent is app-side state, FR-003), main.ts
+// (the clock-owning module, matching the 30 s save / 60 s sync pattern below)
+// publishes a STOMP heartbeat every `content.coop.heartbeatSeconds` with
+// `{ office, activity, commute }` derived from the save state (net/heartbeat.ts
+// — pure; `activity` is a display label, never stored in the save).
+//
+// Gating: `syncHeartbeat()` starts/stops the interval from the current
+// auth + consent state — call it whenever either changes (boot does, via
+// `refreshPresenceConsent()`; the consent UI, T064, re-calls it after a
+// settings change). Belt-and-braces: each tick re-checks the gate, so a
+// mid-session token expiry stops publishing on the very next tick even with
+// no state-change notification; `publishHeartbeat` itself no-ops while the
+// socket is down (the lease simply lapses — advisory, FR-016).
+
+/** The live heartbeat interval handle, or null while gated off. */
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * The player's presence consent (`consentGiven` from `GET /api/v1/me` —
+ * app-side `player_presence` state). Defaults to false: no heartbeat is ever
+ * published before consent is positively confirmed (FR-003).
+ */
+let presenceConsentGiven = false;
+
+/** Start the heartbeat interval (idempotent; cadence from the content catalog). */
+function startHeartbeat(): void {
+  if (heartbeatTimer !== null) return;
+  heartbeatTimer = setInterval(() => {
+    // Re-check the gate every tick: a token expiry or consent withdrawal must
+    // silence the heartbeat immediately, not wait for a sync call.
+    if (!isSignedIn() || !presenceConsentGiven) return;
+    stompClient.publishHeartbeat(deriveHeartbeat(state));
+  }, heartbeatIntervalMs(content));
+}
+
+/** Stop the heartbeat interval (idempotent). */
+function stopHeartbeat(): void {
+  if (heartbeatTimer === null) return;
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
+/** Start/stop the heartbeat from the CURRENT auth + consent state. */
+function syncHeartbeat(): void {
+  if (isSignedIn() && presenceConsentGiven) {
+    startHeartbeat();
+  } else {
+    stopHeartbeat();
+  }
+}
+
+/**
+ * Refresh `presenceConsentGiven` from `GET /api/v1/me` (signed-in only) and
+ * re-sync the heartbeat gate. Best-effort: on any failure consent stays/false
+ * — unknown consent means NO heartbeat (FR-003), and the game plays on solo.
+ */
+async function refreshPresenceConsent(): Promise<void> {
+  if (!isSignedIn()) {
+    presenceConsentGiven = false;
+    syncHeartbeat();
+    return;
+  }
+  try {
+    const me = await restClient.getMe();
+    presenceConsentGiven = me.consentGiven;
+  } catch (err) {
+    presenceConsentGiven = false;
+    console.warn('[main] Consent lookup failed — presence heartbeat stays off.', err);
+  }
+  syncHeartbeat();
 }
 
 // ── Controller scene (drives the game-loop tick each frame) ────────────────
@@ -349,9 +426,27 @@ async function boot(): Promise<void> {
   //    persists — the game stays fully playable offline (Constitution IV).
   await fetchContent();
 
+  // 5. Auth (best-effort, never blocking — FR-001/002): initialize OIDC,
+  //    complete a sign-in redirect callback if present, else restore a stored
+  //    session. The token sources are bound BEFORE the STOMP connect so the
+  //    CONNECT frame carries the bearer (contracts §3 — the heartbeat's
+  //    identity comes from the STOMP Principal). Every failure inside auth.ts
+  //    degrades to signed-out solo play.
+  initAuth();
+  restClient.setTokenSource(authTokenSource);
+  stompClient.setTokenSource(authTokenSource);
+  if ((await handleSigninCallback()) === null) {
+    await restoreSession();
+  }
+
   // 6. Best-effort backend sync + STOMP (all non-fatal on failure).
   void loadFromBackend();
   connectStomp();
+
+  // 6b. Presence heartbeat gate (T063): look up consent (signed-in only) and
+  //     start the heartbeat interval when signed in AND consent is granted —
+  //     signed-out or no-consent players never publish presence (FR-003).
+  void refreshPresenceConsent();
 
   // 7. Periodic save + sync. Local save every 30s; backend sync every 60s.
   setInterval(() => {
