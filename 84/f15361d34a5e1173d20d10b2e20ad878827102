@@ -1,0 +1,23 @@
+specs/002-shared-office-coop/tasks.md
+  s_9e3cb57f61b316::t_a030ef6f16d80a 44
+  s_9e3cb57f61b316::t_c0343d9bbd2270 43
+  s_9e3cb57f61b316::t_5c7241dc7a4dde 45
+specs/002-shared-office-coop/campus-layout.md
+  s_9e3cb57f61b316::t_381732323863b8 1-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "84f15361d34a5e1173d20d10b2e20ad878827102",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
