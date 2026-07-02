@@ -1,0 +1,31 @@
+backend/src/test/java/com/lise/liseidle/content/ContentControllerTest.java
+  s_9e3cb57f61b316::t_60f40e7ed4b70e 64,160,170
+frontend/src/sim/fallbackContent.ts
+  s_9e3cb57f61b316::t_bf768ef0b5faa0 29,103-107
+  s_9e3cb57f61b316::t_819bb90feae26e 108
+backend/src/main/java/com/lise/liseidle/content/ContentLoader.java
+  s_9e3cb57f61b316::t_b282790d0a2370 41
+frontend/src/sim/fallbackContent.test.ts
+  s_9e3cb57f61b316::t_d86fa5b827042f 21
+frontend/src/sim/content.test.ts
+  s_9e3cb57f61b316::t_b633e29df24a83 36
+  s_9e3cb57f61b316::t_7643ad39f96e0e 388-407
+backend/src/main/resources/content/milestones.json
+  s_9e3cb57f61b316::t_b282790d0a2370 2-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "71ba2fa789270f6fbf0a84e46a5fb3125263dedc",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
