@@ -1,0 +1,23 @@
+frontend/src/scenes/world/avatars.ts
+  s_9e3cb57f61b316::t_63cc5824edf0f5 101-107
+frontend/src/scenes/world/commute.ts
+  s_9e3cb57f61b316::t_ef21b7ab272949 37-132
+frontend/src/scenes/world/presenceView.ts
+  s_9e3cb57f61b316::t_bfc93f50e759ed 1,9,16-17,19,23-30,37-38,42-50,54-59,87-172,175-179,181-183,187-191,193-196,201,203-204,208-210,212-235,239-241,252,255-272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "672e5cac4861cdaa8ff699efb24b79755b765b17",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
