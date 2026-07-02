@@ -1,0 +1,21 @@
+README.md
+  s_903253824dde63::t_a9c37ad8c61cee 196-208
+  s_903253824dde63::t_26691c0c0a2dca 193-195
+  s_903253824dde63::t_06547352093561 209-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "8b06323ee77b4d30c615a17ec015db433c591227",
+  "prompts": {},
+  "sessions": {
+    "s_903253824dde63": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "641845fb-5013-4824-8d84-b0fc7185d0e9",
+        "model": "unknown"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
