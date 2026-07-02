@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Optional;
+
 /**
  * {@code GET /api/v1/me} &mdash; the current identity (contracts &sect;2
  * "MeController / identity"). Echoes the JWT {@code sub} as
@@ -96,18 +98,21 @@ public class MeController {
         String colleagueId = jwt.getSubject();
         String claimedName = displayNameFromClaims(jwt);
 
-        // findById-orElse-create: the first authenticated request bootstraps
-        // the row (the resource server sees no sign-in event). The avatar is
+        // findById-or-create: the first authenticated request bootstraps the
+        // row (the resource server sees no sign-in event). The avatar is
         // assigned exactly once here and then persisted, so repeated calls are
         // stable; a fresh identity starts un-consented and hidden.
-        PlayerPresenceEntity row = presenceRepository.findById(colleagueId)
-                .orElseGet(() -> {
-                    PlayerPresenceEntity fresh = new PlayerPresenceEntity(colleagueId);
-                    fresh.setAvatar(stableAvatarId(colleagueId));
-                    fresh.setConsentGiven(false);
-                    fresh.setVisible(false);
-                    return fresh;
-                });
+        Optional<PlayerPresenceEntity> existing = presenceRepository.findById(colleagueId);
+        boolean isNewRow = existing.isEmpty();
+        PlayerPresenceEntity row;
+        if (isNewRow) {
+            row = new PlayerPresenceEntity(colleagueId);
+            row.setAvatar(stableAvatarId(colleagueId));
+            row.setConsentGiven(false);
+            row.setVisible(false);
+        } else {
+            row = existing.get();
+        }
 
         // Refresh the display name from the access-token claims on EVERY
         // authenticated request (a rename has no other propagation channel).
@@ -117,9 +122,19 @@ public class MeController {
         if (displayName == null) {
             displayName = colleagueId;
         }
+        boolean nameChanged = !displayName.equals(row.getDisplayName());
         row.setDisplayName(displayName);
 
-        presenceRepository.save(row);
+        // Write ONLY when something actually changed (new row, or a rename):
+        // a steady-state GET then issues no DB write (no write amplification if
+        // the SPA ever polls /me), and the read-modify-write window is limited
+        // to genuine renames rather than every request. Full row-level
+        // concurrency with the heartbeat path (a @Version lock or a targeted
+        // single-column UPDATE) is deferred to T059, which wires those
+        // concurrent office/activity/lastSeenAt writes onto this same row.
+        if (isNewRow || nameChanged) {
+            presenceRepository.save(row);
+        }
 
         return new MeResponse(
                 colleagueId,
