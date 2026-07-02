@@ -1,5 +1,20 @@
 # docker-compose.yml — Lise Dev Idle Game
 #
+# ── Image strategy ────────────────────────────────────────────────────────
+# Each service has BOTH an `image:` (GHCR, CI-built) and a `build:` block
+# (local build context). This means:
+#   docker compose pull   -> pulls the prebuilt CI image from GHCR (prod deploy)
+#   docker compose build  -> builds locally from source (dev / offline)
+# CI builds them in .github/workflows/docker-publish.yml and pushes to:
+#   ghcr.io/hochgesand/lise-game-backend:latest
+#   ghcr.io/hochgesand/lise-game-frontend:latest
+# The host therefore deploys via `docker compose pull && docker compose up -d`
+# (see .claude/skills/deploy-lise-game/SKILL.md); `docker compose build` is
+# the documented fallback when a pull fails (image not yet built / package
+# not public). For the host to pull without auth the GHCR packages must be
+# PUBLIC (or the host runs `docker login ghcr.io` once).
+# ─────────────────────────────────────────────────────────────────────────
+#
 # Two-service stack deployed on the Unraid host (root@schmitz.gg:2222,
 # appdata /mnt/user/appdata/lise-game). The host already runs
 # **Nginx Proxy Manager** (NPM, container `nginx_proxy_webui-app-1`,
@@ -32,7 +47,8 @@ services:
   backend:
     build:
       context: ./backend
-    image: lise-game-backend
+    # CI-built image (GHCR). `pull` fetches this; `build` uses ./backend.
+    image: ghcr.io/hochgesand/lise-game-backend:latest
     container_name: lise-game-backend
     restart: unless-stopped
     environment:
@@ -65,7 +81,8 @@ services:
         # Backend API + WebSocket live on the separate API host (NPM proxies it).
         - VITE_API_BASE_URL=https://lise-game-api.schmitz.gg
         - VITE_WS_BASE_URL=wss://lise-game-api.schmitz.gg/ws
-    image: lise-game-frontend
+    # CI-built image (GHCR). `pull` fetches this; `build` uses ./frontend.
+    image: ghcr.io/hochgesand/lise-game-frontend:latest
     container_name: lise-game-frontend
     restart: unless-stopped
     depends_on:

@@ -1,0 +1,101 @@
+# .github/workflows/docker-publish.yml
+#
+# Builds the backend (Spring Boot) and frontend (Vite) container images and
+# pushes them to the GitHub Container Registry (GHCR), so the Unraid host can
+# deploy with `docker compose pull && docker compose up -d` instead of building
+# locally.
+#
+# Triggers:
+#   - push to main          (builds + tags :latest + :sha-<short>)
+#   - version tag v*        (builds + tags <tag> + :sha-<short>)
+#   - workflow_dispatch     (manual run)
+#
+# Produced images (GHCR paths must be lowercase; `hochgesand` already is):
+#   ghcr.io/hochgesand/lise-game-backend:latest
+#   ghcr.io/hochgesand/lise-game-frontend:latest
+#
+# Platform is pinned to linux/amd64 — the Unraid host is x86_64.
+#
+# The FRONTEND build-args are baked into the Vite bundle at build time and MUST
+# match docker-compose.yml exactly (prod API + WS hosts).
+#
+# HOST PULL PREREQUISITE: for the host to pull these images without auth, both
+# packages must be set to PUBLIC in GitHub (Profile -> Packages ->
+# Settings -> "Change visibility"). Otherwise the host must run
+# `docker login ghcr.io -u Hochgesand -p <PAT>` once.
+
+name: Build and publish Docker images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Required so buildx can save the GitHub Actions build cache
+      # (cache-to: type=gha). With any explicit permissions block, unlisted
+      # scopes default to `none`, so `actions: write` must be granted here.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: backend
+            context: ./backend
+            image: ghcr.io/hochgesand/lise-game-backend
+            build-args: ""
+          # The frontend build-args are the prod API/WS hosts, baked into the
+          # Vite bundle. They mirror docker-compose.yml verbatim.
+          - component: frontend
+            context: ./frontend
+            image: ghcr.io/hochgesand/lise-game-frontend
+            build-args: |
+              VITE_API_BASE_URL=https://lise-game-api.schmitz.gg
+              VITE_WS_BASE_URL=wss://lise-game-api.schmitz.gg/ws
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          # tags produced:
+          #   latest      -> on the default branch (main)
+          #   sha-<short> -> every run
+          #   <git tag>   -> on v* tag pushes
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=tag
+
+      - name: Build and push ${{ matrix.component }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build-args }}
+          # Per-component cache scope so backend/frontend layers don't collide.
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          sbom: false
