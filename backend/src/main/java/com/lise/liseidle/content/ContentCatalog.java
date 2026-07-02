@@ -24,6 +24,7 @@ import java.util.List;
  * @param trainings      lise Academy permanent boosts
  * @param milestones     long-term credential goals + rewards
  * @param burners        AI-token accelerator definitions
+ * @param coop           (002) co-op bonus tuning block (data-model.md "CoopConfig"; FR-015)
  */
 public record ContentCatalog(
         int schemaVersion,
@@ -32,5 +33,6 @@ public record ContentCatalog(
         List<Upgrade> upgrades,
         List<Training> trainings,
         List<Milestone> milestones,
-        List<Burner> burners) {
+        List<Burner> burners,
+        CoopConfig coop) {
 }

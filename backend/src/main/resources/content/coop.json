@@ -1,0 +1,8 @@
+{
+  "perColleagueMultiplier": 0.10,
+  "maxMultiplier": 1.5,
+  "leaseSeconds": 60,
+  "heartbeatSeconds": 20,
+  "commuteSeconds": 30,
+  "lastSeenRetentionDays": 14
+}

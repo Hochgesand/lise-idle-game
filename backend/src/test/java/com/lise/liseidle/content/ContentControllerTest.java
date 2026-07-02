@@ -61,7 +61,7 @@ class ContentControllerTest {
         mockMvc.perform(get("/api/v1/content"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.schemaVersion").value(1))
-            .andExpect(jsonPath("$.contentVersion").value("1.2.0"))
+            .andExpect(jsonPath("$.contentVersion").value("1.3.0"))
             .andExpect(jsonPath("$.producers").isArray())
             .andExpect(jsonPath("$.upgrades").isArray())
             .andExpect(jsonPath("$.trainings").isArray())
