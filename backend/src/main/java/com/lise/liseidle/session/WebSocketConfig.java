@@ -1,7 +1,10 @@
 package com.lise.liseidle.session;
 
+import com.lise.liseidle.security.StompBearerAuthInterceptor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -52,6 +55,17 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    private final StompBearerAuthInterceptor stompBearerAuthInterceptor;
+
+    /**
+     * @param stompBearerAuthInterceptor the CONNECT-frame bearer authenticator
+     *        (T032); needs the resource-server {@link JwtDecoder} which Spring
+     *        injects into the interceptor's constructor
+     */
+    public WebSocketConfig(StompBearerAuthInterceptor stompBearerAuthInterceptor) {
+        this.stompBearerAuthInterceptor = stompBearerAuthInterceptor;
+    }
+
     /**
      * Register the STOMP handshake endpoint at {@code /ws}.
      *
@@ -68,17 +82,38 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     }
 
     /**
+     * Register the CONNECT-frame bearer authenticator on the client-inbound
+     * channel so the session {@code Principal} (named by the JWT {@code sub})
+     * is installed before any message is dispatched (T032; contracts &sect;3).
+     *
+     * @param registration the channel registration
+     */
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(stompBearerAuthInterceptor);
+    }
+
+    /**
      * Configure the in-memory message broker.
      *
-     * <p>Enables the {@code /user} prefix (user-specific destinations like
-     * {@code /user/queue/state}) and registers {@code /app} as the (unused by
-     * the push-only model) application destination prefix.
+     * <p>Enables the {@code /queue} and {@code /topic} simple-broker prefixes
+     * (corrected in T032 from the latent 001 value {@code "/user"}) and keeps
+     * {@code /user} as the <i>client-facing</i> user-destination prefix
+     * (contracts &sect;3 Broker). Spring rewrites a client subscription to
+     * {@code /user/queue/state} to {@code /queue/state-user{sessionId}} for the
+     * connected session; the simple broker only routes destinations matching
+     * its configured prefixes, so {@code /queue} is required for
+     * {@code convertAndSendToUser} pushes (incl. 001's
+     * {@code /user/queue/state} corrections) to be deliverable to an
+     * authenticated subscriber. {@code /topic} carries the broadcast presence
+     * deltas ({@code /topic/presence}, later phases). {@code /app} is the
+     * (presence-heartbeat) application destination prefix.
      *
      * @param registry the message-broker registry
      */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/user");
+        registry.enableSimpleBroker("/queue", "/topic");
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
     }
