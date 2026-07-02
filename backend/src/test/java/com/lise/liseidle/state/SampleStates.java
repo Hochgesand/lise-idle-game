@@ -1,5 +1,7 @@
 package com.lise.liseidle.state;
 
+import java.util.List;
+
 /**
  * Test fixture builder for {@link GameState} used by the Phase 2 round-trip
  * tests (T011). Lives in the test sources so it does not pollute production.
@@ -32,6 +34,22 @@ public final class SampleStates {
                 /* reducedMotion */ false,
                 /* muted         */ true);
 
+        // (002) co-op overlay — exercised with concrete values so the
+        // round-trip tests prove these fields persist/serialize losslessly
+        // (not merely the defaulted baseline). {@code from}/{@code until}/
+        // {@code startedAt} are sim-timeline ms (Date.parse of the ISO
+        // lastAdvancedAt above = 1782820800000); {@code until = from +
+        // 60_000} is one placeholder lease (coop.leaseSeconds = 60).
+        CoopSegment segment = new CoopSegment(
+                /* from       */ 1782820800000L,
+                /* until      */ 1782820860000L,
+                /* multiplier */ 1.2);
+
+        CommuteState commute = new CommuteState(
+                /* fromOffice */ "office_1",
+                /* toOffice   */ "office_2",
+                /* startedAt  */ 1782820770000L); // 30s before `from`
+
         return new GameState(
                 resources,
                 java.util.Set.of("manual_typing", "copilot"),
@@ -41,7 +59,10 @@ public final class SampleStates {
                 java.util.Set.of("m1"),
                 "2026-06-30T12:00:00.000Z",
                 1,
-                settings);
+                settings,
+                /* coopSegments */ List.of(segment),
+                /* activeOffice */ "office_2",
+                /* commute */ commute);
     }
 
     /**
@@ -63,7 +84,10 @@ public final class SampleStates {
                 java.util.Set.of(),
                 "2026-06-30T12:00:00.000Z",
                 1,
-                settings);
+                settings,
+                /* coopSegments */ List.of(),
+                /* activeOffice */ "office_1",
+                /* commute */ null);
     }
 
     /**
@@ -83,6 +107,9 @@ public final class SampleStates {
                 java.util.Set.of(),
                 "2026-06-30T12:00:00.000Z",
                 1,
-                settings);
+                settings,
+                /* coopSegments */ List.of(),
+                /* activeOffice */ "office_1",
+                /* commute */ null);
     }
 }

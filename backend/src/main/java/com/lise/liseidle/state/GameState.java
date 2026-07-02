@@ -1,5 +1,6 @@
 package com.lise.liseidle.state;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -15,6 +16,17 @@ import java.util.Set;
  * {@code lastAdvancedAt} is an ISO-8601 UTC timestamp (the clock anchor);
  * {@code schemaVersion} drives the save-migration chain.
  *
+ * <p><b>002 co-op overlay (additive):</b> {@code coopSegments} carries
+ * server-issued co-op lease segments, {@code activeOffice} the dev's active
+ * office, and {@code commute} an in-progress office switch. The three fields
+ * are appended after {@code settings} to preserve the 001 component order
+ * (so Jackson's JSON property order matches the frontend wire shape). Absent
+ * or {@code null} values are normalized to {@code []} / {@code "office_1"} /
+ * {@code null} on read by {@code PlayerStateService} so pre-existing v1 rows
+ * never NPE or leak {@code null} to a v2 client (data-model.md "Save
+ * migration"). An empty {@code coopSegments} + {@code "office_1"} + {@code null}
+ * commute is byte-identical to Spec 001 behavior.
+ *
  * <p>This is a Java record: immutable, with a canonical constructor matching
  * the {@code SampleStates} test fixture argument order, plus explicit
  * {@code getX()} accessors so the round-trip tests and serialization layer
@@ -29,7 +41,10 @@ public record GameState(
         Set<String> earnedMilestones,
         String lastAdvancedAt,
         int schemaVersion,
-        PlayerSettings settings) {
+        PlayerSettings settings,
+        List<CoopSegment> coopSegments,
+        String activeOffice,
+        CommuteState commute) {
 
     public ResourceSet getResources() {
         return resources;
@@ -65,5 +80,31 @@ public record GameState(
 
     public PlayerSettings getSettings() {
         return settings;
+    }
+
+    /**
+     * (002) Server-issued co-op lease segments; default {@code []}. May be
+     * {@code null} on a freshly deserialized v1 row until normalized by
+     * {@code PlayerStateService}.
+     */
+    public List<CoopSegment> getCoopSegments() {
+        return coopSegments;
+    }
+
+    /**
+     * (002) The dev's active office id; default {@code "office_1"}. May be
+     * {@code null} on a freshly deserialized v1 row until normalized by
+     * {@code PlayerStateService}.
+     */
+    public String getActiveOffice() {
+        return activeOffice;
+    }
+
+    /**
+     * (002) An in-progress office switch, or {@code null} when none is running
+     * (the baseline). {@code null} is itself the normalized default.
+     */
+    public CommuteState getCommute() {
+        return commute;
     }
 }

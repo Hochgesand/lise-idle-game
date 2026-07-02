@@ -7,6 +7,7 @@ import com.lise.liseidle.state.ResourceSet;
 import com.lise.liseidle.state.SampleStates;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,7 +43,10 @@ class StateMergerTest {
                 milestones,
                 lastAdvancedAt,
                 schemaVersion,
-                settings);
+                settings,
+                /* coopSegments */ List.of(),
+                /* activeOffice */ "office_1",
+                /* commute */ null);
     }
 
     private static GameState emptyState() {

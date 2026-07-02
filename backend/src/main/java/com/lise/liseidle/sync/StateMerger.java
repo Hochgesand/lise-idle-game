@@ -86,7 +86,17 @@ public class StateMerger {
                 mergedMilestones,
                 mergedLastAdvancedAt,
                 mergedSchemaVersion,
-                mergedSettings);
+                mergedSettings,
+                // (002) coopSegments / activeOffice / commute: the real merge
+                // rule (segment union keyed by `from` taking max until /
+                // max multiplier; office/commute merged as a pair from the
+                // state with the later lastAdvancedAt, client on tie) lands in
+                // T029. Until then these fields pass through from the client so
+                // the merge path does not drop them; the null-normalization on
+                // read (PlayerStateService) keeps any pre-existing v1 row safe.
+                client.getCoopSegments(),
+                client.getActiveOffice(),
+                client.getCommute());
     }
 
     /**

@@ -16,6 +16,7 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -67,7 +68,10 @@ class SessionControllerTest {
                 producers,
                 Set.of(), Set.of(), null, Set.of(),
                 "2026-06-30T12:00:00.000Z", 1,
-                new PlayerSettings(false, false));
+                new PlayerSettings(false, false),
+                /* coopSegments */ List.of(),
+                /* activeOffice */ "office_1",
+                /* commute */ null);
     }
 
     /** Serialize a POST /api/v1/session request body. */
@@ -134,7 +138,10 @@ class SessionControllerTest {
                 new ResourceSet("1", "0", "0"),
                 Set.of(), Set.of(), Set.of(), null, Set.of(),
                 "2026-06-30T12:00:00.000Z", 999,
-                new PlayerSettings(false, false));
+                new PlayerSettings(false, false),
+                /* coopSegments */ List.of(),
+                /* activeOffice */ "office_1",
+                /* commute */ null);
         mockMvc.perform(put("/api/v1/session/future-player/state")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(putBody(futureState, "2026-06-30T12:00:00.000Z")))
