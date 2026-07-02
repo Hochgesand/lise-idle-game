@@ -1,0 +1,21 @@
+frontend/src/main.ts
+  s_9e3cb57f61b316::t_2ae283bd9e61af 538-542
+frontend/src/scenes/world/CampusScene.ts
+  s_9e3cb57f61b316::t_33738c20f32507 245-248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "a9d5dd8f6c092624fe17d869bd7fa646651f26d9",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
