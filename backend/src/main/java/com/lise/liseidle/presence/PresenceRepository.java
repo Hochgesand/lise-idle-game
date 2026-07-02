@@ -18,14 +18,17 @@ public interface PresenceRepository extends JpaRepository<PlayerPresenceEntity, 
 
     /**
      * All durable rows whose {@code lastSeenAt} is older than {@code cutoff}
-     * (lexicographic ISO-8601 comparison = chronological). Used by the daily
-     * retention sweep (T085) to offboard colleagues who have aged out of the
-     * {@code lastSeenRetentionDays} window. Rows with a {@code null}
-     * {@code lastSeenAt} (never seen) are excluded by SQL NULL semantics &mdash;
-     * they have not aged out.
+     * (lexicographic ISO-8601 comparison, approximately chronological). Used by
+     * the daily retention sweep (T085) as a <b>coarse pre-filter</b> to offboard
+     * colleagues who have aged out of the {@code lastSeenRetentionDays} window;
+     * {@code PresenceService#sweepRetainedOut} re-checks each candidate by
+     * parsing the {@link Instant} precisely, because variable-width fractional
+     * seconds make the string comparison inexact at the sub-second boundary.
+     * Rows with a {@code null} {@code lastSeenAt} (never seen) are excluded by
+     * SQL NULL semantics &mdash; they have not aged out.
      *
      * @param cutoff the retention cutoff as an ISO-8601 instant string
-     * @return every row strictly older than the cutoff
+     * @return every row whose string {@code lastSeenAt} sorts before the cutoff
      */
     java.util.List<PlayerPresenceEntity> findByLastSeenAtLessThan(String cutoff);
 }

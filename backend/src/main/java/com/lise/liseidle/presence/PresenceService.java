@@ -312,6 +312,14 @@ public class PresenceService {
         }
         for (PlayerPresenceEntity row : agedOut) {
             try {
+                // The DB string comparison is only chronological to within a
+                // sub-second boundary (variable-width fractional seconds), so
+                // re-check precisely to avoid offboarding a row within ~1s of
+                // the cutoff (impossible to matter for a multi-day window, but
+                // exact — the query is a coarse pre-filter, this is the truth).
+                if (!isBefore(row.getLastSeenAt(), cutoff)) {
+                    continue;
+                }
                 String colleagueId = row.getColleagueId();
                 Optional<PresenceRecord> record = registry.get(colleagueId);
                 if (record.isPresent() && record.get().status() == PresenceRecord.Status.LIVE) {
@@ -495,12 +503,21 @@ public class PresenceService {
      * an active colleague.
      */
     private boolean isRetainedOut(String lastSeenAt) {
+        return isBefore(lastSeenAt, Instant.now().minus(Duration.ofDays(coop.lastSeenRetentionDays())));
+    }
+
+    /**
+     * True iff {@code lastSeenAt} parses to an {@link Instant} strictly before
+     * {@code cutoff}. A {@code null} or unparseable timestamp returns
+     * {@code false} (never offboard/filter on a bad stamp &mdash; advisory,
+     * contracts &sect;4).
+     */
+    private static boolean isBefore(String lastSeenAt, Instant cutoff) {
         if (lastSeenAt == null) {
             return false;
         }
         try {
-            return Instant.parse(lastSeenAt)
-                    .isBefore(Instant.now().minus(Duration.ofDays(coop.lastSeenRetentionDays())));
+            return Instant.parse(lastSeenAt).isBefore(cutoff);
         } catch (RuntimeException parseFailure) {
             return false;
         }
