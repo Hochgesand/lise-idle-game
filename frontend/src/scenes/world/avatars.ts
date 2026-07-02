@@ -234,8 +234,10 @@ export class AvatarLayer {
     sprite.setOrigin(0.5, 0.5);
     container.add(sprite);
 
-    // Name label (above the head). Stroke keeps it legible over any tile.
-    const nameText = this.scene.add.text(0, -AVATAR_FRAME_PX - 6, r.presence.displayName, {
+    // Name label (top of the stack, above the head). Stroke keeps it legible
+    // over any tile. All labels are bottom-anchored (origin y=1.0) so their `y`
+    // is the text baseline; they stack name → activity → head going downward.
+    const nameText = this.scene.add.text(0, -AVATAR_FRAME_PX / 2 - 14, r.presence.displayName, {
       fontFamily: 'monospace',
       fontSize: '9px',
       color: '#e2e8f0',
@@ -245,10 +247,10 @@ export class AvatarLayer {
     nameText.setOrigin(0.5, 1.0);
     container.add(nameText);
 
-    // Activity icon/label (below the name, above the head).
+    // Activity icon/label (below the name, just above the head).
     const activityText = this.scene.add.text(
       0,
-      -AVATAR_FRAME_PX - 16,
+      -AVATAR_FRAME_PX / 2 - 4,
       activityGlyph(r.presence.activity),
       {
         fontFamily: 'monospace',
@@ -261,12 +263,24 @@ export class AvatarLayer {
     activityText.setOrigin(0.5, 1.0);
     container.add(activityText);
 
-    // Padded hit-area: a 44×44 rect centered on the (smaller) sprite, so the
-    // effective touch target meets the FR-024 platform guideline without
-    // visually enlarging the avatar. The hit-area is in the SPRITE's local
-    // space (origin-centered), so center it on (0,0).
+    // Padded hit-area: a 44×44 rect centered on the sprite, so the effective
+    // touch target meets the FR-024 platform guideline without visually
+    // enlarging the avatar.
+    //
+    // Phaser hit-area coordinates are NOT origin-relative: `pointWithinHitArea`
+    // shifts the test point by `displayOriginX/Y` before invoking the callback,
+    // so the space has (0,0) at the frame's TOP-LEFT (not the origin point). A
+    // 16 px sprite at origin (0.5, 0.5) has its frame center at (8, 8) in this
+    // space — so to center the 44 px rect on the visual avatar we offset by
+    // half the frame size, not by zero.
     const half = this.hitTargetPx / 2;
-    const hitArea = new Phaser.Geom.Rectangle(-half, -half, this.hitTargetPx, this.hitTargetPx);
+    const frameHalf = AVATAR_FRAME_PX / 2;
+    const hitArea = new Phaser.Geom.Rectangle(
+      frameHalf - half,
+      frameHalf - half,
+      this.hitTargetPx,
+      this.hitTargetPx,
+    );
     sprite.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
 
     const entry: AvatarEntry = {
@@ -343,6 +357,6 @@ function activityGlyph(activity: string): string {
   const key = activity.toLowerCase();
   if (key.includes('commut')) return '»';
   if (key.includes('burn')) return '!';
-  if (key.includes('cod') || key.includes('idle')) return '·';
+  // Coding / idle and any unrecognized activity share the neutral dot.
   return '·';
 }
