@@ -47,7 +47,7 @@ import {
 } from './camera';
 import { extractSeatAnchors, readBuildingProperty, type RawSeatAnchor, type SeatAnchor } from './seats';
 import { extractCommutePath, type CommutePath, type RawCommutePathObject } from './commute';
-import { AvatarLayer, AVATAR_TEXTURE, type AvatarRender } from './avatars';
+import { AvatarLayer, AVATAR_TEXTURE, type AvatarRender, type AvatarUpdateOptions } from './avatars';
 
 // ── Asset keys (mirrored by the README + the campus.json embedded tileset) ──
 
@@ -226,10 +226,11 @@ export class CampusScene extends Phaser.Scene {
    * Reconcile the rendered avatars against `renders` (the loop builds these
    * from the presence model + seat/commute assignments in US1/T065 & US3/T080).
    * Adds containers for new colleagues, removes departed ones, updates the rest
-   * in place. Safe to call with `[]` (the no-presence Phase 3 default).
+   * in place — a live → lastSeen flip fades softly (T081; instant under
+   * `opts.reducedMotion`). Safe to call with `[]` (the no-presence default).
    */
-  updateAvatars(renders: ReadonlyArray<AvatarRender>): void {
-    this.avatarLayer.update(renders);
+  updateAvatars(renders: ReadonlyArray<AvatarRender>, opts?: AvatarUpdateOptions): void {
+    this.avatarLayer.update(renders, opts);
   }
 
   /**

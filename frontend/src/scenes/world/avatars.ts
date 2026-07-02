@@ -29,12 +29,18 @@ import Phaser from 'phaser';
 // camera module so the FR-024 zoom math and the avatar frame size stay in sync
 // from one source of truth).
 import { AVATAR_FRAME_PX } from './camera';
-// The pure label rule (FR-005 × FR-024 zoom persistence for seated avatars,
-// tap/hover-only while in transit — FR-022 decluttering). Lives in the
-// Phaser-free presenceView module so it stays unit-tested (T078); this layer
-// only APPLIES it. (No import cycle: presenceView imports from here
-// type-only, which is erased at runtime.)
-import { labelVisible } from './presenceView';
+// The pure US3 derivations: the label rule (FR-005 × FR-024 zoom persistence
+// for seated avatars, tap/hover-only while in transit — FR-022 decluttering)
+// and the liveness-tier transition decision + fade tuning (the T081 "no pop"
+// rule). They live in the Phaser-free presenceView module so they stay
+// unit-tested (T078); this layer only APPLIES them. (No import cycle:
+// presenceView imports from here type-only, which is erased at runtime.)
+import {
+  labelVisible,
+  statusTransition,
+  LAST_SEEN_ALPHA,
+  LAST_SEEN_FADE_MS,
+} from './presenceView';
 
 // ── Asset keys / frame layout ────────────────────────────────────────────
 //
@@ -113,6 +119,17 @@ export interface AvatarRender {
   inTransit?: boolean;
 }
 
+/**
+ * Per-update options for {@link AvatarLayer.update} (T081). `reducedMotion`
+ * mirrors `state.settings.reducedMotion`: when set, liveness-tier fades apply
+ * their end state instantly instead of animating (accessibility — the same
+ * rule as the HUD boost float). The loop passes the CURRENT setting on every
+ * push, so a mid-session toggle takes effect on the next transition.
+ */
+export interface AvatarUpdateOptions {
+  reducedMotion?: boolean;
+}
+
 /** {@link AvatarLayer} construction options. */
 export interface AvatarLayerOptions {
   /**
@@ -150,6 +167,12 @@ interface AvatarEntry {
    * become tap/hover-only regardless of zoom (FR-022 decluttering).
    */
   inTransit: boolean;
+  /**
+   * (T081) The liveness tier currently APPLIED to this entry — the `prev`
+   * input to the pure `statusTransition` on the next reconcile, so a
+   * live → lastSeen flip fades softly (no pop) exactly once.
+   */
+  status: AvatarPresence['status'];
 }
 
 // ── The layer ────────────────────────────────────────────────────────────
@@ -190,17 +213,20 @@ export class AvatarLayer {
   /**
    * Reconcile the rendered avatars against `renders`. Adds containers for new
    * colleagues, removes containers for departed ones, and updates position /
-   * frame / label text for the rest in place. Idempotent and order-independent
-   * (keyed by `colleagueId`).
+   * frame / label text for the rest in place. A live → lastSeen tier flip
+   * fades softly to the desaturated at-desk state (T081; instant under
+   * `opts.reducedMotion`). Idempotent and order-independent (keyed by
+   * `colleagueId`).
    */
-  update(renders: ReadonlyArray<AvatarRender>): void {
+  update(renders: ReadonlyArray<AvatarRender>, opts: AvatarUpdateOptions = {}): void {
     const seen = new Set<string>();
+    const reducedMotion = opts.reducedMotion ?? false;
 
     for (const r of renders) {
       seen.add(r.colleagueId);
       const existing = this.entries.get(r.colleagueId);
       if (existing !== undefined) {
-        this.applyPresence(existing, r);
+        this.applyPresence(existing, r, reducedMotion);
       } else {
         const entry = this.createEntry(r);
         this.entries.set(r.colleagueId, entry);
@@ -252,6 +278,11 @@ export class AvatarLayer {
     const sprite = this.scene.add.sprite(0, 0, AVATAR_TEXTURE, this.frameFor(r.presence.status));
     sprite.setOrigin(0.5, 0.5);
     container.add(sprite);
+
+    // (T081) 'appear': a first-seen colleague renders directly in the target
+    // state — a last-seen join settles at the desaturated resting alpha with
+    // no fade (statusTransition's 'appear' rule).
+    container.setAlpha(r.presence.status === 'lastSeen' ? LAST_SEEN_ALPHA : 1);
 
     // Name label (top of the stack, above the head). Stroke keeps it legible
     // over any tile. All labels are bottom-anchored (origin y=1.0) so their `y`
@@ -310,6 +341,7 @@ export class AvatarLayer {
       hovered: false,
       pinned: false,
       inTransit: r.inTransit ?? false,
+      status: r.presence.status,
     };
 
     // Tap/hover label rule (below the zoom threshold): hover shows the label
@@ -333,12 +365,41 @@ export class AvatarLayer {
     return entry;
   }
 
-  /** Update an existing entry's position / frame / label text in place. */
-  private applyPresence(entry: AvatarEntry, r: AvatarRender): void {
+  /**
+   * Update an existing entry's position / frame / label text in place, and
+   * apply the pure `statusTransition` decision for liveness-tier changes
+   * (T081): live → lastSeen fades the container to {@link LAST_SEEN_ALPHA}
+   * over {@link LAST_SEEN_FADE_MS} — the soft "no pop" expiry (US3 acceptance
+   * 3) — applied INSTANTLY under reducedMotion; lastSeen → live snaps back to
+   * full alpha (the colleague is back). The red/green frame swaps at
+   * transition start either way (`frameFor` below).
+   */
+  private applyPresence(entry: AvatarEntry, r: AvatarRender, reducedMotion: boolean): void {
     entry.container.setPosition(r.x, r.y);
     entry.sprite.setFrame(this.frameFor(r.presence.status));
     entry.nameText.setText(r.presence.displayName);
     entry.activityText.setText(activityGlyph(r.presence.activity));
+
+    const transition = statusTransition(entry.status, r.presence.status);
+    if (transition === 'fadeToLastSeen') {
+      // A superseded animation must never fight the new state.
+      this.scene.tweens.killTweensOf(entry.container);
+      if (reducedMotion) {
+        entry.container.setAlpha(LAST_SEEN_ALPHA);
+      } else {
+        this.scene.tweens.add({
+          targets: entry.container,
+          alpha: LAST_SEEN_ALPHA,
+          duration: LAST_SEEN_FADE_MS,
+          ease: 'Sine.easeOut',
+        });
+      }
+    } else if (transition === 'revive') {
+      this.scene.tweens.killTweensOf(entry.container);
+      entry.container.setAlpha(1);
+    }
+    entry.status = r.presence.status;
+
     // (T080) Transit changes flip the label rule (tap/hover-only on the
     // route); refresh only when it actually changed — this runs per frame
     // while commuters are on the route.
@@ -373,6 +434,8 @@ export class AvatarLayer {
 
   /** Destroy one entry's game objects and detach its input listeners. */
   private destroyEntry(entry: AvatarEntry): void {
+    // A fade in flight must not touch a destroyed container (T081).
+    this.scene.tweens.killTweensOf(entry.container);
     entry.sprite.removeInteractive();
     entry.sprite.removeAllListeners();
     entry.container.destroy();

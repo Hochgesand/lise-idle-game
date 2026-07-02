@@ -266,7 +266,9 @@ function pushPresenceToWorld(): void {
   // route (progress < 1). An arrived-but-not-yet-heartbeat-cleared commuter
   // is seated (inTransit false), so the per-frame loop stops at arrival.
   presenceHasCommuters = renders.some((r) => r.inTransit === true);
-  campusScene.updateAvatars(renders);
+  // (T081) The CURRENT reducedMotion setting rides along so a live→last-seen
+  // expiry fades softly — or applies instantly under reduced motion.
+  campusScene.updateAvatars(renders, { reducedMotion: state.settings.reducedMotion });
 }
 
 /**
