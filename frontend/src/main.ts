@@ -230,15 +230,39 @@ function connectStomp(): void {
 let campusScene: CampusScene | null = null;
 
 /**
+ * (T080) True while the presence model holds at least one commuter — the
+ * controller re-pushes the world each frame ONLY then (a commuter's route
+ * position is a function of the clock; seated worlds re-render on deltas
+ * alone). Updated by every `pushPresenceToWorld`.
+ */
+let presenceHasCommuters = false;
+
+/**
  * Project the current presence model into the world: seat every visible
- * colleague (presenceView.buildAvatarRenders) and hand the renders to
+ * colleague and place commuters on the campus route
+ * (presenceView.buildAvatarRenders), then hand the renders to
  * `CampusScene.updateAvatars`. Cheap and idempotent — called after the
- * snapshot fetch and on every presence delta. Skipped while the scene is not
- * up yet (its anchors are parsed in create()).
+ * snapshot fetch, on every presence delta, and per frame while commuters are
+ * in transit (their route progress derives from the server-stamped
+ * `startedAt` against `coop.commuteSeconds`, FR-022). Skipped while the scene
+ * is not up yet (its anchors/route are parsed in create()).
  */
 function pushPresenceToWorld(): void {
   if (campusScene === null) return;
-  const renders = buildAvatarRenders(campusScene.getSeatAnchors(), presenceClient.model.colleagues());
+  const records = presenceClient.model.colleagues();
+  presenceHasCommuters = records.some((r) => r.office === null && r.commute !== null);
+
+  // The commute context needs the parsed route AND the coop tuning; without
+  // either (a map missing its CommutePaths layer / a catalog without a coop
+  // block) commuters are simply skipped — presence is advisory (FR-016).
+  const path = campusScene.getCommutePath();
+  const commuteSeconds = content.coop?.commuteSeconds;
+  const commuteCtx =
+    path !== null && commuteSeconds !== undefined
+      ? { path, nowMs: Date.now(), commuteSeconds }
+      : undefined;
+
+  const renders = buildAvatarRenders(campusScene.getSeatAnchors(), records, commuteCtx);
   campusScene.updateAvatars(renders);
 }
 
@@ -492,6 +516,14 @@ class ControllerScene extends Phaser.Scene {
   update(time: number): void {
     loop.update(time);
     this.overlay?.refresh();
+    // (T080) While colleagues are commuting, their route position is a
+    // function of the clock — re-project presence each frame so observed
+    // commuters travel the street smoothly (never teleport, FR-022). With no
+    // commuters this is skipped entirely; seated worlds re-render on presence
+    // deltas alone.
+    if (presenceHasCommuters) {
+      pushPresenceToWorld();
+    }
   }
 }
 

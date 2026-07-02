@@ -46,6 +46,7 @@ import {
   type WorldBounds,
 } from './camera';
 import { extractSeatAnchors, readBuildingProperty, type RawSeatAnchor, type SeatAnchor } from './seats';
+import { extractCommutePath, type CommutePath, type RawCommutePathObject } from './commute';
 import { AvatarLayer, AVATAR_TEXTURE, type AvatarRender } from './avatars';
 
 // ── Asset keys (mirrored by the README + the campus.json embedded tileset) ──
@@ -100,6 +101,8 @@ export class CampusScene extends Phaser.Scene {
   private mapBounds!: WorldBounds;
   /** Parsed seat anchors from the `SeatAnchors` object layer (per-building). */
   private seatAnchors: SeatAnchor[] = [];
+  /** Parsed `CommutePaths` route (T080); null when the map carries none. */
+  private commutePath: CommutePath | null = null;
   /** The avatar layer; presence is pushed via {@link updateAvatars}. */
   private avatarLayer!: AvatarLayer;
 
@@ -176,6 +179,11 @@ export class CampusScene extends Phaser.Scene {
     // pure presenceView mapping (US1/T065) driven from main.ts.
     this.seatAnchors = this.parseSeatAnchors();
 
+    // ── Commute route: parse the CommutePaths polyline (T080) ─────────────
+    // The pure `extractCommutePath` is defensive (null on a missing/malformed
+    // layer — commuters are simply skipped; presence is advisory, FR-016).
+    this.commutePath = this.parseCommutePath();
+
     // ── Avatars: empty until main.ts pushes presence renders (US1/T065) ───
     this.avatarLayer = new AvatarLayer(this);
     this.avatarLayer.update([]);
@@ -239,6 +247,15 @@ export class CampusScene extends Phaser.Scene {
   /** Read-only access to the parsed seat anchors (used by US1/T065 wiring). */
   getSeatAnchors(): ReadonlyArray<SeatAnchor> {
     return this.seatAnchors;
+  }
+
+  /**
+   * The parsed `CommutePaths` route (T080), or null when the map carries no
+   * usable polyline. main.ts passes it into `buildAvatarRenders`'s commute
+   * context so observed commuters travel the street between the buildings.
+   */
+  getCommutePath(): CommutePath | null {
+    return this.commutePath;
   }
 
   // ── Camera internals ───────────────────────────────────────────────────
@@ -387,6 +404,20 @@ export class CampusScene extends Phaser.Scene {
       properties: o.properties,
     }));
     return extractSeatAnchors(raw);
+  }
+
+  /** Parse the `CommutePaths` object layer into a route via the pure module. */
+  private parseCommutePath(): CommutePath | null {
+    const layer = this.map.getObjectLayer('CommutePaths');
+    // Bridge the Phaser object shape into the pure module's raw shape (x/y
+    // are optional on Phaser's type; polyline vertices are origin-relative).
+    const raw: RawCommutePathObject[] = (layer?.objects ?? []).map((o) => ({
+      x: o.x ?? 0,
+      y: o.y ?? 0,
+      polyline: o.polyline as RawCommutePathObject['polyline'],
+      properties: o.properties,
+    }));
+    return extractCommutePath(raw);
   }
 }
 

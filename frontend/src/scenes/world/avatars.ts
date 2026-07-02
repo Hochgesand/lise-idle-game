@@ -29,6 +29,12 @@ import Phaser from 'phaser';
 // camera module so the FR-024 zoom math and the avatar frame size stay in sync
 // from one source of truth).
 import { AVATAR_FRAME_PX } from './camera';
+// The pure label rule (FR-005 × FR-024 zoom persistence for seated avatars,
+// tap/hover-only while in transit — FR-022 decluttering). Lives in the
+// Phaser-free presenceView module so it stays unit-tested (T078); this layer
+// only APPLIES it. (No import cycle: presenceView imports from here
+// type-only, which is erased at runtime.)
+import { labelVisible } from './presenceView';
 
 // ── Asset keys / frame layout ────────────────────────────────────────────
 //
@@ -139,6 +145,11 @@ interface AvatarEntry {
   hovered: boolean;
   /** True while the user has toggled the label on (tap below threshold). */
   pinned: boolean;
+  /**
+   * (T080) True while this avatar renders on the commute route — labels
+   * become tap/hover-only regardless of zoom (FR-022 decluttering).
+   */
+  inTransit: boolean;
 }
 
 // ── The layer ────────────────────────────────────────────────────────────
@@ -298,6 +309,7 @@ export class AvatarLayer {
       activityText,
       hovered: false,
       pinned: false,
+      inTransit: r.inTransit ?? false,
     };
 
     // Tap/hover label rule (below the zoom threshold): hover shows the label
@@ -327,6 +339,14 @@ export class AvatarLayer {
     entry.sprite.setFrame(this.frameFor(r.presence.status));
     entry.nameText.setText(r.presence.displayName);
     entry.activityText.setText(activityGlyph(r.presence.activity));
+    // (T080) Transit changes flip the label rule (tap/hover-only on the
+    // route); refresh only when it actually changed — this runs per frame
+    // while commuters are on the route.
+    const inTransit = r.inTransit ?? false;
+    if (entry.inTransit !== inTransit) {
+      entry.inTransit = inTransit;
+      this.refreshLabelVisibility(entry, this.currentZoom >= this.labelZoomThreshold);
+    }
   }
 
   /** Frame index for a liveness tier (green live / red last-seen). */
@@ -335,11 +355,18 @@ export class AvatarLayer {
   }
 
   /**
-   * Show/hide this avatar's label texts per the FR-005 × FR-024 rule:
-   * visible when persistent (zoom ≥ threshold) OR hovered OR pinned.
+   * Show/hide this avatar's label texts per the single pure rule
+   * (`labelVisible`, presenceView.ts): hover/pin always shows; the
+   * persistent-zoom rule (FR-005 × FR-024) applies to seated avatars only —
+   * in-transit labels are tap/hover-only (FR-022 decluttering).
    */
   private refreshLabelVisibility(entry: AvatarEntry, persistent: boolean): void {
-    const visible = persistent || entry.hovered || entry.pinned;
+    const visible = labelVisible({
+      persistent,
+      hovered: entry.hovered,
+      pinned: entry.pinned,
+      inTransit: entry.inTransit,
+    });
     entry.nameText.setVisible(visible);
     entry.activityText.setVisible(visible);
   }
