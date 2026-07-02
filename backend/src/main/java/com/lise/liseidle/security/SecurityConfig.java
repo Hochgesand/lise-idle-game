@@ -10,6 +10,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -104,12 +105,30 @@ public class SecurityConfig {
             throws Exception {
         boolean devProfileActive = env.matchesProfiles("dev");
 
+        // 401 entry point shared by BOTH failure paths so they return the
+        // contracts error envelope (not Spring's default bare 401):
+        //   (1) tokenless → ExceptionTranslationFilter (anonymous hit on an
+        //       authenticated() route) uses exceptionHandling().authenticationEntryPoint;
+        //   (2) invalid/expired bearer → the resource server's
+        //       BearerTokenAuthenticationFilter uses its own entry point, which
+        //       must be the SAME handler or token expiry (a routine client
+        //       event) yields a body the SPA cannot parse (contracts §2:
+        //       "missing, expired, or invalid" → not_authenticated).
+        AuthenticationEntryPoint jsonAuthenticationEntryPoint = (request, response, authException) -> {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setHeader("WWW-Authenticate", "Bearer");
+            response.getWriter().write(NOT_AUTHENTICATED_BODY);
+        };
+
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .cors(Customizer.withDefaults())
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .authenticationEntryPoint(jsonAuthenticationEntryPoint)
+                .jwt(Customizer.withDefaults()))
             .authorizeHttpRequests(auth -> {
                 // Anonymous 001 surface (FR-002) — ids never claimed by an
                 // identity; the identity-bound ownership rule is in SessionController.
@@ -127,14 +146,8 @@ public class SecurityConfig {
                 // Nothing becomes anonymously reachable by omission.
                 auth.anyRequest().authenticated();
             })
-            // 401 → contracts error envelope (not Spring's default HTML).
-            .exceptionHandling(eh -> eh.authenticationEntryPoint(
-                    (request, response, authException) -> {
-                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                        response.setHeader("WWW-Authenticate", "Bearer");
-                        response.getWriter().write(NOT_AUTHENTICATED_BODY);
-                    }));
+            // 401 (tokenless path) → contracts error envelope.
+            .exceptionHandling(eh -> eh.authenticationEntryPoint(jsonAuthenticationEntryPoint));
 
         return http.build();
     }

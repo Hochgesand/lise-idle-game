@@ -196,6 +196,24 @@ class SecurityConfigTest {
                 .andExpect(PERMITTED);
         }
 
+        /**
+         * An <b>invalid</b> bearer token yields 401 {@code not_authenticated}
+         * with the JSON envelope, not Spring's bare 401 (contracts &sect;2:
+         * "missing, expired, or invalid"). This exercises the resource
+         * server's own failure path: a structurally malformed token is
+         * rejected by the {@code JwtDecoder} at parse time (before any JWK-set
+         * lookup), so no network to Keycloak occurs. Token expiry is a routine
+         * client event, so this path MUST stay on the same envelope the SPA
+         * parses.
+         */
+        @Test
+        void getMe_returns401WithEnvelope_withInvalidBearerToken() throws Exception {
+            mockMvc.perform(get("/api/v1/me")
+                    .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("not_authenticated"));
+        }
+
         // ── (c) anyRequest().authenticated() default ──────────────────────
 
         /** An unlisted path defaults to authenticated() &rarr; 401 without a token. */
