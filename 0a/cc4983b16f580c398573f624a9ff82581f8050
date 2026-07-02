@@ -1,0 +1,19 @@
+README.md
+  s_903253824dde63::t_a9c37ad8c61cee 196-200,206,208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "0acc4983b16f580c398573f624a9ff82581f8050",
+  "prompts": {},
+  "sessions": {
+    "s_903253824dde63": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "641845fb-5013-4824-8d84-b0fc7185d0e9",
+        "model": "unknown"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
