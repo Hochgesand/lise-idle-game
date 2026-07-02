@@ -13,6 +13,11 @@
 //       -> onStateCorrection(state, reason)
 //     content.update  : { type, contentVersion }
 //       -> onContentUpdate(contentVersion)
+//   Subscribe: /topic/presence  (002: broadcast presence deltas)
+//       -> onPresence(parsedBody)
+//   Subscribe: /user/queue/coop (002 T073: per-player co-op lease segments)
+//     coop.segment    : { type, segment:{ from:ISO, until:ISO, multiplier } }
+//       -> onCoopSegment({ from:ms, until:ms, multiplier })  (ISO→ms here)
 //
 // The channel is ADVISORY only: the client's local localStorage save is the
 // authoritative source for play (Constitution IV — offline-capable core). A
@@ -40,6 +45,14 @@ const SUBSCRIPTION_DESTINATION = '/user/queue/state';
 
 /** (002 T061) The broadcast presence-delta destination (contracts §3). */
 const PRESENCE_SUBSCRIPTION = '/topic/presence';
+
+/**
+ * (002 T073) The per-player co-op lease destination (contracts §3): the server
+ * pushes `coop.segment` messages here for the receiving player only (never
+ * broadcast). Missed messages during a disconnect are NOT retroactively
+ * issued — uncovered spans integrate at baseline by design (FR-013).
+ */
+const COOP_SUBSCRIPTION = '/user/queue/coop';
 
 /** (002 T061) The client→server heartbeat destination. */
 const HEARTBEAT_DESTINATION = '/app/presence.heartbeat';
@@ -69,6 +82,29 @@ export interface StompHandlers {
    * defends against malformed payloads (presenceClient.ts, T056/T062).
    */
   onPresence?: (message: unknown) => void;
+  /**
+   * (002 T073) Called with the sim-shape `CoopSegment` of a `/user/queue/coop`
+   * `coop.segment` message. The wire carries ISO-8601 instants (contracts §3);
+   * this client converts them to the sim timeline (ms) at the transport
+   * boundary — mirroring the array→Set conversion — but does NOT validate
+   * further: `applyCoopPresence` (sim/coop.ts) is the defense layer, dropping
+   * NaN timestamps, inverted windows, and stale segments without throwing
+   * (FR-017/018). The caller merges + persists via the safe mutation template
+   * in main.ts.
+   */
+  onCoopSegment?: (segment: CoopSegment) => void;
+}
+
+/**
+ * (002 T073) The `coop.segment` wire shape on `/user/queue/coop` (contracts
+ * §3): server-authored ISO-8601 instants + a capped scalar multiplier. This is
+ * distinct from the persisted sim `CoopSegment` (sim-timeline ms) — the
+ * transport converts on receipt.
+ */
+interface WireCoopSegment {
+  from?: unknown;
+  until?: unknown;
+  multiplier?: unknown;
 }
 
 /**
@@ -127,6 +163,7 @@ export class StompClient {
   private client: Client | null = null;
   private subscription: StompSubscription | null = null;
   private presenceSubscription: StompSubscription | null = null;
+  private coopSubscription: StompSubscription | null = null;
   private handlers: StompHandlers = {};
   private tokenSource: TokenSource | null;
 
@@ -191,6 +228,10 @@ export class StompClient {
       this.presenceSubscription = client.subscribe(
         PRESENCE_SUBSCRIPTION,
         (message) => this.handlePresenceMessage(message),
+      );
+      this.coopSubscription = client.subscribe(
+        COOP_SUBSCRIPTION,
+        (message) => this.handleCoopMessage(message),
       );
     };
     client.onStompError = (frame) => {
@@ -262,6 +303,43 @@ export class StompClient {
   }
 
   /**
+   * (002 T073) Route one `/user/queue/coop` `coop.segment` message to
+   * `onCoopSegment`, converting the wire's ISO-8601 instants to sim-timeline
+   * ms (`Date.parse`) at the transport boundary. Beyond the type/shape gate
+   * the transport does not validate — a garbage timestamp passes through as
+   * NaN and `applyCoopPresence` drops it (FR-017/018). Unknown types and
+   * unparseable bodies are ignored silently — the channel is advisory and must
+   * never throw into the game loop.
+   */
+  private handleCoopMessage(message: IMessage): void {
+    let body: unknown;
+    try {
+      body = JSON.parse(message.body);
+    } catch (err) {
+      console.warn('[stompClient] Ignoring unparseable coop message body.', err);
+      return;
+    }
+    if (body === null || typeof body !== 'object') {
+      return;
+    }
+
+    const payload = body as { type?: unknown; segment?: unknown };
+    if (payload.type !== 'coop.segment') {
+      return;
+    }
+    if (payload.segment === null || typeof payload.segment !== 'object') {
+      return;
+    }
+
+    const wire = payload.segment as WireCoopSegment;
+    this.handlers.onCoopSegment?.({
+      from: Date.parse(String(wire.from)),
+      until: Date.parse(String(wire.until)),
+      multiplier: Number(wire.multiplier),
+    });
+  }
+
+  /**
    * (002 T061) Publish a heartbeat to `/app/presence.heartbeat` (contracts §3).
    * Guarded by `isConnected` — the heartbeat is advisory; when not connected it
    * is a no-op (the lease simply lapses). Identity comes from the STOMP
@@ -287,6 +365,8 @@ export class StompClient {
     this.subscription = null;
     this.presenceSubscription?.unsubscribe();
     this.presenceSubscription = null;
+    this.coopSubscription?.unsubscribe();
+    this.coopSubscription = null;
     this.client?.deactivate();
     this.client = null;
   }

@@ -30,6 +30,7 @@ import Phaser from 'phaser';
 import type { ContentCatalog, ContentEnvelope, GameState } from './sim/types';
 import { loadContent } from './sim/content';
 import { manualBoost, cashOut, purchaseUpgrade, activateBurner, purchaseTraining, InsufficientResourcesError } from './sim/actions';
+import { applyCoopPresence } from './sim/coop';
 import { bn, compare } from './sim/bigNumber';
 import { GameLoop } from './game/gameLoop';
 import { prepareInitialState } from './game/prepareState';
@@ -179,6 +180,21 @@ function connectStomp(): void {
       onPresence: (message) => {
         presenceClient.model.applyDelta(message);
         pushPresenceToWorld();
+      },
+      // (T073) Merge each server-issued co-op lease segment via the pure
+      // `applyCoopPresence` and persist at the established safe mutation
+      // point. The mutator returns the SAME reference when it drops the
+      // segment (malformed/stale/beyond-horizon — FR-017/018), in which case
+      // nothing changed and no re-anchor/save is needed. Missed segments
+      // during a disconnect are never retroactively issued (contracts §3) —
+      // uncovered spans simply integrate at baseline.
+      onCoopSegment: (segment) => {
+        const next = applyCoopPresence(state, segment, content);
+        if (next !== state) {
+          state = next;
+          loop.load(state, Date.now());
+          saveGame(state);
+        }
       },
     });
   } catch (err) {

@@ -503,6 +503,14 @@ describe('StompClient — /user/queue/coop subscription + onCoopSegment (T073)',
 
     const dests = instances[0]!.subscriptions.map((s) => s.destination);
     expect(dests).toContain('/user/queue/coop');
+
+    // Self-heal: the library re-fires onConnect on every reconnect; the coop
+    // subscription must be re-created (contracts §3 "Reconnect").
+    instances[0]!.onConnect?.({});
+    const coopSubs = instances[0]!.subscriptions.filter(
+      (s) => s.destination === '/user/queue/coop',
+    );
+    expect(coopSubs).toHaveLength(2);
   });
 
   it('routes a coop.segment to onCoopSegment with ISO instants converted to sim-timeline ms', () => {
