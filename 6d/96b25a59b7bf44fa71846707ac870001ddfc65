@@ -1,0 +1,25 @@
+frontend/src/scenes/world/presenceView.ts
+  s_9e3cb57f61b316::t_2d0b8fa7332f4c 193-197,207,242
+frontend/src/scenes/world/presenceView.test.ts
+  s_9e3cb57f61b316::t_f424a20e59b8b5 273-294
+frontend/src/scenes/world/seats.ts
+  s_9e3cb57f61b316::t_fc043ef0594342 167-189,202-205,208-218,222,228,234
+  s_9e3cb57f61b316::t_7f36b1b39f7705 270-279,281,284
+  s_9e3cb57f61b316::t_9d8157463da550 166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "6d96b25a59b7bf44fa71846707ac870001ddfc65",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
