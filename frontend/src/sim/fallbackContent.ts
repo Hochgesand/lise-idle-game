@@ -26,7 +26,7 @@ import type { ContentCatalog } from './types';
  */
 export const FALLBACK_CONTENT: ContentCatalog = {
   schemaVersion: 1,
-  contentVersion: '1.4.0',
+  contentVersion: '1.5.0',
   producers: [
     {
       id: 'manual_typing',

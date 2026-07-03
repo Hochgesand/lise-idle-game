@@ -18,7 +18,9 @@ describe('FALLBACK_CONTENT', () => {
 
   it('has a valid schemaVersion and contentVersion', () => {
     expect(FALLBACK_CONTENT.schemaVersion).toBe(1);
-    expect(FALLBACK_CONTENT.contentVersion).toBe('1.4.0');
+    // Pinned to the backend ContentLoader.CONTENT_VERSION (1.5.0 with the 003
+    // world block) so a stale fallback is caught here, not in the field.
+    expect(FALLBACK_CONTENT.contentVersion).toBe('1.5.0');
   });
 
   it('produces a non-zero rate for a fresh player with manual_typing granted', () => {
