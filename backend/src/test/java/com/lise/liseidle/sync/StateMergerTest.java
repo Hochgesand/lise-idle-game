@@ -1,5 +1,6 @@
 package com.lise.liseidle.sync;
 
+import com.lise.liseidle.state.ActiveTrainingState;
 import com.lise.liseidle.state.BurnerState;
 import com.lise.liseidle.state.CommuteState;
 import com.lise.liseidle.state.CoopSegment;
@@ -48,7 +49,8 @@ class StateMergerTest {
                 settings,
                 /* coopSegments */ List.of(),
                 /* activeOffice */ "office_1",
-                /* commute */ null);
+                /* commute */ null,
+                /* activeTraining */ null);
     }
 
     private static GameState emptyState() {
@@ -354,6 +356,105 @@ class StateMergerTest {
         assertThat(merged.getCommute()).isNull();
     }
 
+    // ── 11. (003) activeTraining: joins the later-lastAdvancedAt PAIR rule
+    //         with activeOffice/commute (client copy on a tie) — the training
+    //         is timeline state, so the newer timeline wins wholesale
+    //         (003 data-model §8; T006 RED until T012).
+
+    @Test
+    void activeTraining_takenFromClient_whenClientLater() {
+        ActiveTrainingState clientTraining = new ActiveTrainingState("agile_master", 1000L);
+        GameState client = stateWithTraining(clientTraining, "2026-07-01T09:00:00.000Z");
+        GameState server = stateWithTraining(null, "2026-06-30T12:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveTraining()).isEqualTo(clientTraining);
+    }
+
+    @Test
+    void activeTraining_takenFromServer_whenServerLater() {
+        // The server side carries the training and is newer — its snapshot wins
+        // wholesale, INCLUDING clearing semantics: a newer client without a
+        // training (already resolved by advance) must override an older
+        // server-side in-progress record and vice versa.
+        ActiveTrainingState serverTraining = new ActiveTrainingState("iso_9001_course", 2000L);
+        GameState client = stateWithTraining(null, "2026-06-30T12:00:00.000Z");
+        GameState server = stateWithTraining(serverTraining, "2026-07-01T09:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveTraining()).isEqualTo(serverTraining);
+    }
+
+    @Test
+    void activeTraining_clientWinsOnTie() {
+        // Identical lastAdvancedAt: the CLIENT's copy wins — the same tie-break
+        // as activeOffice/commute (the sim owns timeline state), opposite of
+        // `settings` (server on tie).
+        ActiveTrainingState clientTraining = new ActiveTrainingState("agile_master", 3000L);
+        GameState client = stateWithTraining(clientTraining, TIE_TIME);
+        GameState server = stateWithTraining(
+                new ActiveTrainingState("iso_9001_course", 4000L), TIE_TIME);
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveTraining()).isEqualTo(clientTraining);
+    }
+
+    @Test
+    void activeTraining_travelsWithTheOfficeCommutePair_notIndependently() {
+        // The three timeline fields (activeOffice, commute, activeTraining)
+        // must come from the SAME side — mixing sides could seat a dev in the
+        // new office while resurrecting a stale training from the other
+        // snapshot.
+        CommuteState clientCommute = new CommuteState("office_1", "office_2", 1000L);
+        GameState client = new GameState(
+                new ResourceSet("0", "0", "0"),
+                Set.of(), Set.of(), Set.of(), null, Set.of(),
+                "2026-07-01T09:00:00.000Z", 1, new PlayerSettings(false, false),
+                List.of(), "office_2", clientCommute,
+                new ActiveTrainingState("agile_master", 5000L));
+        GameState server = new GameState(
+                new ResourceSet("0", "0", "0"),
+                Set.of(), Set.of(), Set.of(), null, Set.of(),
+                "2026-06-30T12:00:00.000Z", 1, new PlayerSettings(false, false),
+                List.of(), "office_1", null,
+                new ActiveTrainingState("iso_9001_course", 1L));
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveOffice()).isEqualTo("office_2");
+        assertThat(merged.getCommute()).isEqualTo(clientCommute);
+        assertThat(merged.getActiveTraining())
+                .isEqualTo(new ActiveTrainingState("agile_master", 5000L));
+    }
+
+    // ── 12. (003) null-normalization: a v1/v2-shaped side (null activeTraining)
+    //         never NPEs and never leaks anything but the null baseline.
+
+    @Test
+    void nullActiveTraining_onEitherSide_normalizedBeforeMerge_neverNpe() {
+        // v1-shaped client (ALL overlay + 003 fields null) against a normal
+        // server: the merge must not NPE and must yield the null baseline.
+        GameState client = v1Shaped("2026-07-01T09:00:00.000Z");
+        GameState server = stateWithTraining(null, "2026-06-30T12:00:00.000Z");
+
+        GameState merged = merger.merge(client, server);
+
+        assertThat(merged.getActiveTraining()).isNull();
+
+        // v2-shaped SERVER (null activeTraining) against a client mid-training:
+        // the client is later, so its in-progress record survives the merge.
+        ActiveTrainingState training = new ActiveTrainingState("agile_master", 1000L);
+        GameState trainingClient = stateWithTraining(training, "2026-07-01T09:00:00.000Z");
+        GameState v2Server = v1Shaped("2026-06-30T12:00:00.000Z");
+
+        GameState merged2 = merger.merge(trainingClient, v2Server);
+
+        assertThat(merged2.getActiveTraining()).isEqualTo(training);
+    }
+
     // ── (002) controlled-state builders ─────────────────────────────────
 
     private static final String TIE_TIME = "2026-06-30T12:00:00.000Z";
@@ -366,7 +467,19 @@ class StateMergerTest {
                 new ResourceSet("0", "0", "0"),
                 Set.of(), Set.of(), Set.of(), null, Set.of(),
                 lastAdvancedAt, 1, new PlayerSettings(false, false),
-                coopSegments, activeOffice, commute);
+                coopSegments, activeOffice, commute,
+                /* activeTraining */ null);
+    }
+
+    /** (003) A GameState carrying an explicit activeTraining next to the overlay. */
+    private static GameState stateWithTraining(ActiveTrainingState activeTraining,
+                                               String lastAdvancedAt) {
+        return new GameState(
+                new ResourceSet("0", "0", "0"),
+                Set.of(), Set.of(), Set.of(), null, Set.of(),
+                lastAdvancedAt, 1, new PlayerSettings(false, false),
+                List.of(), "office_1", null,
+                activeTraining);
     }
 
     /**
@@ -381,6 +494,7 @@ class StateMergerTest {
                 lastAdvancedAt, 1, new PlayerSettings(false, false),
                 /* coopSegments */ null,
                 /* activeOffice */ null,
-                /* commute */ null);
+                /* commute */ null,
+                /* activeTraining */ null);
     }
 }

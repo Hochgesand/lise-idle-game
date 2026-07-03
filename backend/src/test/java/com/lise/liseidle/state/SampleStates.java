@@ -50,6 +50,14 @@ public final class SampleStates {
                 /* toOffice   */ "office_2",
                 /* startedAt  */ 1782820770000L); // 30s before `from`
 
+        // (003) an in-progress Academy training — exercised with a concrete
+        // value so the round-trip tests prove the v3 field persists/serializes
+        // losslessly (not merely the defaulted null baseline). `startedAt` is
+        // sim-timeline ms (Date.parse of the ISO lastAdvancedAt above).
+        ActiveTrainingState activeTraining = new ActiveTrainingState(
+                /* trainingId */ "agile_master",
+                /* startedAt  */ 1782820800000L);
+
         return new GameState(
                 resources,
                 java.util.Set.of("manual_typing", "copilot"),
@@ -62,7 +70,8 @@ public final class SampleStates {
                 settings,
                 /* coopSegments */ List.of(segment),
                 /* activeOffice */ "office_2",
-                /* commute */ commute);
+                /* commute */ commute,
+                /* activeTraining */ activeTraining);
     }
 
     /**
@@ -87,7 +96,8 @@ public final class SampleStates {
                 settings,
                 /* coopSegments */ List.of(),
                 /* activeOffice */ "office_1",
-                /* commute */ null);
+                /* commute */ null,
+                /* activeTraining */ null);
     }
 
     /**
@@ -110,6 +120,7 @@ public final class SampleStates {
                 settings,
                 /* coopSegments */ List.of(),
                 /* activeOffice */ "office_1",
-                /* commute */ null);
+                /* commute */ null,
+                /* activeTraining */ null);
     }
 }

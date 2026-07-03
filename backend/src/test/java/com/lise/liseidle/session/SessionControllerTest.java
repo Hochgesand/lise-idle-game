@@ -2,6 +2,7 @@ package com.lise.liseidle.session;
 
 import com.lise.liseidle.presence.PlayerPresenceEntity;
 import com.lise.liseidle.presence.PresenceRepository;
+import com.lise.liseidle.state.ActiveTrainingState;
 import com.lise.liseidle.state.GameState;
 import com.lise.liseidle.state.PlayerSettings;
 import com.lise.liseidle.state.PlayerStateEntity;
@@ -100,7 +101,8 @@ class SessionControllerTest {
                 new PlayerSettings(false, false),
                 /* coopSegments */ List.of(),
                 /* activeOffice */ "office_1",
-                /* commute */ null);
+                /* commute */ null,
+                /* activeTraining */ null);
     }
 
     /** Serialize a POST /api/v1/session request body. */
@@ -170,7 +172,8 @@ class SessionControllerTest {
                 new PlayerSettings(false, false),
                 /* coopSegments */ List.of(),
                 /* activeOffice */ "office_1",
-                /* commute */ null);
+                /* commute */ null,
+                /* activeTraining */ null);
         mockMvc.perform(put("/api/v1/session/future-player/state")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(putBody(futureState, "2026-06-30T12:00:00.000Z")))
@@ -298,6 +301,92 @@ class SessionControllerTest {
         // The v1 scalar content survives untouched (leniency, not wipe).
         assertThat(returned.resources().loc()).isEqualTo("777");
         assertThat(returned.schemaVersion()).isEqualTo(1);
+    }
+
+    /**
+     * (003) T006 — bootstrap null-leak for the v3 field (003 data-model §8):
+     * a stored v2-shaped {@code player_state} row — JSON WITH the (002) co-op
+     * overlay but WITHOUT {@code activeTraining}, exactly what a 002 build
+     * persisted — loaded via {@code POST /api/v1/session} must respond with an
+     * explicit {@code activeTraining: null}, never an absent field that a v3
+     * client would read as {@code undefined}. The v2 content survives
+     * untouched. RED until T011 adds the field + normalization.
+     */
+    @Test
+    void postSession_normalizesAbsentActiveTraining_forV2ShapedRow() throws Exception {
+        // A raw v2 JSON document — the (003) activeTraining field absent.
+        String v2Json = """
+                {
+                  "resources": {"loc": "888", "cash": "1", "aiTokens": "2"},
+                  "ownedProducers": ["manual_typing"],
+                  "ownedUpgrades": [],
+                  "ownedTrainings": ["t1"],
+                  "activeBurner": null,
+                  "earnedMilestones": [],
+                  "lastAdvancedAt": "2026-06-30T12:00:00.000Z",
+                  "schemaVersion": 2,
+                  "settings": {"reducedMotion": false, "muted": false},
+                  "coopSegments": [{"from": 1000, "until": 2000, "multiplier": 1.2}],
+                  "activeOffice": "office_2",
+                  "commute": null
+                }
+                """;
+        playerStateRepository.save(new PlayerStateEntity(
+                "v2-bootstrap-player", v2Json, "2026-06-30T12:00:00.000Z", 2));
+
+        MvcResult result = mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody("v2-bootstrap-player")))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        JsonNode stateNode = objectMapper.readTree(
+                result.getResponse().getContentAsString()).get("state");
+
+        // The (003) field is PRESENT and explicitly null — no null-leak, no
+        // absent-field hole (a v2 row bootstraps cleanly into a v3 client).
+        assertThat(stateNode.has("activeTraining")).isTrue();
+        assertThat(stateNode.get("activeTraining").isNull()).isTrue();
+        // The v2 content survives untouched (leniency, not wipe).
+        GameState returned = objectMapper.treeToValue(stateNode, GameState.class);
+        assertThat(returned.getActiveTraining()).isNull();
+        assertThat(returned.resources().loc()).isEqualTo("888");
+        assertThat(returned.getCoopSegments()).hasSize(1);
+        assertThat(returned.getActiveOffice()).isEqualTo("office_2");
+    }
+
+    /**
+     * (003) T006 — schema version 3 is accepted by the PUT path (the
+     * {@code CURRENT_SCHEMA_VERSION} bump, T013) while the 409
+     * {@code schema_too_new} semantics stay unchanged for genuinely newer
+     * saves (test 4 above). A v3 save carrying an in-progress training
+     * round-trips through PUT → POST losslessly.
+     */
+    @Test
+    void putState_acceptsSchemaVersion3_andRoundTripsActiveTraining() throws Exception {
+        GameState v3State = new GameState(
+                new ResourceSet("777", "0", "0"),
+                Set.of("manual_typing"), Set.of(), Set.of(), null, Set.of(),
+                "2026-06-30T12:00:00.000Z", 3,
+                new PlayerSettings(false, false),
+                /* coopSegments */ List.of(),
+                /* activeOffice */ "office_1",
+                /* commute */ null,
+                /* activeTraining */ new ActiveTrainingState("agile_master", 1782820800000L));
+
+        mockMvc.perform(put("/api/v1/session/v3-training-player/state")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(putBody(v3State, "2026-06-30T12:00:00.000Z")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.state.schemaVersion").value(3))
+            .andExpect(jsonPath("$.state.activeTraining.trainingId").value("agile_master"));
+
+        mockMvc.perform(post("/api/v1/session")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sessionBody("v3-training-player")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.state.activeTraining.trainingId").value("agile_master"))
+            .andExpect(jsonPath("$.state.activeTraining.startedAt").value(1782820800000L));
     }
 
     // ── (002 T031) Principal-derived identity + identity-bound ownership ─
