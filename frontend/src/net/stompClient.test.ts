@@ -246,7 +246,13 @@ describe('StompClient', () => {
     const stomp = new StompClient(BROKER);
     stomp.connect({ onStateCorrection, onContentUpdate });
 
-    deliver(JSON.stringify({ type: 'state.correction', state: wireState('123'), reason: 'multi_device_sync' }));
+    deliver(
+      JSON.stringify({
+        type: 'state.correction',
+        state: wireState('123'),
+        reason: 'multi_device_sync',
+      }),
+    );
 
     expect(onStateCorrection).toHaveBeenCalledOnce();
     expect(onContentUpdate).not.toHaveBeenCalled();
@@ -269,7 +275,9 @@ describe('StompClient', () => {
       schemaVersion: 3,
       activeTraining: { trainingId: 'agile_master', startedAt: 1782820800000 },
     };
-    deliver(JSON.stringify({ type: 'state.correction', state: v3Wire, reason: 'multi_device_sync' }));
+    deliver(
+      JSON.stringify({ type: 'state.correction', state: v3Wire, reason: 'multi_device_sync' }),
+    );
 
     expect(onStateCorrection).toHaveBeenCalledOnce();
     const [v3State] = onStateCorrection.mock.calls[0]!;
@@ -280,7 +288,13 @@ describe('StompClient', () => {
 
     // A v1/v2 correction (field absent) normalizes to the null baseline —
     // never undefined into the sim (mirrors the 002 overlay leniency rule).
-    deliver(JSON.stringify({ type: 'state.correction', state: wireState('43'), reason: 'multi_device_sync' }));
+    deliver(
+      JSON.stringify({
+        type: 'state.correction',
+        state: wireState('43'),
+        reason: 'multi_device_sync',
+      }),
+    );
     const [v2State] = onStateCorrection.mock.calls[1]!;
     expect((v2State as GameState).activeTraining).toBeNull();
   });
@@ -304,9 +318,7 @@ describe('StompClient', () => {
     const stomp = new StompClient(BROKER);
     stomp.connect({ onStateCorrection, onContentUpdate });
 
-    expect(() =>
-      deliver(JSON.stringify({ type: 'something.unknown', foo: 'bar' })),
-    ).not.toThrow();
+    expect(() => deliver(JSON.stringify({ type: 'something.unknown', foo: 'bar' }))).not.toThrow();
 
     expect(onStateCorrection).not.toHaveBeenCalled();
     expect(onContentUpdate).not.toHaveBeenCalled();
@@ -415,7 +427,11 @@ describe('StompClient — /topic/presence subscription + onPresence', () => {
     const stomp = new StompClient(BROKER);
     stomp.connect({ onPresence });
 
-    const delta = { type: 'presence.update', serverTime: '2026-07-01T09:00:30Z', record: { colleagueId: 'a' } };
+    const delta = {
+      type: 'presence.update',
+      serverTime: '2026-07-01T09:00:30Z',
+      record: { colleagueId: 'a' },
+    };
     deliverPresence(JSON.stringify(delta));
 
     expect(onPresence).toHaveBeenCalledOnce();

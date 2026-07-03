@@ -26,7 +26,13 @@
 // `vite/client` (its ImportMetaEnv carries an index signature, so custom
 // `VITE_*` keys need no extra declaration).
 
-import type { ContentEnvelope, GameState, CoopSegment, CommuteState } from '../sim/types';
+import type {
+  ContentEnvelope,
+  GameState,
+  CoopSegment,
+  CommuteState,
+  ActiveTrainingState,
+} from '../sim/types';
 
 // ── Errors ───────────────────────────────────────────────────────────────
 
@@ -86,6 +92,8 @@ interface WireGameState {
   coopSegments?: CoopSegment[] | null;
   activeOffice?: string | null;
   commute?: CommuteState | null;
+  /** (003) in-progress training — optional on the wire (v1/v2 responses omit it). */
+  activeTraining?: ActiveTrainingState | null;
 }
 
 /** Live GameState -> wire object (Sets become arrays). Pure. */
@@ -105,6 +113,9 @@ function toWire(state: GameState): WireGameState {
     coopSegments: state.coopSegments,
     activeOffice: state.activeOffice,
     commute: state.commute,
+    // (003) T014: the in-progress training rides the wire verbatim (explicit
+    // null at the baseline so the server merge rule always sees the field).
+    activeTraining: state.activeTraining,
   };
 }
 
@@ -127,8 +138,9 @@ function fromWire(wire: WireGameState): GameState {
     coopSegments: wire.coopSegments ?? [],
     activeOffice: wire.activeOffice ?? 'office_1',
     commute: wire.commute ?? null,
-    // (003) baseline until T014 adds the wire passthrough for activeTraining.
-    activeTraining: null,
+    // (003) T014: present values pass through unchanged; absent/null (a v1/v2
+    // response) normalizes to the null baseline — same leniency rule as above.
+    activeTraining: wire.activeTraining ?? null,
   };
 }
 
@@ -217,9 +229,7 @@ export class RestClient {
   /** `Authorization: Bearer ...` when a token is held, else empty (signed out). */
   private authHeaders(): Record<string, string> {
     const token = this.tokenSource?.getToken();
-    return token !== null && token !== undefined
-      ? { Authorization: `Bearer ${token.token}` }
-      : {};
+    return token !== null && token !== undefined ? { Authorization: `Bearer ${token.token}` } : {};
   }
 
   /** GET /api/v1/content — returns the raw envelope (caller runs `loadContent`). */
@@ -262,11 +272,7 @@ export class RestClient {
    * Returns the authoritative merged state. Throws `SchemaTooNewError` on 409
    * (client must update); throws `RestError` on any other non-2xx status.
    */
-  async saveState(
-    playerId: string,
-    state: GameState,
-    clientTime: string,
-  ): Promise<GameState> {
+  async saveState(playerId: string, state: GameState, clientTime: string): Promise<GameState> {
     const res = await fetch(
       `${this.baseUrl}/api/v1/session/${encodeURIComponent(playerId)}/state`,
       {
@@ -388,8 +394,7 @@ export class RestClient {
  * (set in the Docker build / `frontend/.env.production` to e.g.
  * `https://lise-game-api.schmitz.gg`). Defaults to the local dev backend.
  */
-export const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
 /** Factory: build a client for a custom base URL (defaults to the configured one). */
 export function createRestClient(

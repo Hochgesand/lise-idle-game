@@ -15,19 +15,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RestClient, RestError, SchemaTooNewError } from './restClient';
-import type {
-  GameState,
-  ContentEnvelope,
-} from '../sim/types';
+import type { GameState, ContentEnvelope } from '../sim/types';
 // (002) T056a — auth + identity-adoption client tests (contracts §2).
 // These types do not exist on the RestClient yet (RED); the GREEN impl in
 // T058 adds them.
-import type {
-  AccessToken,
-  TokenSource,
-  MeResponse,
-  IdentityAdoption,
-} from './restClient';
+import type { AccessToken, TokenSource, MeResponse, IdentityAdoption } from './restClient';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -136,9 +128,7 @@ describe('RestClient.loadSession', () => {
       schemaVersion: 1,
       settings: { reducedMotion: false, muted: false },
     };
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { playerId: 'p1', state: wireState }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState }));
 
     const client = new RestClient(BASE);
     const state = await client.loadSession('p1');
@@ -178,9 +168,7 @@ describe('RestClient.loadSession', () => {
       activeOffice: null,
       commute: null,
     };
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { playerId: 'p1', state: wireState }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState }));
 
     const client = new RestClient(BASE);
     const state = await client.loadSession('p1');
@@ -205,17 +193,13 @@ describe('RestClient.loadSession', () => {
       activeOffice: 'office_2',
       commute: { fromOffice: 'office_2', toOffice: 'office_3', startedAt: 1500 },
     };
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { playerId: 'p1', state: wireState }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState }));
 
     const client = new RestClient(BASE);
     const state = await client.loadSession('p1');
 
     // Present values pass through unchanged (sim keeps ms numbers; no conversion).
-    expect(state!.coopSegments).toEqual([
-      { from: 1000, until: 2000, multiplier: 1.2 },
-    ]);
+    expect(state!.coopSegments).toEqual([{ from: 1000, until: 2000, multiplier: 1.2 }]);
     expect(state!.activeOffice).toBe('office_2');
     expect(state!.commute).toEqual({
       fromOffice: 'office_2',
@@ -404,7 +388,9 @@ describe('RestClient — generic error envelope', () => {
     );
 
     const client = new RestClient(BASE);
-    await expect(client.saveState('p1', makeState(), '2026-06-30T12:00:00.000Z')).rejects.toMatchObject({
+    await expect(
+      client.saveState('p1', makeState(), '2026-06-30T12:00:00.000Z'),
+    ).rejects.toMatchObject({
       name: 'RestError',
       status: 502,
       code: 'bad_gateway',
@@ -483,9 +469,7 @@ function meBody(overrides: Partial<MeResponse> = {}): MeResponse {
 describe('RestClient — bearer token attachment (T058)', () => {
   it('attaches Authorization: Bearer when a token is held (on loadSession)', async () => {
     const client = new RestClient(BASE, tokenSource('abc123'));
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { playerId: 'p1', state: wireState('10') }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState('10') }));
 
     await client.loadSession('p1');
 
@@ -497,9 +481,7 @@ describe('RestClient — bearer token attachment (T058)', () => {
 
   it('omits Authorization when the token source holds no token', async () => {
     const client = new RestClient(BASE, tokenSource(null));
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { playerId: 'p1', state: wireState('10') }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState('10') }));
 
     await client.loadSession('p1');
 
@@ -509,9 +491,7 @@ describe('RestClient — bearer token attachment (T058)', () => {
 
   it('omits Authorization when no token source is configured (001 anonymous path)', async () => {
     const client = new RestClient(BASE); // no token source
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { playerId: 'p1', state: wireState('10') }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState('10') }));
 
     await client.loadSession('p1');
 
@@ -591,18 +571,20 @@ describe('RestClient.adoptIdentity — identity adoption (T058, contracts §2)',
     // The bootstrap POST targeted the colleague id (not any anonymous uuid).
     const [, bootstrapInit] = fetchMock.mock.calls[1]!;
     expect(fetchMock.mock.calls[1]![0]).toBe(`${BASE}/api/v1/session`);
-    expect(JSON.parse((bootstrapInit!.body as string))).toEqual({ playerId: 'ada-sub' });
+    expect(JSON.parse(bootstrapInit!.body as string)).toEqual({ playerId: 'ada-sub' });
 
     // The push PUT targeted /api/v1/session/ada-sub/state with the LOCAL state.
     expect(fetchMock.mock.calls[2]![0]).toBe(`${BASE}/api/v1/session/ada-sub/state`);
-    const pushBody = JSON.parse((fetchMock.mock.calls[2]![1]!.body as string));
+    const pushBody = JSON.parse(fetchMock.mock.calls[2]![1]!.body as string);
     expect(pushBody.clientTime).toBe('2026-07-01T09:00:00.000Z');
     expect(pushBody.state.resources.loc).toBe('500');
 
     // Orphan-never-wipe: NO DELETE was issued against the anonymous-UUID row,
     // and the bootstrap+push targeted only the colleague id. The anonymous row
     // is left in place (a manual/support action to restore).
-    const methods = fetchMock.mock.calls.map((c) => (c[1] as { method?: string } | undefined)?.method);
+    const methods = fetchMock.mock.calls.map(
+      (c) => (c[1] as { method?: string } | undefined)?.method,
+    );
     expect(methods).not.toContain('DELETE');
 
     // The local save content itself is untouched by adoption (input not mutated).
@@ -670,7 +652,9 @@ describe('RestClient.adoptIdentity — identity adoption (T058, contracts §2)',
     // caller should retry the push, not drop the session.
     const client = new RestClient(BASE, tokenSource('tok-1'));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, meBody({ colleagueId: 'ada-sub' })));
-    fetchMock.mockResolvedValueOnce(jsonResponse(404, { error: { code: 'no_save', message: 'fresh' } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(404, { error: { code: 'no_save', message: 'fresh' } }),
+    );
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
     const result = await client.adoptIdentity(makeState('500'), '2026-07-01T09:00:00.000Z');
@@ -687,7 +671,9 @@ describe('RestClient.adoptIdentity — identity adoption (T058, contracts §2)',
     // network failure (the caller should prompt a reload, not retry).
     const client = new RestClient(BASE, tokenSource('tok-1'));
     fetchMock.mockResolvedValueOnce(jsonResponse(200, meBody({ colleagueId: 'ada-sub' })));
-    fetchMock.mockResolvedValueOnce(jsonResponse(404, { error: { code: 'no_save', message: 'fresh' } }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(404, { error: { code: 'no_save', message: 'fresh' } }),
+    );
     fetchMock.mockResolvedValueOnce(
       jsonResponse(409, { error: { code: 'schema_too_new', message: 'update required' } }),
     );
@@ -714,9 +700,7 @@ describe('RestClient.adoptIdentity — identity adoption (T058, contracts §2)',
 describe('RestClient.putPresenceSettings (T064)', () => {
   it('PUTs the settings body with the bearer and returns the stored result', async () => {
     const client = new RestClient(BASE, tokenSource('tok-1'));
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { consentGiven: true, visible: true }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { consentGiven: true, visible: true }));
 
     const result = await client.putPresenceSettings({ consentGiven: true, visible: true });
 
@@ -738,9 +722,7 @@ describe('RestClient.putPresenceSettings (T064)', () => {
   it('returns the STORED server result even when it differs from the request', async () => {
     const client = new RestClient(BASE, tokenSource('tok-1'));
     // Server may normalize (e.g. revoking consent also hides).
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { consentGiven: false, visible: false }),
-    );
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { consentGiven: false, visible: false }));
 
     const result = await client.putPresenceSettings({ consentGiven: false, visible: true });
 

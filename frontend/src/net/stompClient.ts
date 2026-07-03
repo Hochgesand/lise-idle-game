@@ -39,7 +39,7 @@
 // wire helper is a noted future refactor, out of scope here).
 
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
-import type { GameState, CoopSegment, CommuteState } from '../sim/types';
+import type { GameState, CoopSegment, CommuteState, ActiveTrainingState } from '../sim/types';
 import type { TokenSource } from './restClient';
 
 /** The 001 state/content push destination (both message types arrive here, by `type`). */
@@ -141,6 +141,8 @@ interface WireGameState {
   coopSegments?: CoopSegment[] | null;
   activeOffice?: string | null;
   commute?: CommuteState | null;
+  /** (003) in-progress training — optional on the wire (v1/v2 corrections omit it). */
+  activeTraining?: ActiveTrainingState | null;
 }
 
 /** Convert a wire-shape (arrays) GameState into a live GameState (Sets). Pure. */
@@ -161,8 +163,9 @@ function fromWire(wire: WireGameState): GameState {
     coopSegments: wire.coopSegments ?? [],
     activeOffice: wire.activeOffice ?? 'office_1',
     commute: wire.commute ?? null,
-    // (003) baseline until T014 adds the wire passthrough for activeTraining.
-    activeTraining: null,
+    // (003) T014: present values pass through unchanged; absent/null (a v1/v2
+    // state.correction) normalizes to the null baseline (mirrors restClient.ts).
+    activeTraining: wire.activeTraining ?? null,
   };
 }
 
@@ -227,26 +230,21 @@ export class StompClient {
     client.beforeConnect = () => {
       const token = this.tokenSource?.getToken();
       client.connectHeaders =
-        token !== null && token !== undefined
-          ? { Authorization: `Bearer ${token.token}` }
-          : {};
+        token !== null && token !== undefined ? { Authorization: `Bearer ${token.token}` } : {};
     };
 
     client.onConnect = () => {
       // Both subscriptions are created inside onConnect, which re-fires on every
       // library-driven reconnect — subscriptions self-heal (contracts §3), and
       // each reconnect carries a fresh access token (beforeConnect above).
-      this.subscription = client.subscribe(
-        SUBSCRIPTION_DESTINATION,
-        (message) => this.handleMessage(message),
+      this.subscription = client.subscribe(SUBSCRIPTION_DESTINATION, (message) =>
+        this.handleMessage(message),
       );
-      this.presenceSubscription = client.subscribe(
-        PRESENCE_SUBSCRIPTION,
-        (message) => this.handlePresenceMessage(message),
+      this.presenceSubscription = client.subscribe(PRESENCE_SUBSCRIPTION, (message) =>
+        this.handlePresenceMessage(message),
       );
-      this.coopSubscription = client.subscribe(
-        COOP_SUBSCRIPTION,
-        (message) => this.handleCoopMessage(message),
+      this.coopSubscription = client.subscribe(COOP_SUBSCRIPTION, (message) =>
+        this.handleCoopMessage(message),
       );
       // Notify AFTER the subscriptions exist: a snapshot re-fetch triggered
       // here sees every delta from this connection onward (no subscribe/fetch
@@ -254,11 +252,7 @@ export class StompClient {
       this.handlers.onConnected?.();
     };
     client.onStompError = (frame) => {
-      console.error(
-        '[stompClient] STOMP protocol error:',
-        frame.headers['message'],
-        frame.body,
-      );
+      console.error('[stompClient] STOMP protocol error:', frame.headers['message'], frame.body);
     };
     client.onWebSocketError = (event) => {
       console.error('[stompClient] WebSocket error:', event);
@@ -290,10 +284,7 @@ export class StompClient {
     if (type === 'state.correction') {
       const payload = body as { state?: WireGameState; reason?: string };
       if (payload.state !== undefined) {
-        this.handlers.onStateCorrection?.(
-          fromWire(payload.state),
-          payload.reason ?? '',
-        );
+        this.handlers.onStateCorrection?.(fromWire(payload.state), payload.reason ?? '');
       }
     } else if (type === 'content.update') {
       const payload = body as { contentVersion?: string };
@@ -398,8 +389,7 @@ export class StompClient {
  * (WebSocket scheme `ws://`/`wss://`). Production sets it to
  * `wss://lise-game-api.schmitz.gg/ws`. Defaults to the local dev backend.
  */
-export const WS_BASE_URL: string =
-  import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8080/ws';
+export const WS_BASE_URL: string = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8080/ws';
 
 /** Factory: build a client for a custom broker URL (defaults to the configured one). */
 export function createStompClient(
