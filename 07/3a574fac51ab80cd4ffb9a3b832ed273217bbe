@@ -1,0 +1,28 @@
+backend/src/main/java/com/lise/liseidle/state/PlayerStateService.java
+  s_9e3cb57f61b316::t_ab4c390e714e4c 137-142,155-156
+backend/src/main/java/com/lise/liseidle/state/ActiveTrainingState.java
+  s_9e3cb57f61b316::t_41964331063993 1-31
+backend/src/main/java/com/lise/liseidle/state/GameState.java
+  s_9e3cb57f61b316::t_fc461b2cec32d2 119-128
+  s_9e3cb57f61b316::t_1407a640a14034 30-37,55-56
+backend/src/main/java/com/lise/liseidle/sync/StateMerger.java
+  s_9e3cb57f61b316::t_d75fdc6b4af790 3,54-56,58-59,94-97,120-126,130-131,149-150
+backend/src/main/java/com/lise/liseidle/session/SessionController.java
+  s_9e3cb57f61b316::t_afa22453edff31 69-71,73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "073a574fac51ab80cd4ffb9a3b832ed273217bbe",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
