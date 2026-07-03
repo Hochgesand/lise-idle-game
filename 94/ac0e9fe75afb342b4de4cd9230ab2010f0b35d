@@ -1,0 +1,27 @@
+backend/src/test/java/com/lise/liseidle/sync/StateMergerTest.java
+  s_9e3cb57f61b316::t_7bdb2aa2bbdb67 3,52-53,470-482,497-498
+  s_9e3cb57f61b316::t_7e74713999c4d5 359-457
+backend/src/test/java/com/lise/liseidle/session/SessionControllerTest.java
+  s_9e3cb57f61b316::t_b4f650193b96b7 104-105,175-176
+  s_9e3cb57f61b316::t_65ea8a7940a476 5,306-390
+  s_9e3cb57f61b316::t_8c7b2d5e840b65 391
+backend/src/test/java/com/lise/liseidle/state/SampleStates.java
+  s_9e3cb57f61b316::t_a1f1ccf2a18098 99-100,123-124
+  s_9e3cb57f61b316::t_880b6475288890 53-60,73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "94ac0e9fe75afb342b4de4cd9230ab2010f0b35d",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
