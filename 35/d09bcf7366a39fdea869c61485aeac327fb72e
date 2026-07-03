@@ -1,0 +1,27 @@
+frontend/src/sim/content.test.ts
+  s_9e3cb57f61b316::t_cbcde19a6c0312 180
+frontend/src/sim/content.ts
+  s_9e3cb57f61b316::t_7ccb3a419d27a5 380-382
+  s_9e3cb57f61b316::t_040949ab772e8b 399
+  s_9e3cb57f61b316::t_d4ff1776cb4958 315-330
+  s_9e3cb57f61b316::t_8878858efec6da 31
+  s_9e3cb57f61b316::t_0dd7c74f9e21d1 203,211-232
+frontend/src/sim/fallbackContent.ts
+  s_9e3cb57f61b316::t_4de56b0c92e5dc 143-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "35d09bcf7366a39fdea869c61485aeac327fb72e",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
