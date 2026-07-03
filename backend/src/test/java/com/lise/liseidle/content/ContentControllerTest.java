@@ -15,6 +15,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -61,7 +62,7 @@ class ContentControllerTest {
         mockMvc.perform(get("/api/v1/content"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.schemaVersion").value(1))
-            .andExpect(jsonPath("$.contentVersion").value("1.4.0"))
+            .andExpect(jsonPath("$.contentVersion").value("1.5.0"))
             .andExpect(jsonPath("$.producers").isArray())
             .andExpect(jsonPath("$.upgrades").isArray())
             .andExpect(jsonPath("$.trainings").isArray())
@@ -170,7 +171,7 @@ class ContentControllerTest {
             .andExpect(status().isOk())
             // five 001 arrays + the two scalar envelope fields stay intact
             .andExpect(jsonPath("$.schemaVersion").value(1))
-            .andExpect(jsonPath("$.contentVersion").value("1.4.0"))
+            .andExpect(jsonPath("$.contentVersion").value("1.5.0"))
             .andExpect(jsonPath("$.producers").isArray())
             .andExpect(jsonPath("$.upgrades").isArray())
             .andExpect(jsonPath("$.trainings").isArray())
@@ -218,5 +219,114 @@ class ContentControllerTest {
                                 + "\"heartbeatSeconds\":20,\"commuteSeconds\":30,"
                                 + "\"lastSeenRetentionDays\":14}").getBytes(StandardCharsets.UTF_8));
         assertThrows(IllegalStateException.class, () -> loader.loadCoop(missingField));
+    }
+
+    // ── (003) T005 — additive `world` block + Training.durationSeconds ──
+
+    /**
+     * (003) T005 — the content envelope carries the additive seventh
+     * {@code world} block (003 data-model §3; the exact {@code coop.json}
+     * pattern) alongside the six 001/002 entries, with {@code schemaVersion}
+     * and {@code contentVersion} intact. {@code contentVersion} bumps to
+     * {@code "1.5.0"} as the world block is additive new content (FR-021).
+     * RED until T008 adds {@code WorldConfig}/{@code world.json}.
+     */
+    @Test
+    void getContent_carriesAdditiveSeventhWorldBlockAlongsideCoopAndFiveArrays() throws Exception {
+        mockMvc.perform(get("/api/v1/content"))
+            .andExpect(status().isOk())
+            // the 001/002 envelope stays intact
+            .andExpect(jsonPath("$.schemaVersion").value(1))
+            .andExpect(jsonPath("$.contentVersion").value("1.5.0"))
+            .andExpect(jsonPath("$.producers").isArray())
+            .andExpect(jsonPath("$.upgrades").isArray())
+            .andExpect(jsonPath("$.trainings").isArray())
+            .andExpect(jsonPath("$.milestones").isArray())
+            .andExpect(jsonPath("$.burners").isArray())
+            .andExpect(jsonPath("$.coop.commuteSeconds").value(30))
+            // additive seventh world tuning block (003 FR-007/021)
+            .andExpect(jsonPath("$.world.walkSeconds").value(2.0));
+    }
+
+    /**
+     * (003) T005 — {@code ContentLoader} fails fast ({@code @PostConstruct})
+     * on a malformed {@code world.json}: the game must never start with
+     * half-parsed world tuning data (Constitution Principle II). RED until
+     * T008 implements {@code loadWorld}.
+     */
+    @Test
+    void loadWorld_failsFast_whenWorldJsonMalformed() {
+        ContentLoader loader = new ContentLoader(objectMapper);
+        InputStream malformed =
+                new ByteArrayInputStream("{not valid json".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadWorld(malformed));
+    }
+
+    /**
+     * (003) T005 — every required {@code world} field must be present and
+     * within bounds; a missing {@code walkSeconds} would otherwise default to
+     * {@code 0.0} (a primitive default) and silently disable station walks —
+     * the same gap the coop presence check guards (cubic P3 precedent).
+     */
+    @Test
+    void loadWorld_failsFast_whenWalkSecondsMissingOrOutOfBounds() {
+        ContentLoader loader = new ContentLoader(objectMapper);
+
+        InputStream missing =
+                new ByteArrayInputStream("{}".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadWorld(missing));
+
+        InputStream zero =
+                new ByteArrayInputStream("{\"walkSeconds\":0}".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadWorld(zero));
+
+        InputStream negative =
+                new ByteArrayInputStream("{\"walkSeconds\":-2}".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadWorld(negative));
+
+        InputStream notANumber =
+                new ByteArrayInputStream("{\"walkSeconds\":\"2\"}".getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalStateException.class, () -> loader.loadWorld(notANumber));
+    }
+
+    /**
+     * (003) T005 — {@code Training} entries round-trip the optional
+     * {@code durationSeconds} (003 data-model §2): a timed training keeps its
+     * value through deserialize → serialize, and a pre-003 training without
+     * the field stays valid with {@code null} (FR-016 backward compatibility;
+     * the frontend loader treats served {@code null} as absent). RED until
+     * T008 adds the record component.
+     */
+    @Test
+    void training_roundTripsOptionalDurationSeconds() throws Exception {
+        String timedJson = """
+                {
+                  "id": "agile_master",
+                  "name": "Agile Master",
+                  "description": "Certified Scrum mastery.",
+                  "cost": { "resource": "cash", "amount": "2000" },
+                  "permanentMultiplier": 3,
+                  "prerequisite": null,
+                  "durationSeconds": 90
+                }
+                """;
+        Training timed = objectMapper.readValue(timedJson, Training.class);
+        assertThat(timed.durationSeconds()).isEqualTo(90.0);
+        Training timedAgain = objectMapper.readValue(
+                objectMapper.writeValueAsString(timed), Training.class);
+        assertThat(timedAgain.durationSeconds()).isEqualTo(90.0);
+
+        String instantJson = """
+                {
+                  "id": "iso_9001_course",
+                  "name": "ISO 9001 Course",
+                  "description": "Quality management fundamentals.",
+                  "cost": { "resource": "cash", "amount": "500" },
+                  "permanentMultiplier": 2,
+                  "prerequisite": null
+                }
+                """;
+        Training instant = objectMapper.readValue(instantJson, Training.class);
+        assertThat(instant.durationSeconds()).isNull();
     }
 }
