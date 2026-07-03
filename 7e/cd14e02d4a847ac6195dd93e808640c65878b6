@@ -1,0 +1,26 @@
+frontend/src/net/restClient.test.ts
+  s_9e3cb57f61b316::t_83a9fccd5e082f 18,22,131,171,196,202,391-393,472,484,494,574,578,585-587,655-657,674-676,703,725
+frontend/src/net/stompClient.test.ts
+  s_9e3cb57f61b316::t_83a9fccd5e082f 249-255,278-280,291-297,321,430-434
+frontend/src/net/stompClient.ts
+  s_9e3cb57f61b316::t_83a9fccd5e082f 42,144-145,166-168,233,240-241,243-244,246-247,255,287,392
+frontend/src/net/restClient.ts
+  s_9e3cb57f61b316::t_83a9fccd5e082f 29-35,232,275,397
+  s_9e3cb57f61b316::t_9f250fac8763bf 95-96,116-118,141-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "7ecd14e02d4a847ac6195dd93e808640c65878b6",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
