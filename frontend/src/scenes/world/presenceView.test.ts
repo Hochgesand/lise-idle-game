@@ -233,3 +233,48 @@ describe('buildAvatarRenders — purity & determinism', () => {
     expect(JSON.parse(JSON.stringify(records))).toEqual(recordsSnapshot);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T016 (US1) — reserved player anchor rides through to assignSeats (FR-003)
+// ---------------------------------------------------------------------------
+//
+// `buildAvatarRenders` gains an optional reserved-anchor input (the player's
+// seat, `reservedAnchorFor` in seats.ts): no colleague — resident or arrived
+// commuter — ever renders on it, at any crowd size. The parameter does not
+// exist yet (T016 RED); the implementation lands in T019.
+
+describe('buildAvatarRenders — reserved player anchor (T016)', () => {
+  it('never seats a colleague on the reserved anchor', () => {
+    const reserved = OFFICE_1_ANCHORS[0]; // (y,x)-first office_1 anchor
+    const records = [record({ colleagueId: 'c-1' }), record({ colleagueId: 'c-2' })];
+
+    const renders = buildAvatarRenders(ALL_ANCHORS, records, undefined, reserved);
+
+    expect(renders).toHaveLength(2);
+    for (const r of renders) {
+      expect({ x: r.x, y: r.y }).not.toEqual({ x: reserved.x, y: reserved.y });
+    }
+  });
+
+  it('keeps the reservation under overflow (crowd larger than the anchor pool)', () => {
+    const reserved = OFFICE_1_ANCHORS[0];
+    const crowd = Array.from({ length: 9 }, (_, i) =>
+      record({ colleagueId: `c-${String(i).padStart(2, '0')}` }),
+    );
+
+    const renders = buildAvatarRenders(ALL_ANCHORS, crowd, undefined, reserved);
+
+    expect(renders).toHaveLength(9); // never hidden
+    const positions = renders.map((r) => `${r.x},${r.y}`);
+    expect(new Set(positions).size).toBe(9); // never stacked
+    expect(positions).not.toContain(`${reserved.x},${reserved.y}`);
+  });
+
+  it('without a reservation the behavior is unchanged (back-compat)', () => {
+    const records = [record({ colleagueId: 'c-1' }), record({ colleagueId: 'c-2' })];
+
+    expect(buildAvatarRenders(ALL_ANCHORS, records, undefined, null)).toEqual(
+      buildAvatarRenders(ALL_ANCHORS, records),
+    );
+  });
+});
