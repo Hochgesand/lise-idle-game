@@ -224,6 +224,63 @@ describe('RestClient.loadSession', () => {
     });
   });
 
+  it('passes a present activeTraining through from the wire (003 T014)', async () => {
+    // A v3 server response carrying an in-progress training MUST reach the
+    // sim intact — dropping it would silently cancel the training on every
+    // session bootstrap (003 data-model §8; state passthrough, no new endpoints).
+    const wireState = {
+      resources: { loc: '0', cash: '0', aiTokens: '0' },
+      ownedProducers: [],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: '2026-06-30T12:00:00.000Z',
+      schemaVersion: 3,
+      settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
+      activeTraining: { trainingId: 'agile_master', startedAt: 1782820800000 },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState }));
+
+    const client = new RestClient(BASE);
+    const state = await client.loadSession('p1');
+
+    expect(state!.activeTraining).toEqual({
+      trainingId: 'agile_master',
+      startedAt: 1782820800000,
+    });
+  });
+
+  it('normalizes an absent/null activeTraining to null (003 T014 leniency)', async () => {
+    // A v1/v2 server response (field omitted or null) must never leak
+    // undefined into the sim — mirrors the (002) overlay leniency rule.
+    const wireState = {
+      resources: { loc: '0', cash: '0', aiTokens: '0' },
+      ownedProducers: [],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: '2026-06-30T12:00:00.000Z',
+      schemaVersion: 2,
+      settings: { reducedMotion: false, muted: false },
+      coopSegments: [],
+      activeOffice: 'office_1',
+      commute: null,
+      // activeTraining intentionally absent (a v2 response)
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { playerId: 'p1', state: wireState }));
+
+    const client = new RestClient(BASE);
+    const state = await client.loadSession('p1');
+
+    expect(state!.activeTraining).toBeNull();
+    expect(state!.activeTraining).not.toBeUndefined();
+  });
+
   it('returns null on 404 (no save — fresh-player contract)', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(404, { error: { code: 'no_save', message: 'no save' } }),
@@ -275,9 +332,49 @@ describe('RestClient.saveState', () => {
     expect(body.state.activeOffice).toBe('office_1');
     expect(body.state.commute).toBeNull();
 
+    // (003) T014: the v3 field rides the wire explicitly — present and null
+    // at the baseline (an absent key would bypass the server merge rule).
+    expect(body.state.activeTraining).toBeNull();
+
     // Merged state returned with Sets reconstructed from wire arrays.
     expect(result.resources.loc).toBe('300');
     expect(result.ownedProducers).toBeInstanceOf(Set);
+  });
+
+  it('serializes a non-null activeTraining onto the PUT wire (003 T014)', async () => {
+    const merged = {
+      resources: { loc: '300', cash: '0', aiTokens: '0' },
+      ownedProducers: ['manual_typing'],
+      ownedUpgrades: [],
+      ownedTrainings: [],
+      activeBurner: null,
+      earnedMilestones: [],
+      lastAdvancedAt: '2026-06-30T12:00:00.000Z',
+      schemaVersion: 3,
+      settings: { reducedMotion: false, muted: false },
+      activeTraining: { trainingId: 'agile_master', startedAt: 1782820800000 },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { state: merged }));
+
+    const client = new RestClient(BASE);
+    const state = {
+      ...makeState('100'),
+      activeTraining: { trainingId: 'agile_master', startedAt: 1782820800000 },
+    };
+    const result = await client.saveState('p1', state, '2026-06-30T12:00:00.000Z');
+
+    // The in-progress training rides the PUT body verbatim (sim-timeline ms)…
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init!.body as string);
+    expect(body.state.activeTraining).toEqual({
+      trainingId: 'agile_master',
+      startedAt: 1782820800000,
+    });
+    // …and the merged response carries it back into a live GameState.
+    expect(result.activeTraining).toEqual({
+      trainingId: 'agile_master',
+      startedAt: 1782820800000,
+    });
   });
 
   it('throws SchemaTooNewError on 409', async () => {

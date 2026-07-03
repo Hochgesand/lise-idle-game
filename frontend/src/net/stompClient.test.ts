@@ -258,6 +258,33 @@ describe('StompClient', () => {
     expect((state as GameState).resources.loc).toBe('123');
   });
 
+  it('passes activeTraining through a state.correction and normalizes absence to null (003 T014)', () => {
+    const onStateCorrection = vi.fn();
+    const stomp = new StompClient(BROKER);
+    stomp.connect({ onStateCorrection });
+
+    // A v3 correction carrying an in-progress training reaches the sim intact.
+    const v3Wire = {
+      ...wireState('42'),
+      schemaVersion: 3,
+      activeTraining: { trainingId: 'agile_master', startedAt: 1782820800000 },
+    };
+    deliver(JSON.stringify({ type: 'state.correction', state: v3Wire, reason: 'multi_device_sync' }));
+
+    expect(onStateCorrection).toHaveBeenCalledOnce();
+    const [v3State] = onStateCorrection.mock.calls[0]!;
+    expect((v3State as GameState).activeTraining).toEqual({
+      trainingId: 'agile_master',
+      startedAt: 1782820800000,
+    });
+
+    // A v1/v2 correction (field absent) normalizes to the null baseline —
+    // never undefined into the sim (mirrors the 002 overlay leniency rule).
+    deliver(JSON.stringify({ type: 'state.correction', state: wireState('43'), reason: 'multi_device_sync' }));
+    const [v2State] = onStateCorrection.mock.calls[1]!;
+    expect((v2State as GameState).activeTraining).toBeNull();
+  });
+
   it('routes a content.update message to onContentUpdate(contentVersion)', () => {
     const onStateCorrection = vi.fn();
     const onContentUpdate = vi.fn();
