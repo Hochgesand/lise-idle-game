@@ -1,0 +1,21 @@
+frontend/src/sim/fallbackContent.test.ts
+  s_9e3cb57f61b316::t_abe333d80f9a2b 21-23
+frontend/src/sim/fallbackContent.ts
+  s_9e3cb57f61b316::t_fd50dd995b1bdc 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "875fda79746486c330a975ecd41d015dad6d5b39",
+  "prompts": {},
+  "sessions": {
+    "s_9e3cb57f61b316": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42316e3c-b824-4d6a-a907-47e2711a8331",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Andre Schmitz <andre@schmitz.gg>"
+    }
+  }
+}
