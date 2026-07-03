@@ -2,6 +2,7 @@ package com.lise.liseidle.presence;
 
 import com.lise.liseidle.content.ContentCatalog;
 import com.lise.liseidle.content.CoopConfig;
+import com.lise.liseidle.content.WorldConfig;
 import com.lise.liseidle.content.ContentLoader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,7 +55,8 @@ class CoopServiceTest {
     @BeforeEach
     void setUp() {
         when(contentLoader.getCatalog()).thenReturn(
-                new ContentCatalog(1, "test", List.of(), List.of(), List.of(), List.of(), List.of(), COOP));
+                new ContentCatalog(1, "test", List.of(), List.of(), List.of(), List.of(), List.of(), COOP,
+                        new WorldConfig(2)));
         coopService = new CoopService(registry, repository, contentLoader);
     }
 

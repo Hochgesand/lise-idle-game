@@ -161,9 +161,10 @@ class ContentControllerTest {
      * T018 — the content envelope carries the additive sixth {@code coop}
      * block (data-model.md "CoopConfig"; contracts §2) alongside the five
      * 001 arrays, with {@code schemaVersion} and {@code contentVersion}
-     * intact. {@code contentVersion} bumps to {@code "1.4.0"} as the coop
-     * block is additive new content (FR-015). RED until {@code ContentCatalog}
-     * serves {@code coop} (T027).
+     * intact. The coop block landed as additive new content (FR-015);
+     * {@code contentVersion} has since moved on to {@code "1.5.0"} with the
+     * (003) world block — see {@code ContentLoader.CONTENT_VERSION} for the
+     * bump history.
      */
     @Test
     void getContent_carriesAdditiveSixthCoopBlockAlongsideFiveArrays() throws Exception {

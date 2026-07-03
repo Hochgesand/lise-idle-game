@@ -25,6 +25,7 @@ import java.util.List;
  * @param milestones     long-term credential goals + rewards
  * @param burners        AI-token accelerator definitions
  * @param coop           (002) co-op bonus tuning block (data-model.md "CoopConfig"; FR-015)
+ * @param world          (003) world/presentation tuning block (003 data-model §3; FR-021)
  */
 public record ContentCatalog(
         int schemaVersion,
@@ -34,5 +35,6 @@ public record ContentCatalog(
         List<Training> trainings,
         List<Milestone> milestones,
         List<Burner> burners,
-        CoopConfig coop) {
+        CoopConfig coop,
+        WorldConfig world) {
 }

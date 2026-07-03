@@ -2,6 +2,7 @@ package com.lise.liseidle.presence;
 
 import com.lise.liseidle.content.ContentCatalog;
 import com.lise.liseidle.content.CoopConfig;
+import com.lise.liseidle.content.WorldConfig;
 import com.lise.liseidle.content.ContentLoader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,8 @@ class PresenceCommuteTest {
         // PresenceService + CoopService both read the co-op tuning once at
         // construction (content is immutable per version).
         when(contentLoader.getCatalog()).thenReturn(
-                new ContentCatalog(1, "test", List.of(), List.of(), List.of(), List.of(), List.of(), COOP));
+                new ContentCatalog(1, "test", List.of(), List.of(), List.of(), List.of(), List.of(), COOP,
+                        new WorldConfig(2)));
         CoopService coopService = new CoopService(registry, repository, contentLoader);
         service = new PresenceService(registry, repository, pushService, contentLoader, coopService);
     }

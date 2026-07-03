@@ -37,8 +37,12 @@ public class ContentLoader {
     /** Content-format schema version (constant until a breaking change). */
     static final int SCHEMA_VERSION = 1;
 
-    /** Balance version — bumped to 1.3.0 with the (002) co-op tuning block (T027). */
-    static final String CONTENT_VERSION = "1.4.0";
+    /**
+     * Balance version — 1.3.0 added the (002) co-op tuning block (T027),
+     * 1.4.0 the office_2_unlock milestone content (T082), and 1.5.0 the (003)
+     * world tuning block (T008).
+     */
+    static final String CONTENT_VERSION = "1.5.0";
 
     /** The six required keys of the {@code coop.json} block (data-model.md "CoopConfig"). */
     private static final Set<String> COOP_REQUIRED_FIELDS = Set.of(
@@ -48,6 +52,9 @@ public class ContentLoader {
             "heartbeatSeconds",
             "commuteSeconds",
             "lastSeenRetentionDays");
+
+    /** The required keys of the (003) {@code world.json} block (003 data-model §3). */
+    private static final Set<String> WORLD_REQUIRED_FIELDS = Set.of("walkSeconds");
 
     private final ObjectMapper objectMapper;
 
@@ -75,8 +82,8 @@ public class ContentLoader {
     }
 
     /**
-     * Loads the five content files plus the (002) co-op tuning block from the
-     * classpath and assembles a {@link ContentCatalog}.
+     * Loads the five content files plus the (002) co-op and (003) world
+     * tuning blocks from the classpath and assembles a {@link ContentCatalog}.
      *
      * @return a fully populated content catalog
      * @throws IllegalStateException if any content file is missing or malformed
@@ -88,9 +95,10 @@ public class ContentLoader {
         List<Milestone> milestones = loadList("content/milestones.json", Milestone.class);
         List<Burner> burners = loadList("content/burners.json", Burner.class);
         CoopConfig coop = loadCoop("content/coop.json");
+        WorldConfig world = loadWorld("content/world.json");
         return new ContentCatalog(
                 SCHEMA_VERSION, CONTENT_VERSION,
-                producers, upgrades, trainings, milestones, burners, coop);
+                producers, upgrades, trainings, milestones, burners, coop, world);
     }
 
     /**
@@ -205,6 +213,91 @@ public class ContentLoader {
     private static IllegalStateException malformedCoop(String detail) {
         return new IllegalStateException(
                 "Invalid content/coop.json — " + detail
+                        + " (the game cannot start with malformed content)");
+    }
+
+    // ── (003) world tuning block ─────────────────────────────────────────
+
+    /**
+     * Reads the (003) world tuning block ({@code world.json}) from the
+     * classpath, parses it into a {@link WorldConfig}, and validates the
+     * contracted bound. Mirrors {@link #loadCoop(String)}; the
+     * {@link InputStream} overload is the fail-fast test seam.
+     *
+     * @param path the classpath resource path (e.g. "content/world.json")
+     * @return the validated world tuning block
+     * @throws IllegalStateException if the resource is missing, unparseable, or
+     *                               violates a contracted bound (fail-fast)
+     */
+    WorldConfig loadWorld(String path) {
+        try (InputStream in = new ClassPathResource(path).getInputStream()) {
+            return loadWorld(in);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Failed to load content resource '" + path
+                            + "' — the game cannot start with missing or malformed content",
+                    e);
+        }
+    }
+
+    /**
+     * Parses + validates a world tuning block from the given stream.
+     * Fail-fast: a syntactically broken, structurally incomplete
+     * ({@code walkSeconds} missing/null/non-numeric), or contract-violating
+     * ({@code walkSeconds <= 0}) stream surfaces as an
+     * {@link IllegalStateException} (Constitution Principle II — never run
+     * with half-parsed balance data). The presence check is explicit for the
+     * same reason as {@link #loadCoop(InputStream)}: a missing
+     * {@code walkSeconds} would otherwise default to the primitive
+     * {@code 0.0}. Closes the stream.
+     *
+     * @param in the JSON stream (closed by this method)
+     * @return the validated world tuning block
+     * @throws IllegalStateException if the stream is unparseable, incomplete, or invalid
+     */
+    WorldConfig loadWorld(InputStream in) {
+        JsonNode root;
+        try (in) {
+            root = objectMapper.readTree(in);
+        } catch (IOException | JacksonException e) {
+            throw malformedWorld(e);
+        }
+        if (root == null || !root.isObject()) {
+            throw malformedWorld("world block must be a JSON object");
+        }
+        for (String field : WORLD_REQUIRED_FIELDS) {
+            JsonNode node = root.get(field);
+            if (node == null || node.isNull()) {
+                throw malformedWorld("missing required field '" + field + "'");
+            }
+            if (!node.isNumber()) {
+                throw malformedWorld("field '" + field + "' must be a number");
+            }
+        }
+        WorldConfig world;
+        try {
+            world = objectMapper.treeToValue(root, WorldConfig.class);
+        } catch (JacksonException e) {
+            throw malformedWorld(e);
+        }
+        if (!(world.walkSeconds() > 0) || Double.isInfinite(world.walkSeconds())) {
+            throw malformedWorld("world.walkSeconds must be a finite number > 0");
+        }
+        return world;
+    }
+
+    /** Wraps a parse/IO failure of {@code world.json} as a fail-fast error. */
+    private static IllegalStateException malformedWorld(Throwable cause) {
+        return new IllegalStateException(
+                "Failed to load content resource 'content/world.json' — "
+                        + "the game cannot start with missing or malformed content",
+                cause);
+    }
+
+    /** Builds a fail-fast error for a specific {@code world.json} contract violation. */
+    private static IllegalStateException malformedWorld(String detail) {
+        return new IllegalStateException(
+                "Invalid content/world.json — " + detail
                         + " (the game cannot start with malformed content)");
     }
 
