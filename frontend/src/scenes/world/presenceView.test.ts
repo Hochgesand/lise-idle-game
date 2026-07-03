@@ -270,6 +270,28 @@ describe('buildAvatarRenders — reserved player anchor (T016)', () => {
     expect(positions).not.toContain(`${reserved.x},${reserved.y}`);
   });
 
+  it('never seats an ARRIVED commuter on the reserved anchor (destination seating)', () => {
+    // An arrived commuter (progress >= 1) seats in the DESTINATION building —
+    // the reservation must hold on that path too. Route: office_1 → office_2.
+    const reserved = OFFICE_2_ANCHORS[0]; // (y,x)-first office_2 anchor
+    const path = {
+      from: 'office_1',
+      to: 'office_2',
+      points: [
+        { x: 100, y: 100 },
+        { x: 900, y: 400 },
+      ],
+    };
+    const startedAtMs = Date.parse('2026-07-02T09:59:00Z');
+    const ctx = { path, nowMs: startedAtMs + 120_000, commuteSeconds: 90 }; // long arrived
+
+    const renders = buildAvatarRenders(ALL_ANCHORS, [commuter('c-arrived')], ctx, reserved);
+
+    expect(renders).toHaveLength(1);
+    expect(renders[0].inTransit).toBe(false); // seated, not on the route
+    expect({ x: renders[0].x, y: renders[0].y }).not.toEqual({ x: reserved.x, y: reserved.y });
+  });
+
   it('without a reservation the behavior is unchanged (back-compat)', () => {
     const records = [record({ colleagueId: 'c-1' }), record({ colleagueId: 'c-2' })];
 

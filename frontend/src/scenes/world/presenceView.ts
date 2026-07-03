@@ -190,6 +190,11 @@ type CommutingRecord = PresenceRecord & {
  * reaches 1. Without a context, commuters are skipped (the pre-T080
  * behavior); placeless records are always skipped (defensive).
  *
+ * (T019/US1) With a `reservedAnchor` (the player's seat — `reservedAnchorFor`
+ * in seats.ts), no colleague — resident or arrived commuter — is ever seated
+ * on it: the reservation rides straight through to `assignSeats` (FR-003).
+ * `null`/`undefined` = no reservation (unchanged pre-003 behavior).
+ *
  * Pure: no I/O, no clock (the context carries `nowMs`), no mutation of the
  * inputs; the same inputs always yield the same output (seated renders in
  * `colleagueId` order from `assignSeats`, then in-transit commuters in
@@ -199,6 +204,7 @@ export function buildAvatarRenders(
   anchors: ReadonlyArray<SeatAnchor>,
   records: ReadonlyArray<PresenceRecord>,
   commuteCtx?: CommuteRenderContext,
+  reservedAnchor?: SeatAnchor | null,
 ): AvatarRender[] {
   // Partition: seated (office set) / commuting (office null + commute set) /
   // placeless (defensive skip).
@@ -233,7 +239,7 @@ export function buildAvatarRenders(
     ...present.map((r) => ({ colleagueId: r.colleagueId, office: r.office })),
     ...arrived.map((r) => ({ colleagueId: r.colleagueId, office: r.commute.toOffice })),
   ];
-  const assignments = assignSeats(anchors, seatable);
+  const assignments = assignSeats(anchors, seatable, reservedAnchor);
 
   // Join the placements back onto their presence records by colleagueId.
   const recordById = new Map<string, PresenceRecord>(

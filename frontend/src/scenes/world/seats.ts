@@ -164,6 +164,30 @@ export function extractSeatAnchors(raw: ReadonlyArray<RawSeatAnchor>): SeatAncho
 }
 
 /**
+ * (T019/US1) The player's deterministic reserved seat in `building`: the
+ * FIRST anchor of that building in the existing stable `(y, x)` order —
+ * top-left first, the exact ordering colleague assignment uses (FR-003;
+ * research 003 Decision 2). Deterministic across sessions, devices, and
+ * reloads with zero new data; `null` when the building has no anchors (a
+ * map/office-id desync — the caller degrades gracefully).
+ *
+ * Pure: never mutates `anchors`; returns the anchor object as-is.
+ */
+export function reservedAnchorFor(
+  anchors: ReadonlyArray<SeatAnchor>,
+  building: string,
+): SeatAnchor | null {
+  let first: SeatAnchor | null = null;
+  for (const a of anchors) {
+    if (a.building !== building) continue;
+    if (first === null || anchorSortKey(a).localeCompare(anchorSortKey(first)) < 0) {
+      first = a;
+    }
+  }
+  return first;
+}
+
+/**
  * Deterministically assign `colleagues` to distinct `anchors`, per building,
  * overflowing the excess to standing/roaming spots.
  *
@@ -175,24 +199,39 @@ export function extractSeatAnchors(raw: ReadonlyArray<RawSeatAnchor>): SeatAncho
  *  3. Seat colleague `k` at anchor `k` for `k < min(count, anchors)`.
  *  4. The remaining colleagues get standing spots on a deterministic lattice
  *     laid out just below the building's seat area (distinct per overflow
- *     index, and strictly below every anchor so a standing spot never
- *     coincides with a seated one). A building with zero anchors places its
- *     standing colleagues at a per-building hash offset.
+ *     index, and strictly below every anchor — the reserved one included —
+ *     so a standing spot never coincides with a seated one or the player's).
+ *     A building with zero anchors places its standing colleagues at a
+ *     per-building hash offset.
  *  5. Emit the result sorted by `colleagueId`.
+ *
+ * ## Reserved player anchor (T019/US1 — FR-003; research 003 Decision 2)
+ * With a `reserved` anchor (the player's seat, `reservedAnchorFor`), every
+ * anchor matching its `(x, y, building)` is EXCLUDED from colleague seating —
+ * colleague `k` shifts by one past it, and the player's seat and colleague
+ * positions never overlap at any crowd size. Matching by value (not
+ * reference) removes ALL duplicates sharing the pixel (the no-overlap
+ * guarantee wins over capacity on a duplicate-anchor map error). The standing
+ * lattice still measures the FULL anchor set, so overflow spots stay strictly
+ * below the reserved anchor too. `null`/`undefined` = no reservation (the
+ * pre-003 behavior, unchanged).
  *
  * ## Guarantees (asserted in seats.test.ts)
  *  - every input colleague appears in the output (never hidden);
  *  - no two colleagues ever share a pixel position (never stacked);
+ *  - no colleague ever shares the reserved anchor's position (FR-003);
  *  - a seated colleague always sits on an anchor tagged with their building;
  *  - the same inputs always yield the same output (pure & deterministic).
  *
  * @param anchors    normalized seat anchors (from `extractSeatAnchors`)
  * @param colleagues presences present in an office (NOT commuting)
+ * @param reserved   the player's reserved anchor to exclude, if any
  * @returns a fresh, `colleagueId`-sorted array of placements
  */
 export function assignSeats(
   anchors: ReadonlyArray<SeatAnchor>,
   colleagues: ReadonlyArray<SeatedColleague>,
+  reserved?: SeatAnchor | null,
 ): SeatAssignment[] {
   // Index anchors by building, deterministically sorted within each building.
   // (Sort copies so the caller's array is never mutated.)
@@ -228,11 +267,21 @@ export function assignSeats(
   for (const [office, officeColleagues] of colleaguesByOffice) {
     const officeAnchors = anchorsByBuilding.get(office) ?? [];
 
+    // (T019/US1) Exclude the reserved player anchor from the seating pool —
+    // by (x, y, building) VALUE, removing all duplicates sharing the pixel,
+    // so no colleague ever overlaps the player's seat (FR-003). The standing
+    // lattice below still measures the FULL `officeAnchors` set, keeping
+    // overflow spots strictly below the reserved anchor too.
+    const seatableAnchors =
+      reserved != null && reserved.building === office
+        ? officeAnchors.filter((a) => a.x !== reserved.x || a.y !== reserved.y)
+        : officeAnchors;
+
     // Seated: up to the anchor count, colleague[k] → anchor[k].
-    const seatedCount = Math.min(officeColleagues.length, officeAnchors.length);
+    const seatedCount = Math.min(officeColleagues.length, seatableAnchors.length);
     for (let k = 0; k < seatedCount; k++) {
       const c = officeColleagues[k];
-      const a = officeAnchors[k];
+      const a = seatableAnchors[k];
       assignments.push({ colleagueId: c.colleagueId, building: office, kind: 'seated', x: a.x, y: a.y });
     }
 
