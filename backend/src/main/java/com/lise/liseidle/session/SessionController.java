@@ -66,9 +66,11 @@ public class SessionController {
      * A save whose {@code schemaVersion} exceeds this is rejected with
      * {@code 409} — the client must update. Bumped {@code 1 → 2} by the 002
      * co-op overlay ({@code coopSegments}/{@code activeOffice}/{@code commute},
-     * data-model.md "Save migration"); the {@code 409} semantics are unchanged.
+     * data-model.md "Save migration") and {@code 2 → 3} by the 003
+     * living-campus {@code activeTraining} field (003 data-model §8, T013);
+     * the {@code 409} semantics are unchanged.
      */
-    private static final int CURRENT_SCHEMA_VERSION = 2;
+    private static final int CURRENT_SCHEMA_VERSION = 3;
 
     private final PlayerStateService playerStateService;
     private final StateMerger stateMerger;

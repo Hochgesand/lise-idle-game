@@ -134,6 +134,12 @@ public class PlayerStateService {
                 state.getActiveOffice() != null ? state.getActiveOffice() : "office_1";
         // commute's normalized default IS null (baseline) — nothing to coerce.
         CommuteState commute = state.getCommute();
+        // (003) activeTraining's normalized default IS null too: a v1/v2 row
+        // (field absent) deserializes as null, which is already the correct v3
+        // baseline — carried through explicitly so the serialized response
+        // always includes "activeTraining": null (no absent-field hole for a
+        // v3 client; 003 data-model §8).
+        ActiveTrainingState activeTraining = state.getActiveTraining();
         return new GameState(
                 state.getResources(),
                 state.getOwnedProducers(),
@@ -146,6 +152,7 @@ public class PlayerStateService {
                 state.getSettings(),
                 coopSegments,
                 activeOffice,
-                commute);
+                commute,
+                activeTraining);
     }
 }

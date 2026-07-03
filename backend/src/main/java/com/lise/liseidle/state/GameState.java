@@ -27,6 +27,14 @@ import java.util.Set;
  * migration"). An empty {@code coopSegments} + {@code "office_1"} + {@code null}
  * commute is byte-identical to Spec 001 behavior.
  *
+ * <p><b>003 living-campus (additive, save schema v3):</b>
+ * {@code activeTraining} carries the one in-progress Academy training
+ * ({@code null} when idle — which is itself the normalized default, exactly
+ * like {@code commute}). Backend involvement is passthrough-only: persisted,
+ * merged as part of the later-{@code lastAdvancedAt} snapshot pair rule
+ * (with {@code activeOffice}/{@code commute}), and served verbatim; the pure
+ * frontend {@code advance} owns resolution (003 data-model §8).
+ *
  * <p>This is a Java record: immutable, with a canonical constructor matching
  * the {@code SampleStates} test fixture argument order, plus explicit
  * {@code getX()} accessors so the round-trip tests and serialization layer
@@ -44,7 +52,8 @@ public record GameState(
         PlayerSettings settings,
         List<CoopSegment> coopSegments,
         String activeOffice,
-        CommuteState commute) {
+        CommuteState commute,
+        ActiveTrainingState activeTraining) {
 
     public ResourceSet getResources() {
         return resources;
@@ -106,5 +115,15 @@ public record GameState(
      */
     public CommuteState getCommute() {
         return commute;
+    }
+
+    /**
+     * (003) The one in-progress Academy training, or {@code null} when none is
+     * running (the baseline). {@code null} is itself the normalized default —
+     * a freshly deserialized v1/v2 row carries {@code null} here, which is
+     * already the correct v3 value (003 data-model §8).
+     */
+    public ActiveTrainingState getActiveTraining() {
+        return activeTraining;
     }
 }

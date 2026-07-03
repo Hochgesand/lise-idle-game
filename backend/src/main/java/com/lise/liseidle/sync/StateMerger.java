@@ -1,5 +1,6 @@
 package com.lise.liseidle.sync;
 
+import com.lise.liseidle.state.ActiveTrainingState;
 import com.lise.liseidle.state.BurnerState;
 import com.lise.liseidle.state.CommuteState;
 import com.lise.liseidle.state.CoopSegment;
@@ -50,10 +51,12 @@ import java.util.Set;
  *       identical, conflict-free rule the client-side {@code applyCoopPresence}
  *       applies (contracts §1/§2), so client merge and server merge cannot
  *       disagree. Segment multipliers are ≥ 1, so monotonicity is preserved.
- *   <li><b>(002) {@code activeOffice}/{@code commute}</b>: merged <b>as a
- *       pair</b> from whichever state has the later {@code lastAdvancedAt} (the
+ *   <li><b>(002) {@code activeOffice}/{@code commute}</b> and <b>(003)
+ *       {@code activeTraining}</b>: merged <b>as a pair/snapshot</b> from
+ *       whichever state has the later {@code lastAdvancedAt} (the
  *       <b>client</b> copy on a tie — consistent with the sim owning that
- *       state; note this is the opposite tie-break from {@code settings}).
+ *       timeline state; note this is the opposite tie-break from
+ *       {@code settings}).
  *   <li><b>(002) null-normalization first</b>: a pre-existing v1 row or a
  *       pre-002 PUT body deserializes the overlay fields as {@code null}; they
  *       are normalized ({@code coopSegments} → {@code []}, {@code activeOffice}
@@ -88,6 +91,10 @@ public class StateMerger {
         // commute's normalized default IS null (baseline) — nothing to coerce.
         CommuteState clientCommute = client.getCommute();
         CommuteState serverCommute = server.getCommute();
+        // (003) activeTraining's normalized default IS null too — a v1/v2-shaped
+        // side deserializes it as null, which is already the correct baseline.
+        ActiveTrainingState clientTraining = client.getActiveTraining();
+        ActiveTrainingState serverTraining = server.getActiveTraining();
 
         ResourceSet mergedResources = new ResourceSet(
                 maxBig(client.resources().loc(), server.resources().loc()),
@@ -110,12 +117,18 @@ public class StateMerger {
                 ? client.settings()
                 : server.settings();
 
-        // (002) activeOffice/commute merge as a PAIR from the state with the
-        // later lastAdvancedAt (client copy on a tie — the opposite tie-break
-        // from settings, consistent with the sim owning that state).
+        // (002/003) activeOffice/commute/activeTraining merge as a PAIR (one
+        // snapshot side, never mixed) from the state with the later
+        // lastAdvancedAt (client copy on a tie — the opposite tie-break from
+        // settings, consistent with the sim owning that timeline state). The
+        // (003) training joins the rule because it is timeline state exactly
+        // like the commute: the newer timeline wins wholesale, including its
+        // cleared-after-resolution nulls (003 data-model §8).
         boolean clientIsLaterOrTied = client.lastAdvancedAt().compareTo(server.lastAdvancedAt()) >= 0;
         String mergedActiveOffice = clientIsLaterOrTied ? clientOffice : serverOffice;
         CommuteState mergedCommute = clientIsLaterOrTied ? clientCommute : serverCommute;
+        ActiveTrainingState mergedActiveTraining =
+                clientIsLaterOrTied ? clientTraining : serverTraining;
 
         // (002) coopSegments: union keyed by `from`, taking max(until) AND
         // max(multiplier) — identical to the client-side applyCoopPresence.
@@ -133,7 +146,8 @@ public class StateMerger {
                 mergedSettings,
                 mergedCoopSegments,
                 mergedActiveOffice,
-                mergedCommute);
+                mergedCommute,
+                mergedActiveTraining);
     }
 
     /**
