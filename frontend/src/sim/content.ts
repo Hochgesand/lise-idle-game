@@ -28,6 +28,7 @@ import type {
   ResourceType,
   Training,
   Upgrade,
+  WorldConfig,
 } from './types';
 
 /** The loader's own error type. Thrown on any malformed content. */
@@ -199,7 +200,7 @@ function validateUpgrade(raw: unknown): Upgrade {
 function validateTraining(raw: unknown): Training {
   assert(isRecord(raw), 'training must be an object');
   const ctx = `training "${String(raw.id ?? '?')}"`;
-  return {
+  const training: Training = {
     id: expectString(raw.id, 'id', ctx),
     name: expectString(raw.name, 'name', ctx),
     description: expectString(raw.description, 'description', ctx),
@@ -207,6 +208,28 @@ function validateTraining(raw: unknown): Training {
     permanentMultiplier: expectNumber(raw.permanentMultiplier, 'permanentMultiplier', ctx),
     prerequisite: validateNullableRequirement(raw.prerequisite, ctx),
   };
+  // (003) Optional run duration (data-model §2; FR-016). Absent/null → the key
+  // stays absent (Spec 001 instant behavior — existing content valid
+  // unchanged); a present value must be a finite number >= 0.
+  const durationSeconds = validateDurationSeconds(raw.durationSeconds, ctx);
+  if (durationSeconds !== undefined) {
+    training.durationSeconds = durationSeconds;
+  }
+  return training;
+}
+
+/**
+ * (003) Validates a training's optional `durationSeconds` (data-model §2;
+ * FR-016/021). Absent (`undefined`) or an explicit wire `null` normalize to
+ * `undefined` (Spec 001 instant purchase); a present value must be a finite
+ * number `>= 0`, else ContentValidationError.
+ */
+function validateDurationSeconds(value: unknown, ctx: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const duration = expectNumber(value, 'durationSeconds', ctx);
+  assert(Number.isFinite(duration), `${ctx}: "durationSeconds" must be finite`);
+  assert(duration >= 0, `${ctx}: "durationSeconds" must be >= 0`);
+  return duration;
 }
 
 function validateMilestone(raw: unknown): Milestone {
@@ -289,6 +312,22 @@ function validateCoop(raw: unknown): CoopConfig {
   };
 }
 
+/**
+ * (003) Validates the world/presentation tuning block (data-model §3;
+ * FR-021). Enforced-present with `walkSeconds` a finite number > 0 —
+ * the exact `coop` convention. Malformed → ContentValidationError.
+ */
+function validateWorld(raw: unknown): WorldConfig {
+  const ctx = 'world';
+  assert(isRecord(raw), `${ctx}: world block must be an object`);
+
+  const walkSeconds = expectNumber(raw.walkSeconds, 'walkSeconds', ctx);
+  assert(Number.isFinite(walkSeconds), `${ctx}: "walkSeconds" must be finite`);
+  assert(walkSeconds > 0, `${ctx}: "walkSeconds" must be > 0`);
+
+  return { walkSeconds };
+}
+
 /** Ensures all ids within one content type are unique. */
 function assertUniqueIds<T extends { id: string }>(items: T[], label: string): void {
   const seen = new Set<string>();
@@ -338,6 +377,9 @@ export function loadContent(envelope: ContentEnvelope): ContentCatalog {
   // The (002) coop block is mandatory content (contracts §1/§2); validate it
   // alongside the five 001 arrays so the catalog is all-or-nothing.
   const coop = validateCoop(envelope.coop);
+  // The (003) world block is mandatory content (003 data-model §3; FR-021);
+  // same all-or-nothing rule.
+  const world = validateWorld(envelope.world);
 
   assertUniqueIds(producers, 'producers');
   assertUniqueIds(upgrades, 'upgrades');
@@ -354,5 +396,6 @@ export function loadContent(envelope: ContentEnvelope): ContentCatalog {
     milestones,
     burners,
     coop,
+    world,
   };
 }

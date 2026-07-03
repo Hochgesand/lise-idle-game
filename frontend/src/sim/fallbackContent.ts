@@ -140,4 +140,12 @@ export const FALLBACK_CONTENT: ContentCatalog = {
     commuteSeconds: 30,
     lastSeenRetentionDays: 14,
   },
+  // (003) World/presentation tuning — mirrors
+  // backend/src/main/resources/content/world.json (T008 placeholder value) so
+  // an offline-booting client walks station paths with the identical tuning
+  // as the served envelope (FR-021; 003 data-model §3). loadContent validates
+  // this exact shape for the served path; the fallback carries it verbatim.
+  world: {
+    walkSeconds: 2,
+  },
 };

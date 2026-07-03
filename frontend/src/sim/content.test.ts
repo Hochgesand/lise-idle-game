@@ -177,6 +177,7 @@ describe('loadContent — valid input', () => {
       milestones: [],
       burners: [],
       coop: coop(),
+      world: world(),
     });
 
     // Five empty arrays, no throw.
